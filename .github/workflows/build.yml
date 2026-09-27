@@ -164,7 +164,11 @@ jobs:
           $legacyReferences = Join-Path $legacyPhoneRoot 'References\CommonConfiguration\Neutral'
           New-Item -ItemType Directory -Force -Path $legacyReferences | Out-Null
           $phoneWinmd = Get-ChildItem $sdkRoot -Recurse -Filter 'Windows.winmd' -File -ErrorAction SilentlyContinue |
-            Where-Object { $_.FullName -match '\\References\\CommonConfiguration\\Neutral\\Windows\.winmd
+            Where-Object { $_.FullName.EndsWith('\References\CommonConfiguration\Neutral\Windows.winmd') } |
+            Select-Object -First 1
+          Write-Host "Windows.winmd candidates in WP SDK:"
+          Get-ChildItem $sdkRoot -Recurse -Filter 'Windows.winmd' -File -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty FullName
           if ($phoneWinmd) {
             Copy-Item $phoneWinmd.FullName (Join-Path $legacyReferences 'Windows.winmd') -Force
             Write-Host "Windows Phone metadata: $($phoneWinmd.FullName)"
