@@ -316,6 +316,36 @@ jobs:
 
           "WINDOWS_PHONE_SDK_DIR=$legacyPhoneRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
           "TARGET_PLATFORM_SDK_ROOT_OVERRIDE=$legacyPhoneRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
+ } |
+          if ($phoneWinmd) {
+            Copy-Item $phoneWinmd.FullName (Join-Path $legacyReferences 'Windows.winmd') -Force
+            Write-Host "Windows Phone metadata: $($phoneWinmd.FullName)"
+          } else {
+            $genericWinmd = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\8.1\References\CommonConfiguration\Neutral\Windows.winmd'
+            if (Test-Path $genericWinmd) { Copy-Item $genericWinmd (Join-Path $legacyReferences 'Windows.winmd') -Force }
+            else { throw "Windows.winmd was not found for the Windows Phone SDK." }
+          }
+
+          # Older XAML targets discover WP SDK through these registry keys.
+          $registryPaths = @(
+            'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Microsoft SDKs\WindowsPhone\v8.1',
+            'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Microsoft SDKs\WindowsPhoneApp\v8.1'
+          )
+          foreach ($key in $registryPaths) {
+            New-Item -Path $key -Force | Out-Null
+            New-ItemProperty -Path $key -Name 'Install Path' -PropertyType String -Value ($legacyPhoneRoot + '\') -Force | Out-Null
+            New-ItemProperty -Path $key -Name 'InstallationFolder' -PropertyType String -Value ($legacyPhoneRoot + '\') -Force | Out-Null
+          }
+
+          Write-Host "Windows Phone SDK root: $sdkRoot"
+          Write-Host "Legacy Windows Phone SDK root: $legacyPhoneRoot"
+          Get-ItemProperty $registryPaths[0] | Format-List *
+          Get-ChildItem $legacyPhoneRoot -Recurse -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -ieq 'Windows.winmd' -or $_.Name -ieq 'Windows.props' } |
+            Select-Object -First 150 FullName
+
+          "WINDOWS_PHONE_SDK_DIR=$legacyPhoneRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "TARGET_PLATFORM_SDK_ROOT_OVERRIDE=$legacyPhoneRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Locate WP XAML build tools
         shell: powershell
         run: |
@@ -393,7 +423,7 @@ jobs:
       - name: Build solution
         shell: powershell
         run: |
-          & "$env:MSBUILD_PATH" ".\ESP32-AI-Control-WP81.sln" /m /t:Build /p:Configuration=Debug /p:Platform="ARM" /p:FrameworkPathOverride="$env:FRAMEWORK_PATH" /p:WindowsPhoneSdkDir="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSDKDir="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSdkRoot="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSDKRoot="$env:WINDOWS_PHONE_SDK_DIR" /p:TargetPlatformSdkRootOverride="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:TargetPlatformSdkRoot="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:WindowsSdkDir="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:WindowsSdkDir_8.1="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:WindowsPhoneSdkVersion="8.1" /verbosity:minimal
+          & "$env:MSBUILD_PATH" ".\ESP32-AI-Control-WP81.sln" /m /t:Build /p:Configuration=Debug /p:Platform="ARM" /p:FrameworkPathOverride="$env:FRAMEWORK_PATH" /p:WindowsPhoneSdkDir="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSDKDir="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSdkRoot="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSDKRoot="$env:WINDOWS_PHONE_SDK_DIR" /p:TargetPlatformSdkRootOverride="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:TargetPlatformSdkRoot="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:WindowsSdkDir="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:WindowsPhoneSdkVersion="8.1" /verbosity:minimal
           if ($LASTEXITCODE -ne 0) {
             throw "MSBuild failed with exit code $LASTEXITCODE"
           }
@@ -407,3 +437,34 @@ jobs:
             src/ESP32AIControl.WP81/bin/**
             src/ESP32AIControl.WP81/obj/**
           if-no-files-found: warn
+ } |
+            Select-Object -First 1
+          if ($phoneWinmd) {
+            Copy-Item $phoneWinmd.FullName (Join-Path $legacyReferences 'Windows.winmd') -Force
+            Write-Host "Windows Phone metadata: $($phoneWinmd.FullName)"
+          } else {
+            $genericWinmd = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\8.1\References\CommonConfiguration\Neutral\Windows.winmd'
+            if (Test-Path $genericWinmd) { Copy-Item $genericWinmd (Join-Path $legacyReferences 'Windows.winmd') -Force }
+            else { throw "Windows.winmd was not found for the Windows Phone SDK." }
+          }
+
+          # Older XAML targets discover WP SDK through these registry keys.
+          $registryPaths = @(
+            'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Microsoft SDKs\WindowsPhone\v8.1',
+            'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Microsoft SDKs\WindowsPhoneApp\v8.1'
+          )
+          foreach ($key in $registryPaths) {
+            New-Item -Path $key -Force | Out-Null
+            New-ItemProperty -Path $key -Name 'Install Path' -PropertyType String -Value ($legacyPhoneRoot + '\') -Force | Out-Null
+            New-ItemProperty -Path $key -Name 'InstallationFolder' -PropertyType String -Value ($legacyPhoneRoot + '\') -Force | Out-Null
+          }
+
+          Write-Host "Windows Phone SDK root: $sdkRoot"
+          Write-Host "Legacy Windows Phone SDK root: $legacyPhoneRoot"
+          Get-ItemProperty $registryPaths[0] | Format-List *
+          Get-ChildItem $legacyPhoneRoot -Recurse -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -ieq 'Windows.winmd' -or $_.Name -ieq 'Windows.props' } |
+            Select-Object -First 150 FullName
+
+          "WINDOWS_PHONE_SDK_DIR=$legacyPhoneRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "TARGET_PLATFORM_SDK_ROOT_OVERRIDE=$legacyPhoneRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
