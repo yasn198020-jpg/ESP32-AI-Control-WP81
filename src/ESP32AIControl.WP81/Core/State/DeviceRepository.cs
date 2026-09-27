@@ -29,6 +29,7 @@ namespace ESP32AIControl.WP81.Core.State
             {
                 state = new WidgetState
                 {
+                    DeviceId = message.DeviceId,
                     Id = message.WidgetId,
                     Description = message.Description,
                     WidgetType = message.WidgetType,
@@ -38,6 +39,8 @@ namespace ESP32AIControl.WP81.Core.State
                 _widgets[key] = state;
             }
 
+            if (!string.IsNullOrEmpty(message.DeviceId))
+                state.DeviceId = message.DeviceId;
             if (!string.IsNullOrEmpty(message.Description))
                 state.Description = message.Description;
             if (!string.IsNullOrEmpty(message.WidgetType))
