@@ -271,7 +271,7 @@ jobs:
       - name: Build solution
         shell: powershell
         run: |
-          & "$env:MSBUILD_PATH" ".\ESP32-AI-Control-WP81.sln" /m /t:Build /p:Configuration=Debug /p:Platform="ARM" /p:FrameworkPathOverride="$env:FRAMEWORK_PATH" /p:WindowsPhoneSdkDir="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSDKDir="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSdkRoot="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSDKRoot="$env:WINDOWS_PHONE_SDK_DIR" /p:TargetPlatformSdkRootOverride="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:TargetPlatformSdkRoot="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:WindowsSdkDir="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:WindowsPhoneSdkVersion="8.1" /verbosity:minimal
+          & "$env:MSBUILD_PATH" ".\ESP32-AI-Control-WP81.sln" /m /t:Build /p:Configuration=Debug /p:Platform="ARM" /p:FrameworkPathOverride="$env:FRAMEWORK_PATH" /p:WindowsPhoneSdkDir="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSDKDir="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSdkRoot="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSDKRoot="$env:WINDOWS_PHONE_SDK_DIR" /p:TargetPlatformSdkRootOverride="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:TargetPlatformSdkRoot="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:WindowsSdkDir="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE"  /p:WindowsPhoneSdkVersion="8.1" /verbosity:minimal
           if ($LASTEXITCODE -ne 0) {
             throw "MSBuild failed with exit code $LASTEXITCODE"
           }
@@ -393,7 +393,7 @@ jobs:
       - name: Build solution
         shell: powershell
         run: |
-          & "$env:MSBUILD_PATH" ".\ESP32-AI-Control-WP81.sln" /m /t:Build /p:Configuration=Debug /p:Platform="ARM" /p:FrameworkPathOverride="$env:FRAMEWORK_PATH" /p:WindowsPhoneSdkDir="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSDKDir="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSdkRoot="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSDKRoot="$env:WINDOWS_PHONE_SDK_DIR" /p:TargetPlatformSdkRootOverride="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:TargetPlatformSdkRoot="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:WindowsSdkDir="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:WindowsSdkDir_8.1="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:WindowsPhoneSdkVersion="8.1" /verbosity:minimal
+          & "$env:MSBUILD_PATH" ".\ESP32-AI-Control-WP81.sln" /m /t:Build /p:Configuration=Debug /p:Platform="ARM" /p:FrameworkPathOverride="$env:FRAMEWORK_PATH" /p:WindowsPhoneSdkDir="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSDKDir="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSdkRoot="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSDKRoot="$env:WINDOWS_PHONE_SDK_DIR" /p:TargetPlatformSdkRootOverride="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:TargetPlatformSdkRoot="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:WindowsSdkDir="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE"  /p:WindowsPhoneSdkVersion="8.1" /verbosity:minimal
           if ($LASTEXITCODE -ne 0) {
             throw "MSBuild failed with exit code $LASTEXITCODE"
           }
