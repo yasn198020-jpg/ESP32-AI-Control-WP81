@@ -25,7 +25,7 @@ jobs:
           $file = Get-Item $sdk
           Write-Host "Installer size: $($file.Length) bytes"
           Write-Host "Installer version: $((Get-Item $sdk).VersionInfo.FileVersion)"
-          $proc = Start-Process -FilePath $sdk -ArgumentList "/quiet","/norestart" -Wait -PassThru
+          $proc = Start-Process -FilePath $sdk -ArgumentList "/features","+","/quiet","/norestart" -Wait -PassThru
           $code = $proc.ExitCode
           Write-Host "Windows 8.1 SDK installer exit code: $code"
           if (($code -ne 0) -and ($code -ne 3010)) {
@@ -34,6 +34,8 @@ jobs:
 
           $winmd = "$env:ProgramFiles(x86)\Windows Kits\8.1\References\CommonConfiguration\Neutral\Windows.winmd"
           if (-not (Test-Path $winmd)) {
+            Write-Host "Windows Kits directories:"
+            Get-ChildItem "$env:ProgramFiles(x86)\Windows Kits" -Directory -ErrorAction SilentlyContinue | Select-Object FullName
             Write-Host "Windows.winmd files found:"
             Get-ChildItem "$env:ProgramFiles(x86)\Windows Kits" -Recurse -Filter Windows.winmd -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName
             throw "Windows 8.1 SDK Windows.winmd was not found after installation."
