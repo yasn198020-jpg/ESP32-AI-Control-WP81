@@ -156,7 +156,7 @@ jobs:
           if (-not $sdkRoot) { throw "Installed Windows Phone 8.1 SDK root was not found." }
 
           # Legacy WP8.1 XAML targets expect the historical Windows Phone Kits path.
-          $legacyPhoneRoot = Join-Path $env:ProgramFiles(x86) 'Windows Phone Kits\8.1'
+          $legacyPhoneRoot = Join-Path ${env:ProgramFiles(x86)} 'Windows Phone Kits\8.1'
           New-Item -ItemType Directory -Force -Path $legacyPhoneRoot | Out-Null
           Write-Host "Copying Windows Phone SDK from $sdkRoot to $legacyPhoneRoot"
           Copy-Item (Join-Path $sdkRoot '*') $legacyPhoneRoot -Recurse -Force
@@ -168,7 +168,7 @@ jobs:
             Copy-Item $phoneWinmd.FullName (Join-Path $legacyReferences 'Windows.winmd') -Force
             Write-Host "Windows Phone metadata: $($phoneWinmd.FullName)"
           } else {
-            $genericWinmd = Join-Path $env:ProgramFiles(x86) 'Windows Kits\8.1\References\CommonConfiguration\Neutral\Windows.winmd'
+            $genericWinmd = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\8.1\References\CommonConfiguration\Neutral\Windows.winmd'
             if (Test-Path $genericWinmd) { Copy-Item $genericWinmd (Join-Path $legacyReferences 'Windows.winmd') -Force }
             else { throw "Windows.winmd was not found for the Windows Phone SDK." }
           }
