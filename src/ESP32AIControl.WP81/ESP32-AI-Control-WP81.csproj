@@ -64,5 +64,10 @@
     <Reference Include="Windows" />
   </ItemGroup>
 
-  <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\WindowsXaml\Microsoft.Windows.UI.Xaml.CSharp.targets" />
+  <!-- VS 2022 keeps the Windows Phone 8.1 XAML targets under WindowsXaml\v17.0\8.1.
+       Older WP8.1 Visual Studio installations use the legacy VisualStudio\v$(VisualStudioVersion) path. -->
+  <Import Project="$(MSBuildExtensionsPath32)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\8.1\Microsoft.Windows.UI.Xaml.CSharp.Targets"
+          Condition="Exists('$(MSBuildExtensionsPath32)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\8.1\Microsoft.Windows.UI.Xaml.CSharp.Targets')" />
+  <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\WindowsXaml\Microsoft.Windows.UI.Xaml.CSharp.targets"
+          Condition="Exists('$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\WindowsXaml\Microsoft.Windows.UI.Xaml.CSharp.targets')" />
 </Project>
