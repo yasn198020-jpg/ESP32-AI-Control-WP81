@@ -164,8 +164,7 @@ jobs:
           $legacyReferences = Join-Path $legacyPhoneRoot 'References\CommonConfiguration\Neutral'
           New-Item -ItemType Directory -Force -Path $legacyReferences | Out-Null
           $phoneWinmd = Get-ChildItem $sdkRoot -Recurse -Filter 'Windows.winmd' -File -ErrorAction SilentlyContinue |
-            Where-Object { $_.FullName -match '\\References\\CommonConfiguration\\Neutral\\Windows\.winmd
-          if ($phoneWinmd) {
+            Where-Object { $_.FullName -match '\\References\\CommonConfiguration\\Neutral\\Windows\.winmd          if ($phoneWinmd) {
             Copy-Item $phoneWinmd.FullName (Join-Path $legacyReferences 'Windows.winmd') -Force
             Write-Host "Windows Phone metadata: $($phoneWinmd.FullName)"
           } else {
@@ -286,7 +285,6 @@ jobs:
             src/ESP32AIControl.WP81/obj/**
           if-no-files-found: warn
  } |
-            Select-Object -First 1
           if ($phoneWinmd) {
             Copy-Item $phoneWinmd.FullName (Join-Path $legacyReferences 'Windows.winmd') -Force
             Write-Host "Windows Phone metadata: $($phoneWinmd.FullName)"
