@@ -19,8 +19,15 @@ jobs:
           $sdk = Join-Path $env:RUNNER_TEMP "winsdk81.exe"
           Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/p/?LinkId=323507" -OutFile $sdk
           Write-Host "Downloaded Windows 8.1 SDK installer: $sdk"
-          & $sdk /quiet /norestart
-          $code = $LASTEXITCODE
+          if (-not (Test-Path $sdk)) {
+            throw "Windows 8.1 SDK installer was not downloaded."
+          }
+          $file = Get-Item $sdk
+          Write-Host "Installer size: $($file.Length) bytes"
+          Write-Host "Installer version: $((Get-Item $sdk).VersionInfo.FileVersion)"
+          $proc = Start-Process -FilePath $sdk -ArgumentList "/quiet","/norestart" -Wait -PassThru
+          $code = $proc.ExitCode
+          Write-Host "Windows 8.1 SDK installer exit code: $code"
           if (($code -ne 0) -and ($code -ne 3010)) {
             throw "Windows 8.1 SDK installation failed with exit code $code"
           }
