@@ -231,7 +231,9 @@ jobs:
       - name: Inspect WP8.1 XAML SDK target properties
         shell: powershell
         run: |
-          $target = Get-ChildItem "$env:ProgramFiles\Microsoft Visual Studio\2022\Enterprise\MSBuild\Microsoft\WindowsXaml" -Recurse -Filter "Microsoft.Windows.UI.Xaml.CSharp.Targets" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+          $target = Get-ChildItem "$env:ProgramFiles\Microsoft Visual Studio\2022\Enterprise\MSBuild\Microsoft\WindowsXaml" -Recurse -Filter "Microsoft.Windows.UI.Xaml.CSharp.Targets" -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match '\\8\.1\\' } |
+            Select-Object -First 1
           if (-not $target) { throw "WP8.1 XAML target file not found for inspection." }
           Write-Host "Inspecting XAML target: $($target.FullName)"
           Select-String -Path $target.FullName -Pattern "WindowsPhone|TargetPlatformSdk|Windows.metadata|WindowsSdkDir|SDKRoot" -Context 2,3
@@ -397,7 +399,7 @@ jobs:
         run: |
           $log = Join-Path $env:RUNNER_TEMP "msbuild-diagnostic.log"
           Write-Host "Starting MSBuild diagnostic build..."
-          & "$env:MSBUILD_PATH" ".\ESP32-AI-Control-WP81.sln" /m:1 /t:Build /p:Configuration=Debug /p:Platform="ARM" /p:FrameworkPathOverride="$env:FRAMEWORK_PATH" /p:WindowsPhoneSdkDir="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSDKDir="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSdkRoot="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSDKRoot="$env:WINDOWS_PHONE_SDK_DIR" /p:TargetPlatformSdkRootOverride="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:TargetPlatformSdkRoot="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:WindowsSdkDir="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:WindowsSdkDir_8.1="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:WindowsPhoneSdkVersion="8.1" /nologo /verbosity:diagnostic 2>&1 | Tee-Object -FilePath $log
+          & "$env:MSBUILD_PATH" ".\ESP32-AI-Control-WP81.sln" /m:1 /t:Build /p:Configuration=Debug /p:Platform="ARM" /p:FrameworkPathOverride="$env:FRAMEWORK_PATH" /p:WindowsPhoneSdkDir="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSDKDir="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSdkRoot="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSDKRoot="$env:WINDOWS_PHONE_SDK_DIR" /p:TargetPlatformSdkRootOverride="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:TargetPlatformSdkRoot="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:WindowsSdkDir="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:WindowsPhoneSdkVersion="8.1" /nologo /verbosity:diagnostic 2>&1 | Tee-Object -FilePath $log
           $code = $LASTEXITCODE
           Write-Host "MSBuild exit code: $code"
           Write-Host "==== MSBuild diagnostic tail ===="
