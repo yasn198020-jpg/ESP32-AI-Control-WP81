@@ -164,13 +164,19 @@ jobs:
           $legacyReferences = Join-Path $legacyPhoneRoot 'References\CommonConfiguration\Neutral'
           New-Item -ItemType Directory -Force -Path $legacyReferences | Out-Null
           $phoneWinmd = Get-ChildItem $sdkRoot -Recurse -Filter 'Windows.winmd' -File -ErrorAction SilentlyContinue |
-            Where-Object { $_.FullName -match '\\References\\CommonConfiguration\\Neutral\\Windows\.winmd          if ($phoneWinmd) {
+            Where-Object { $_.FullName -match '\\References\\CommonConfiguration\\Neutral\\Windows\.winmd$' } |
+            Select-Object -First 1
+
+          if ($phoneWinmd) {
             Copy-Item $phoneWinmd.FullName (Join-Path $legacyReferences 'Windows.winmd') -Force
             Write-Host "Windows Phone metadata: $($phoneWinmd.FullName)"
           } else {
             $genericWinmd = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\8.1\References\CommonConfiguration\Neutral\Windows.winmd'
-            if (Test-Path $genericWinmd) { Copy-Item $genericWinmd (Join-Path $legacyReferences 'Windows.winmd') -Force }
-            else { throw "Windows.winmd was not found for the Windows Phone SDK." }
+            if (Test-Path $genericWinmd) {
+              Copy-Item $genericWinmd (Join-Path $legacyReferences 'Windows.winmd') -Force
+            } else {
+              throw "Windows.winmd was not found for the Windows Phone SDK."
+            }
           }
 
           # Older XAML targets discover WP SDK through these registry keys.
