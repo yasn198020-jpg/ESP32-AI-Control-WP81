@@ -76,6 +76,7 @@ namespace ESP32AIControl.WP81.Core.Protocol
             {
                 Kind = Esp32MessageKind.Status,
                 Topic = topic,
+                DeviceId = parts.Length >= 2 ? parts[0] : string.Empty,
                 WidgetId = widgetId,
                 Value = ExtractStatus(payload),
                 RawPayload = payload
@@ -90,6 +91,7 @@ namespace ESP32AIControl.WP81.Core.Protocol
             {
                 Kind = Esp32MessageKind.Event,
                 Topic = topic,
+                DeviceId = parts.Length >= 2 ? parts[0] : string.Empty,
                 WidgetId = !string.IsNullOrEmpty(dto.Id) ? dto.Id : (parts.Length >= 2 ? parts[parts.Length - 2] : string.Empty),
                 Value = ValueToString(dto.Value),
                 RawPayload = payload
