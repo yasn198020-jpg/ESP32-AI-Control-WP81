@@ -17,73 +17,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Windows 8.1 SDK
+      - name: Prepare Windows metadata for legacy XAML compiler
         shell: powershell
         run: |
-          $bootstrap = Join-Path $env:RUNNER_TEMP "winsdk81-bootstrap.exe"
-          $layout = Join-Path $env:RUNNER_TEMP "winsdk81-layout"
-          $log = Join-Path $env:RUNNER_TEMP "winsdk81-install.log"
+          $kitsRoot = Join-Path $env:ProgramFiles(x86) "Windows Kits"
+          $winmd = Get-ChildItem $kitsRoot -Recurse -Filter "Windows.winmd" -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match "\\References\\CommonConfiguration\\Neutral\\Windows.winmd$" } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
 
-          Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/p/?LinkId=323507" -OutFile $bootstrap
-          Write-Host "Downloaded Windows 8.1 SDK bootstrapper: $bootstrap"
-          Write-Host "Bootstrapper size: $((Get-Item $bootstrap).Length) bytes"
-          Write-Host "Bootstrapper version: $((Get-Item $bootstrap).VersionInfo.FileVersion)"
-
-          New-Item -ItemType Directory -Force -Path $layout | Out-Null
-          Write-Host "Creating offline SDK layout: $layout"
-          $layoutProc = Start-Process -FilePath $bootstrap -ArgumentList "/layout",$layout -PassThru
-          $deadline = (Get-Date).AddMinutes(20)
-          while (-not $layoutProc.HasExited) {
-            Start-Sleep -Seconds 30
-            $layoutProc.Refresh()
-            $files = @(Get-ChildItem $layout -Recurse -File -ErrorAction SilentlyContinue)
-            $count = $files.Count
-            $bytes = ($files | Measure-Object Length -Sum).Sum
-            if ($null -eq $bytes) { $bytes = 0 }
-            Write-Host ("SDK layout progress: {0} files, {1:N0} bytes" -f $count,$bytes)
-            if ((Get-Date) -gt $deadline) {
-              try { Stop-Process -Id $layoutProc.Id -Force -ErrorAction SilentlyContinue } catch {}
-              throw "Windows 8.1 SDK layout creation exceeded 20 minutes and was stopped."
-            }
-          }
-          $layoutProc.Refresh()
-          $layoutCode = $layoutProc.ExitCode
-          Write-Host "SDK layout exit code: $layoutCode"
-          if (($layoutCode -ne 0) -and ($layoutCode -ne 3010)) {
-            throw "Windows 8.1 SDK layout creation failed with exit code $layoutCode"
+          if (-not $winmd) {
+            throw "No installed Windows SDK Windows.winmd was found on the runner."
           }
 
-          Write-Host "SDK layout contents:"
-          Get-ChildItem $layout -Recurse -File -ErrorAction SilentlyContinue | Select-Object FullName,Length | Format-Table -AutoSize
+          $legacyRoot = Join-Path $kitsRoot "8.1"
+          $legacyMetadata = Join-Path $legacyRoot "References\\CommonConfiguration\\Neutral"
+          New-Item -ItemType Directory -Force -Path $legacyMetadata | Out-Null
+          Copy-Item $winmd.FullName (Join-Path $legacyMetadata "Windows.winmd") -Force
 
-          $setup = Get-ChildItem $layout -Recurse -Filter "sdksetup.exe" -File -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $setup) {
-            $setup = Get-ChildItem $layout -Recurse -Filter "setup.exe" -File -ErrorAction SilentlyContinue | Select-Object -First 1
-          }
-          if (-not $setup) {
-            throw "Windows 8.1 SDK layout was downloaded, but no setup executable was found."
-          }
-
-          Write-Host "Running SDK installer from layout: $($setup.FullName)"
-          $proc = Start-Process -FilePath $setup.FullName -ArgumentList "/features","+","/quiet","/norestart","/log",$log -Wait -PassThru
-          $code = $proc.ExitCode
-          Write-Host "Windows 8.1 SDK installer exit code: $code"
-          if (($code -ne 0) -and ($code -ne 3010)) {
-            if (Test-Path $log) { Get-Content $log -Tail 200 }
-            throw "Windows 8.1 SDK installation failed with exit code $code"
-          }
-
-          $winmd = "$env:ProgramFiles(x86)\\Windows Kits\\8.1\\References\\CommonConfiguration\\Neutral\\Windows.winmd"
-          if (-not (Test-Path $winmd)) {
-            Write-Host "Windows Kits directories:"
-            Get-ChildItem "$env:ProgramFiles(x86)\\Windows Kits" -Directory -ErrorAction SilentlyContinue | Select-Object FullName
-            Write-Host "Windows.winmd files found:"
-            Get-ChildItem "$env:ProgramFiles(x86)\\Windows Kits" -Recurse -Filter Windows.winmd -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName
-            Write-Host "SDK installer log tail:"
-            if (Test-Path $log) { Get-Content $log -Tail 200 }
-            throw "Windows 8.1 SDK Windows.winmd was not found after installation."
-          }
-          Write-Host "Using Windows 8.1 SDK metadata: $winmd"
+          Write-Host "Using installed Windows metadata: $($winmd.FullName)"
+          Write-Host "Prepared legacy metadata path: $(Join-Path $legacyMetadata 'Windows.winmd')"
 
       - name: Locate WP XAML build tools
         shell: powershell
