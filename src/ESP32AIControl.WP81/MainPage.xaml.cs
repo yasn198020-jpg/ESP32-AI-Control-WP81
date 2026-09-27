@@ -79,6 +79,8 @@ namespace ESP32AIControl.WP81
             _settings.Host = HostBox.Text.Trim();
             _settings.Port = PortBox.Text.Trim();
             _settings.Prefix = PrefixBox.Text.Trim().Trim('/');
+            _settings.UserName = UserNameBox.Text.Trim();
+            _settings.Password = PasswordBox.Password;
         }
 
         private async void Mqtt_MessageReceived(object sender, Esp32Message e)
