@@ -135,6 +135,15 @@ jobs:
           "TARGET_PLATFORM_SDK_ROOT_OVERRIDE=$legacyPhoneRoot" | Out-File $env:GITHUB_ENV -Append
           "WINDOWS_SDK_ROOT=$(Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\8.1')" | Out-File $env:GITHUB_ENV -Append
 
+      - name: Locate legacy XAML targets
+        shell: powershell
+        run: |
+          $root = Join-Path ${env:ProgramFiles(x86)} 'MSBuild\Microsoft\WindowsXaml'
+          Get-ChildItem $root -Directory -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }
+          $targets = Get-ChildItem $root -Recurse -Filter 'Microsoft.Windows.UI.Xaml.CSharp.Targets' -File -ErrorAction SilentlyContinue
+          if (-not $targets) { throw 'No Windows XAML CSharp targets found.' }
+          $targets | Select-Object -ExpandProperty FullName
+
       - name: Locate WP XAML build tools
         shell: powershell
         run: |
