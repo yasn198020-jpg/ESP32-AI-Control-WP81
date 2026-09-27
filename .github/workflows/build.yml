@@ -16,28 +16,52 @@ jobs:
       - name: Install Windows 8.1 SDK
         shell: powershell
         run: |
-          $sdk = Join-Path $env:RUNNER_TEMP "winsdk81.exe"
-          Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/p/?LinkId=323507" -OutFile $sdk
-          Write-Host "Downloaded Windows 8.1 SDK installer: $sdk"
-          if (-not (Test-Path $sdk)) {
-            throw "Windows 8.1 SDK installer was not downloaded."
+          $bootstrap = Join-Path $env:RUNNER_TEMP "winsdk81-bootstrap.exe"
+          $layout = Join-Path $env:RUNNER_TEMP "winsdk81-layout"
+          $log = Join-Path $env:RUNNER_TEMP "winsdk81-install.log"
+
+          Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/p/?LinkId=323507" -OutFile $bootstrap
+          Write-Host "Downloaded Windows 8.1 SDK bootstrapper: $bootstrap"
+          Write-Host "Bootstrapper size: $((Get-Item $bootstrap).Length) bytes"
+          Write-Host "Bootstrapper version: $((Get-Item $bootstrap).VersionInfo.FileVersion)"
+
+          New-Item -ItemType Directory -Force -Path $layout | Out-Null
+          Write-Host "Creating offline SDK layout: $layout"
+          $layoutProc = Start-Process -FilePath $bootstrap -ArgumentList "/layout",$layout -Wait -PassThru
+          $layoutCode = $layoutProc.ExitCode
+          Write-Host "SDK layout exit code: $layoutCode"
+          if (($layoutCode -ne 0) -and ($layoutCode -ne 3010)) {
+            throw "Windows 8.1 SDK layout creation failed with exit code $layoutCode"
           }
-          $file = Get-Item $sdk
-          Write-Host "Installer size: $($file.Length) bytes"
-          Write-Host "Installer version: $((Get-Item $sdk).VersionInfo.FileVersion)"
-          $proc = Start-Process -FilePath $sdk -ArgumentList "/features","+","/quiet","/norestart" -Wait -PassThru
+
+          Write-Host "SDK layout contents:"
+          Get-ChildItem $layout -Recurse -File -ErrorAction SilentlyContinue | Select-Object FullName,Length | Format-Table -AutoSize
+
+          $setup = Get-ChildItem $layout -Recurse -Filter "sdksetup.exe" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $setup) {
+            $setup = Get-ChildItem $layout -Recurse -Filter "setup.exe" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+          }
+          if (-not $setup) {
+            throw "Windows 8.1 SDK layout was downloaded, but no setup executable was found."
+          }
+
+          Write-Host "Running SDK installer from layout: $($setup.FullName)"
+          $proc = Start-Process -FilePath $setup.FullName -ArgumentList "/features","+","/quiet","/norestart","/log",$log -Wait -PassThru
           $code = $proc.ExitCode
           Write-Host "Windows 8.1 SDK installer exit code: $code"
           if (($code -ne 0) -and ($code -ne 3010)) {
+            if (Test-Path $log) { Get-Content $log -Tail 200 }
             throw "Windows 8.1 SDK installation failed with exit code $code"
           }
 
-          $winmd = "$env:ProgramFiles(x86)\Windows Kits\8.1\References\CommonConfiguration\Neutral\Windows.winmd"
+          $winmd = "$env:ProgramFiles(x86)\\Windows Kits\\8.1\\References\\CommonConfiguration\\Neutral\\Windows.winmd"
           if (-not (Test-Path $winmd)) {
             Write-Host "Windows Kits directories:"
-            Get-ChildItem "$env:ProgramFiles(x86)\Windows Kits" -Directory -ErrorAction SilentlyContinue | Select-Object FullName
+            Get-ChildItem "$env:ProgramFiles(x86)\\Windows Kits" -Directory -ErrorAction SilentlyContinue | Select-Object FullName
             Write-Host "Windows.winmd files found:"
-            Get-ChildItem "$env:ProgramFiles(x86)\Windows Kits" -Recurse -Filter Windows.winmd -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName
+            Get-ChildItem "$env:ProgramFiles(x86)\\Windows Kits" -Recurse -Filter Windows.winmd -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName
+            Write-Host "SDK installer log tail:"
+            if (Test-Path $log) { Get-Content $log -Tail 200 }
             throw "Windows 8.1 SDK Windows.winmd was not found after installation."
           }
           Write-Host "Using Windows 8.1 SDK metadata: $winmd"
