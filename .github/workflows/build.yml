@@ -49,7 +49,27 @@ jobs:
           New-Item -ItemType Directory -Force -Path $legacyMetadata | Out-Null
           Copy-Item $winmd.FullName (Join-Path $legacyMetadata "Windows.winmd") -Force
 
+          # The WP8.1 XAML compiler also requires the Universal API contract metadata.
+          $universal = Get-ChildItem (Join-Path $kitsRoot "8.1") -Recurse -Filter "Windows.Foundation.UniversalApiContract.winmd" -File -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+          if (-not $universal) {
+            $metadataRoot = Join-Path $env:RUNNER_TEMP "windows-sdk-metadata"
+            if (-not (Test-Path $metadataRoot)) {
+              $nuget = Join-Path $env:RUNNER_TEMP "nuget.exe"
+              Invoke-WebRequest -Uri "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe" -OutFile $nuget
+              New-Item -ItemType Directory -Force -Path $metadataRoot | Out-Null
+              & $nuget install Microsoft.Windows.SDK.Contracts -Version 10.0.26100.4654 -OutputDirectory $metadataRoot -NonInteractive
+            }
+            $universal = Get-ChildItem $metadataRoot -Recurse -Filter "Windows.Foundation.UniversalApiContract.winmd" -File -ErrorAction SilentlyContinue |
+              Select-Object -First 1
+          }
+          if (-not $universal) {
+            throw "Windows.Foundation.UniversalApiContract.winmd was not found."
+          }
+          Copy-Item $universal.FullName (Join-Path $legacyMetadata "Windows.Foundation.UniversalApiContract.winmd") -Force
+
           Write-Host "Using Windows metadata: $($winmd.FullName)"
+          Write-Host "Using Universal API contract: $($universal.FullName)"
           Write-Host "Prepared legacy metadata path: $(Join-Path $legacyMetadata 'Windows.winmd')"
 
       - name: Install Windows Phone 8.1 SDK components
