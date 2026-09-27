@@ -31,8 +31,10 @@
 
                 <Button Content="HELLO" Click="HelloButton_Click" Margin="0,10,0,14"/>
 
-                <TextBlock Text="Устройства и виджеты" FontSize="21" Margin="0,0,0,8"/>
-                <StackPanel x:Name="WidgetHost"/>
+                <TextBlock Text="Страницы виджетов" FontSize="21" Margin="0,0,0,8"/>
+                <Pivot x:Name="WidgetPages"
+                       Height="360"
+                       Margin="0,0,0,8"/>
 
                 <TextBlock Text="MQTT / ESP32 log" FontSize="19" Margin="0,16,0,6"/>
                 <Border BorderThickness="1" Padding="6" MinHeight="120">
