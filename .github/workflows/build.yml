@@ -20,55 +20,55 @@ jobs:
             "$env:ProgramFiles\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe",
             "$env:ProgramFiles(x86)\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe",
             "$env:ProgramFiles\Microsoft Visual Studio\2019\Enterprise\MSBuild\Current\Bin\MSBuild.exe",
-            "$env:ProgramFiles(x86)\Microsoft Visual Studio\2019\Enterprise\MSBuild\Current\Bin\MSBuild.exe",
-            "$env:ProgramFiles\Microsoft Visual Studio\2019\Professional\MSBuild\Current\Bin\MSBuild.exe",
-            "$env:ProgramFiles(x86)\Microsoft Visual Studio\2019\Professional\MSBuild\Current\Bin\MSBuild.exe"
+            "$env:ProgramFiles(x86)\Microsoft Visual Studio\2019\Enterprise\MSBuild\Current\Bin\MSBuild.exe"
           )
 
           $selected = $null
-          $selectedTarget = $null
-
           foreach ($msbuild in $candidates) {
-            if (-not (Test-Path $msbuild)) {
-              continue
-            }
-
+            if (-not (Test-Path $msbuild)) { continue }
             $msbuildRoot = Split-Path (Split-Path (Split-Path $msbuild -Parent) -Parent) -Parent
-            $targetCandidates = @(
+            $targets = @(
               (Join-Path $msbuildRoot "Microsoft\WindowsXaml\v17.0\8.1\Microsoft.Windows.UI.Xaml.CSharp.Targets"),
               (Join-Path $msbuildRoot "Microsoft\WindowsXaml\v16.0\8.1\Microsoft.Windows.UI.Xaml.CSharp.Targets"),
               (Join-Path $msbuildRoot "Microsoft\VisualStudio\v17.0\WindowsXaml\Microsoft.Windows.UI.Xaml.CSharp.targets"),
               (Join-Path $msbuildRoot "Microsoft\VisualStudio\v16.0\WindowsXaml\Microsoft.Windows.UI.Xaml.CSharp.targets")
             )
-
-            Write-Host "Checking MSBuild: $msbuild"
-            foreach ($target in $targetCandidates) {
-              Write-Host "  Target: $target"
+            foreach ($target in $targets) {
               if (Test-Path $target) {
                 $selected = $msbuild
-                $selectedTarget = $target
+                Write-Host "Selected MSBuild: $msbuild"
+                Write-Host "Selected XAML targets: $target"
                 break
               }
             }
-
-            if ($selected) {
-              break
-            }
+            if ($selected) { break }
           }
 
           if (-not $selected) {
-            Write-Host "WindowsXaml targets found:"
-            Get-ChildItem "C:\Program Files\Microsoft Visual Studio","C:\Program Files (x86)\Microsoft Visual Studio","C:\Program Files (x86)\MSBuild" -Filter Microsoft.Windows.UI.Xaml.CSharp.Targets -Recurse -ErrorAction SilentlyContinue |
-              Select-Object -ExpandProperty FullName
-
             throw "No installed MSBuild with WP8.1 Windows XAML targets was found."
           }
 
-          Write-Host "Selected MSBuild: $selected"
-          Write-Host "Selected target: $selectedTarget"
           "MSBUILD_PATH=$selected" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "MSBUILD_TARGET=$selectedTarget" | Out-File -FilePath $env:GITHUB_ENV -Append
           & $selected -version
+
+      - name: Install .NET Framework 4.0 reference assemblies
+        shell: powershell
+        run: |
+          $nuget = Join-Path $env:RUNNER_TEMP "nuget.exe"
+          Invoke-WebRequest -Uri "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe" -OutFile $nuget
+          $packages = Join-Path $env:RUNNER_TEMP "nuget-packages"
+          New-Item -ItemType Directory -Force -Path $packages | Out-Null
+          & $nuget install Microsoft.NETFramework.ReferenceAssemblies -Version 1.0.3 -OutputDirectory $packages -NonInteractive
+
+          $frameworkRoot = Join-Path $packages "Microsoft.NETFramework.ReferenceAssemblies.1.0.3\build\.NETFramework\v4.0"
+          if (-not (Test-Path (Join-Path $frameworkRoot "mscorlib.dll"))) {
+            Write-Host "Installed reference assemblies:"
+            Get-ChildItem $packages -Recurse -Filter mscorlib.dll | Select-Object -ExpandProperty FullName
+            throw "NET Framework 4.0 reference assemblies were not installed at the expected location."
+          }
+
+          Write-Host "Using .NET Framework 4.0 reference assemblies: $frameworkRoot"
+          "FRAMEWORK_PATH=$frameworkRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Locate solution
         shell: powershell
@@ -81,7 +81,7 @@ jobs:
       - name: Build solution
         shell: powershell
         run: |
-          & "$env:MSBUILD_PATH" ".\ESP32-AI-Control-WP81.sln" /m /t:Build /p:Configuration=Debug /p:Platform="ARM" /verbosity:minimal
+          & "$env:MSBUILD_PATH" ".\ESP32-AI-Control-WP81.sln" /m /t:Build /p:Configuration=Debug /p:Platform="ARM" /p:FrameworkPathOverride="$env:FRAMEWORK_PATH" /verbosity:minimal
           if ($LASTEXITCODE -ne 0) {
             throw "MSBuild failed with exit code $LASTEXITCODE"
           }
