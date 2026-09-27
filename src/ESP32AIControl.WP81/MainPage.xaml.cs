@@ -56,8 +56,8 @@ namespace ESP32AIControl.WP81
                     return;
                 }
 
-                await _mqtt.PublishControlAsync(string.Empty, string.Empty, string.Empty);
-                Log("TX control test");
+                await _mqtt.PublishHelloAsync();
+                Log("TX /" + _settings.Prefix + " HELLO");
             }
             catch (Exception ex)
             {
