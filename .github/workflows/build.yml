@@ -12,7 +12,6 @@ concurrency:
 jobs:
   build:
     runs-on: windows-2022
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -21,85 +20,44 @@ jobs:
         shell: powershell
         run: |
           $kitsRoot = Join-Path ${env:ProgramFiles(x86)} "Windows Kits"
-          $winmd = Get-ChildItem $kitsRoot -Recurse -Filter "Windows.winmd" -File -ErrorAction SilentlyContinue |
-            Where-Object { $_.FullName -match "\\References\\CommonConfiguration\\Neutral\\Windows.winmd$" } |
-            Sort-Object FullName -Descending |
-            Select-Object -First 1
-
-          if (-not $winmd) {
-            Write-Host "No Windows.winmd found in installed Windows Kits; obtaining metadata from Microsoft Windows SDK reference package."
-            $nuget = Join-Path $env:RUNNER_TEMP "nuget.exe"
-            Invoke-WebRequest -Uri "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe" -OutFile $nuget
-            $metadataPackageRoot = Join-Path $env:RUNNER_TEMP "windows-sdk-metadata"
-            New-Item -ItemType Directory -Force -Path $metadataPackageRoot | Out-Null
-            & $nuget install Microsoft.Windows.SDK.Contracts -Version 10.0.26100.4654 -OutputDirectory $metadataPackageRoot -NonInteractive
-
-            $winmd = Get-ChildItem $metadataPackageRoot -Recurse -Filter "Windows.winmd" -File -ErrorAction SilentlyContinue |
-              Select-Object -First 1
-
-            if (-not $winmd) {
-              Write-Host "Windows SDK package contents:"
-              Get-ChildItem $metadataPackageRoot -Recurse | Select-Object -First 200 FullName
-              throw "Windows.winmd was not found in the Microsoft.Windows.SDK.Contracts package."
-            }
-          }
-
           $legacyRoot = Join-Path $kitsRoot "8.1"
           $legacyMetadata = Join-Path $legacyRoot "References\CommonConfiguration\Neutral"
           New-Item -ItemType Directory -Force -Path $legacyMetadata | Out-Null
+
+          $winmd = Get-ChildItem $kitsRoot -Recurse -Filter "Windows.winmd" -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match "\\References\\CommonConfiguration\\Neutral\\Windows.winmd$" } |
+            Sort-Object FullName -Descending | Select-Object -First 1
+
+          $metadataRoot = Join-Path $env:RUNNER_TEMP "windows-sdk-metadata"
+          if (-not $winmd -or -not (Test-Path (Join-Path $legacyMetadata "Windows.Foundation.UniversalApiContract.winmd"))) {
+            $nuget = Join-Path $env:RUNNER_TEMP "nuget.exe"
+            if (-not (Test-Path $nuget)) {
+              Invoke-WebRequest -Uri "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe" -OutFile $nuget
+            }
+            New-Item -ItemType Directory -Force -Path $metadataRoot | Out-Null
+            & $nuget install Microsoft.Windows.SDK.Contracts -Version 10.0.26100.4654 -OutputDirectory $metadataRoot -NonInteractive
+          }
+
+          if (-not $winmd) {
+            $winmd = Get-ChildItem $metadataRoot -Recurse -Filter "Windows.winmd" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+          }
+          if (-not $winmd) { throw "Windows.winmd was not found." }
           Copy-Item $winmd.FullName (Join-Path $legacyMetadata "Windows.winmd") -Force
 
-          # The WP8.1 XAML compiler also requires the Universal API contract metadata.
-          $universal = Get-ChildItem (Join-Path $kitsRoot "8.1") -Recurse -Filter "Windows.Foundation.UniversalApiContract.winmd" -File -ErrorAction SilentlyContinue |
-            Select-Object -First 1
+          $universal = Get-ChildItem $kitsRoot -Recurse -Filter "Windows.Foundation.UniversalApiContract.winmd" -File -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $universal) {
-            $metadataRoot = Join-Path $env:RUNNER_TEMP "windows-sdk-metadata"
-            if (-not (Test-Path $metadataRoot)) {
-              $nuget = Join-Path $env:RUNNER_TEMP "nuget.exe"
-              Invoke-WebRequest -Uri "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe" -OutFile $nuget
-              New-Item -ItemType Directory -Force -Path $metadataRoot | Out-Null
-              & $nuget install Microsoft.Windows.SDK.Contracts -Version 10.0.26100.4654 -OutputDirectory $metadataRoot -NonInteractive
-            }
-            $universal = Get-ChildItem $metadataRoot -Recurse -Filter "Windows.Foundation.UniversalApiContract.winmd" -File -ErrorAction SilentlyContinue |
-              Select-Object -First 1
+            $universal = Get-ChildItem $metadataRoot -Recurse -Filter "Windows.Foundation.UniversalApiContract.winmd" -File -ErrorAction SilentlyContinue | Select-Object -First 1
           }
-          if (-not $universal) {
-            throw "Windows.Foundation.UniversalApiContract.winmd was not found."
-          }
-          # Legacy XAML resolution uses the contract name as an assembly and expects
-          # the historical Windows Kits\8.1\References\<ContractName> layout.
-          $universalReferenceDir = Join-Path $legacyRoot "References\Windows.Foundation.UniversalApiContract"
-          New-Item -ItemType Directory -Force -Path $universalReferenceDir | Out-Null
-          Copy-Item $universal.FullName (Join-Path $universalReferenceDir "Windows.Foundation.UniversalApiContract.winmd") -Force
+          if (-not $universal) { throw "Windows.Foundation.UniversalApiContract.winmd was not found." }
 
-          # Keep a copy in the neutral reference directory as well; some WP8.1 targets
-          # use that location during the legacy SDK resolution pass.
+          $universalDir = Join-Path $legacyRoot "References\Windows.Foundation.UniversalApiContract"
+          New-Item -ItemType Directory -Force -Path $universalDir | Out-Null
+          Copy-Item $universal.FullName (Join-Path $universalDir "Windows.Foundation.UniversalApiContract.winmd") -Force
           Copy-Item $universal.FullName (Join-Path $legacyMetadata "Windows.Foundation.UniversalApiContract.winmd") -Force
 
-          # FoundationContract is a dependency of the Universal API contract on modern
-          # Windows SDK metadata. If available in the package, expose it using the same
-          # historical reference layout.
-          $foundation = Get-ChildItem (Join-Path $kitsRoot "8.1") -Recurse -Filter "Windows.Foundation.FoundationContract.winmd" -File -ErrorAction SilentlyContinue |
-            Select-Object -First 1
-          if (-not $foundation) {
-            $metadataRoot = Join-Path $env:RUNNER_TEMP "windows-sdk-metadata"
-            if (Test-Path $metadataRoot) {
-              $foundation = Get-ChildItem $metadataRoot -Recurse -Filter "Windows.Foundation.FoundationContract.winmd" -File -ErrorAction SilentlyContinue |
-                Select-Object -First 1
-            }
-          }
-          if ($foundation) {
-            $foundationReferenceDir = Join-Path $legacyRoot "References\Windows.Foundation.FoundationContract"
-            New-Item -ItemType Directory -Force -Path $foundationReferenceDir | Out-Null
-            Copy-Item $foundation.FullName (Join-Path $foundationReferenceDir "Windows.Foundation.FoundationContract.winmd") -Force
-            Copy-Item $foundation.FullName (Join-Path $legacyMetadata "Windows.Foundation.FoundationContract.winmd") -Force
-            Write-Host "Using Foundation contract: $($foundation.FullName)"
-          }
-
-          Write-Host "Using Windows metadata: $($winmd.FullName)"
-          Write-Host "Using Universal API contract: $($universal.FullName)"
-          Write-Host "Prepared Universal API contract reference path: $universalReferenceDir"
-          Write-Host "Prepared legacy metadata path: $(Join-Path $legacyMetadata 'Windows.winmd')"
+          Write-Host "Windows SDK metadata root: $legacyRoot"
+          Write-Host "Windows.winmd: $(Join-Path $legacyMetadata 'Windows.winmd')"
+          Write-Host "Universal contract: $(Join-Path $universalDir 'Windows.Foundation.UniversalApiContract.winmd')"
 
       - name: Install Windows Phone 8.1 SDK components
         shell: powershell
@@ -107,128 +65,42 @@ jobs:
         run: |
           $iso = Join-Path $env:RUNNER_TEMP "windowsphone81sdkupdate1.iso"
           $url = "https://download.microsoft.com/download/E/7/D/E7D9744A-06A6-46FB-AEA4-50FAAEC6CE73/windowsphone81sdkupdate1.iso"
-
-          Write-Host "Downloading official Windows Phone 8.1 Update 1 ISO with BITS..."
           Start-BitsTransfer -Source $url -Destination $iso -DisplayName "Windows Phone 8.1 SDK ISO" -Description "Microsoft Windows Phone 8.1 Update 1" -Priority High
-
-          if (-not (Test-Path $iso)) {
-            throw "Windows Phone SDK ISO was not downloaded."
-          }
-
-          $size = (Get-Item $iso).Length
-          Write-Host "Downloaded Windows Phone SDK ISO: $size bytes"
-          if ($size -lt 800MB) {
-            throw "Downloaded Windows Phone SDK ISO is unexpectedly small."
-          }
-
           $image = Mount-DiskImage -ImagePath $iso -PassThru
           try {
             $volume = $image | Get-Volume | Where-Object DriveLetter | Select-Object -First 1
-            if (-not $volume) { throw "Could not determine mounted Windows Phone SDK ISO drive." }
-            $root = "$($volume.DriveLetter):\\"
-            Write-Host "Mounted SDK ISO at $root"
-
+            if (-not $volume) { throw "Could not determine mounted SDK drive." }
+            $root = "$($volume.DriveLetter):\"
             $msis = Get-ChildItem $root -Recurse -Filter *.msi -File -ErrorAction SilentlyContinue
-            Write-Host "MSI packages found: $($msis.Count)"
-
             $selected = foreach ($msi in $msis) {
-              if ($msi.Name -ieq 'mobiletools_wpsdkcore_net.msi' -or
-                  $msi.Name -ieq 'phoneaddon_sharedcore.msi' -or
-                  $msi.Name -ieq 'typescript_sdk.msi' -or
-                  $msi.Name -ieq 'WindowsPhoneSdk-ARM.msi' -or
+              if ($msi.Name -ieq 'WindowsPhoneSdk-ARM.msi' -or
                   $msi.Name -ieq 'WindowsPhoneSdk-Desktop.msi' -or
                   $msi.Name -ieq 'WindowsPhoneSdk-Desktop-x64.msi' -or
-                  $msi.Name -ieq 'WindowsPhoneSdk-x86.msi' -or
-                  $msi.Name -like 'Windows Software Development Kit for Windows Store Apps-x86_en-us.msi') {
-                $msi
-              }
+                  $msi.Name -ieq 'WindowsPhoneSdk-x86.msi') { $msi }
             }
-
-            if (-not $selected) {
-              Write-Host "Available MSI packages (first 150):"
-              $msis | Select-Object -First 150 -ExpandProperty FullName
-              throw "No Windows Phone 8.1 SDK MSI packages were found on the ISO."
-            }
-
-            Write-Host "Selected SDK MSI packages:"
-            $selected | ForEach-Object { Write-Host $_.FullName }
-
+            if (-not $selected) { throw "Windows Phone SDK MSI packages were not found." }
             foreach ($msi in $selected) {
-              $log = Join-Path $env:RUNNER_TEMP ($msi.BaseName + '.log')
-              Write-Host "Installing $($msi.Name)"
-              $proc = Start-Process -FilePath "msiexec.exe" -ArgumentList '/i', $msi.FullName, '/qn', '/norestart', '/L*v', $log -Wait -PassThru
-              Write-Host "Exit code: $($proc.ExitCode)"
-              if ($proc.ExitCode -ne 0 -and $proc.ExitCode -ne 3010) {
-                if (Test-Path $log) { Get-Content $log -Tail 120 }
-                throw "Windows Phone SDK MSI installation failed: $($msi.Name)"
-              }
+              $p = Start-Process msiexec.exe -ArgumentList '/i',$msi.FullName,'/qn','/norestart' -Wait -PassThru
+              if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { throw "SDK MSI failed: $($msi.Name), code $($p.ExitCode)" }
             }
-          }
-          finally {
+          } finally {
             Dismount-DiskImage -ImagePath $iso -ErrorAction SilentlyContinue
           }
 
-          $phoneRoots = @(
-            'C:\\Program Files (x86)\\Microsoft SDKs\\Windows Phone',
-            'C:\\Program Files (x86)\\Microsoft SDKs\\Windows Phone\\v8.1'
-          )
-          foreach ($path in $phoneRoots) {
-            if (Test-Path $path) { Write-Host "Found: $path" }
-          }
-
-          $registryHints = @(
-            'HKLM:\SOFTWARE\\Microsoft\\Microsoft SDKs\\WindowsPhone',
-            'HKLM:\SOFTWARE\\WOW6432Node\\Microsoft\\Microsoft SDKs\\WindowsPhone'
-          )
-          foreach ($key in $registryHints) {
-            if (Test-Path $key) {
-              Write-Host "Found SDK registry key: $key"
-              Get-ItemProperty $key | Format-List *
-            }
-          }
       - name: Configure Windows Phone SDK path
         shell: powershell
         run: |
-          $roots = @(
-            'C:\Program Files (x86)\Microsoft SDKs\Windows Phone\v8.1',
-            'C:\Program Files (x86)\Microsoft SDKs\Windows Phone'
-          )
-          $sdkRoot = $null
-          foreach ($root in $roots) {
-            if (Test-Path $root) {
-              $candidate = Get-ChildItem $root -Directory -ErrorAction SilentlyContinue |
-                Where-Object { $_.Name -eq 'v8.1' } | Select-Object -First 1
-              if ($candidate) { $sdkRoot = $candidate.FullName; break }
-              if (Test-Path (Join-Path $root 'References')) { $sdkRoot = $root; break }
-            }
-          }
-          if (-not $sdkRoot) { throw "Installed Windows Phone 8.1 SDK root was not found." }
+          $sdkRoot = 'C:\Program Files (x86)\Microsoft SDKs\Windows Phone\v8.1'
+          if (-not (Test-Path (Join-Path $sdkRoot 'References'))) { throw "WP8.1 SDK root not found: $sdkRoot" }
 
-          # Legacy WP8.1 XAML targets expect the historical Windows Phone Kits path.
           $legacyPhoneRoot = Join-Path ${env:ProgramFiles(x86)} 'Windows Phone Kits\8.1'
           New-Item -ItemType Directory -Force -Path $legacyPhoneRoot | Out-Null
-          Write-Host "Copying Windows Phone SDK from $sdkRoot to $legacyPhoneRoot"
           Copy-Item (Join-Path $sdkRoot '*') $legacyPhoneRoot -Recurse -Force
 
           $legacyReferences = Join-Path $legacyPhoneRoot 'References\CommonConfiguration\Neutral'
           New-Item -ItemType Directory -Force -Path $legacyReferences | Out-Null
-          $phoneWinmd = Get-ChildItem $sdkRoot -Recurse -Filter 'Windows.winmd' -File -ErrorAction SilentlyContinue |
-            Where-Object { $_.FullName -match '\\References\\CommonConfiguration\\Neutral\\Windows\.winmd$' } |
-            Select-Object -First 1
+          Copy-Item (Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\8.1\References\CommonConfiguration\Neutral\Windows.winmd') (Join-Path $legacyReferences 'Windows.winmd') -Force
 
-          if ($phoneWinmd) {
-            Copy-Item $phoneWinmd.FullName (Join-Path $legacyReferences 'Windows.winmd') -Force
-            Write-Host "Windows Phone metadata: $($phoneWinmd.FullName)"
-          } else {
-            $genericWinmd = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\8.1\References\CommonConfiguration\Neutral\Windows.winmd'
-            if (Test-Path $genericWinmd) {
-              Copy-Item $genericWinmd (Join-Path $legacyReferences 'Windows.winmd') -Force
-            } else {
-              throw "Windows.winmd was not found for the Windows Phone SDK."
-            }
-          }
-
-          # Older XAML targets discover WP SDK through these registry keys.
           $registryPaths = @(
             'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Microsoft SDKs\WindowsPhone\v8.1',
             'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Microsoft SDKs\WindowsPhoneApp\v8.1'
@@ -239,63 +111,17 @@ jobs:
             New-ItemProperty -Path $key -Name 'InstallationFolder' -PropertyType String -Value ($legacyPhoneRoot + '\') -Force | Out-Null
           }
 
-          Write-Host "Windows Phone SDK root: $sdkRoot"
-          Write-Host "Legacy Windows Phone SDK root: $legacyPhoneRoot"
-          Get-ItemProperty $registryPaths[0] | Format-List *
-          Get-ChildItem $legacyPhoneRoot -Recurse -File -ErrorAction SilentlyContinue |
-            Where-Object { $_.Name -ieq 'Windows.winmd' -or $_.Name -ieq 'Windows.props' } |
-            Select-Object -First 150 FullName
+          "WINDOWS_PHONE_SDK_DIR=$legacyPhoneRoot" | Out-File $env:GITHUB_ENV -Append
+          "TARGET_PLATFORM_SDK_ROOT_OVERRIDE=$legacyPhoneRoot" | Out-File $env:GITHUB_ENV -Append
+          "WINDOWS_SDK_ROOT=$(Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\8.1')" | Out-File $env:GITHUB_ENV -Append
 
-          "WINDOWS_PHONE_SDK_DIR=$legacyPhoneRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "TARGET_PLATFORM_SDK_ROOT_OVERRIDE=$legacyPhoneRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
-          # Keep the Windows SDK metadata root separate from the Windows Phone SDK root.
-          # The legacy XAML compiler resolves WinRT contracts through Windows Kits\8.1.
-          "WINDOWS_SDK_ROOT=$legacyRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Locate WP XAML build tools
         shell: powershell
         run: |
-          $candidates = @(
-            "$env:ProgramFiles\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe",
-            "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe",
-            "$env:ProgramFiles\Microsoft Visual Studio\2019\Enterprise\MSBuild\Current\Bin\MSBuild.exe",
-            "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2019\Enterprise\MSBuild\Current\Bin\MSBuild.exe"
-          )
-
-          $selected = $null
-          foreach ($msbuild in $candidates) {
-            if (-not (Test-Path $msbuild)) { continue }
-            $msbuildRoot = Split-Path (Split-Path (Split-Path $msbuild -Parent) -Parent) -Parent
-            $targets = @(
-              (Join-Path $msbuildRoot "Microsoft\WindowsXaml\v17.0\8.1\Microsoft.Windows.UI.Xaml.CSharp.Targets"),
-              (Join-Path $msbuildRoot "Microsoft\WindowsXaml\v16.0\8.1\Microsoft.Windows.UI.Xaml.CSharp.Targets"),
-              (Join-Path $msbuildRoot "Microsoft\VisualStudio\v17.0\WindowsXaml\Microsoft.Windows.UI.Xaml.CSharp.targets"),
-              (Join-Path $msbuildRoot "Microsoft\VisualStudio\v16.0\WindowsXaml\Microsoft.Windows.UI.Xaml.CSharp.targets")
-            )
-            foreach ($target in $targets) {
-              if (Test-Path $target) {
-                $selected = $msbuild
-                Write-Host "Selected MSBuild: $msbuild"
-                Write-Host "Selected XAML targets: $target"
-                break
-              }
-            }
-            if ($selected) { break }
-          }
-
-          if (-not $selected) {
-            throw "No installed MSBuild with WP8.1 Windows XAML targets was found."
-          }
-
-          "MSBUILD_PATH=$selected" | Out-File -FilePath $env:GITHUB_ENV -Append
-          & $selected -version
-
-      - name: Inspect WP8.1 XAML SDK target properties
-        shell: powershell
-        run: |
-          $target = Get-ChildItem "$env:ProgramFiles\Microsoft Visual Studio\2022\Enterprise\MSBuild\Microsoft\WindowsXaml" -Recurse -Filter "Microsoft.Windows.UI.Xaml.CSharp.Targets" -File -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $target) { throw "WP8.1 XAML target file not found for inspection." }
-          Write-Host "Inspecting XAML target: $($target.FullName)"
-          Select-String -Path $target.FullName -Pattern "WindowsPhone|TargetPlatformSdk|Windows.metadata|WindowsSdkDir|SDKRoot" -Context 2,3
+          $msbuild = "$env:ProgramFiles\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe"
+          $target = "$env:ProgramFiles\Microsoft Visual Studio\2022\Enterprise\MSBuild\Microsoft\WindowsXaml\v17.0\8.1\Microsoft.Windows.UI.Xaml.CSharp.Targets"
+          if (-not (Test-Path $msbuild) -or -not (Test-Path $target)) { throw "WP8.1 XAML MSBuild tools not found." }
+          "MSBUILD_PATH=$msbuild" | Out-File $env:GITHUB_ENV -Append
 
       - name: Install .NET Framework 4.0 reference assemblies
         shell: powershell
@@ -304,34 +130,16 @@ jobs:
           Invoke-WebRequest -Uri "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe" -OutFile $nuget
           $packages = Join-Path $env:RUNNER_TEMP "nuget-packages"
           New-Item -ItemType Directory -Force -Path $packages | Out-Null
-
           & $nuget install Microsoft.NETFramework.ReferenceAssemblies.net40 -Version 1.0.3 -OutputDirectory $packages -NonInteractive
-
           $frameworkRoot = Join-Path $packages "Microsoft.NETFramework.ReferenceAssemblies.net40.1.0.3\build\.NETFramework\v4.0"
-          if (-not (Test-Path (Join-Path $frameworkRoot "mscorlib.dll"))) {
-            Write-Host "Installed reference assemblies:"
-            Get-ChildItem $packages -Recurse -Filter mscorlib.dll | Select-Object -ExpandProperty FullName
-            throw "NET Framework 4.0 reference assemblies were not installed at the expected location."
-          }
-
-          Write-Host "Using .NET Framework 4.0 reference assemblies: $frameworkRoot"
-          "FRAMEWORK_PATH=$frameworkRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
-
-      - name: Locate solution
-        shell: powershell
-        run: |
-          if (-not (Test-Path ".\ESP32-AI-Control-WP81.sln")) {
-            throw "Solution ESP32-AI-Control-WP81.sln not found."
-          }
-          Get-ChildItem -Recurse -Filter *.csproj | Select-Object FullName
+          if (-not (Test-Path (Join-Path $frameworkRoot "mscorlib.dll"))) { throw "NET Framework 4.0 reference assemblies not found." }
+          "FRAMEWORK_PATH=$frameworkRoot" | Out-File $env:GITHUB_ENV -Append
 
       - name: Build solution
         shell: powershell
         run: |
           & "$env:MSBUILD_PATH" ".\ESP32-AI-Control-WP81.sln" /m /t:Build /p:Configuration=Debug /p:Platform="ARM" /p:FrameworkPathOverride="$env:FRAMEWORK_PATH" /p:WindowsPhoneSdkDir="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSDKDir="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSdkRoot="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSDKRoot="$env:WINDOWS_PHONE_SDK_DIR" /p:TargetPlatformSdkRootOverride="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:TargetPlatformSdkRoot="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:WindowsSdkDir="$env:WINDOWS_SDK_ROOT" /p:WindowsPhoneSdkVersion="8.1" /verbosity:minimal
-          if ($LASTEXITCODE -ne 0) {
-            throw "MSBuild failed with exit code $LASTEXITCODE"
-          }
+          if ($LASTEXITCODE -ne 0) { throw "MSBuild failed with exit code $LASTEXITCODE" }
 
       - name: Upload build output
         if: success()
