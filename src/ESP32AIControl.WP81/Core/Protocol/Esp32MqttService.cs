@@ -9,7 +9,7 @@ namespace ESP32AIControl.WP81.Core.Protocol
     public sealed class Esp32MqttService
     {
         private readonly MqttClient _mqtt;
-        private readonly Esp32Protocol _protocol;
+        private Esp32Protocol _protocol;
         private readonly DeviceRepository _devices;
         private readonly MqttSettings _settings;
 
@@ -24,6 +24,9 @@ namespace ESP32AIControl.WP81.Core.Protocol
 
         public Esp32MqttService(MqttSettings settings, DeviceRepository devices)
         {
+            if (settings == null) throw new ArgumentNullException("settings");
+            if (devices == null) throw new ArgumentNullException("devices");
+
             _settings = settings;
             _devices = devices;
             _mqtt = new MqttClient();
@@ -36,6 +39,9 @@ namespace ESP32AIControl.WP81.Core.Protocol
 
         public async Task ConnectAsync()
         {
+            _settings.Prefix = (_settings.Prefix ?? string.Empty).Trim('/');
+            _protocol = new Esp32Protocol(_settings.Prefix);
+
             await _mqtt.ConnectAsync(
                 _settings.Host,
                 _settings.Port,
@@ -43,8 +49,13 @@ namespace ESP32AIControl.WP81.Core.Protocol
                 _settings.UserName,
                 _settings.Password);
 
-            await _mqtt.SubscribeAsync("/" + _settings.Prefix.Trim('/') + "/#", 1);
-            await _mqtt.PublishAsync("/" + _settings.Prefix.Trim('/'), "HELLO", 1, false);
+            await _mqtt.SubscribeAsync("/" + _settings.Prefix + "/#", 1);
+            await PublishHelloAsync();
+        }
+
+        public Task PublishHelloAsync()
+        {
+            return _mqtt.PublishAsync("/" + _settings.Prefix, "HELLO", 1, false);
         }
 
         public Task DisconnectAsync()
@@ -54,12 +65,10 @@ namespace ESP32AIControl.WP81.Core.Protocol
 
         public Task PublishControlAsync(string deviceId, string widgetId, string value)
         {
-            var topic = "/" + _settings.Prefix.Trim('/') + "/" +
+            var topic = "/" + _settings.Prefix + "/" +
                         (deviceId ?? string.Empty).Trim('/') + "/" +
                         (widgetId ?? string.Empty).Trim('/') + "/control";
-            var payload = "{\"status\":\"" +
-                          EscapeJson(value) +
-                          "\"}";
+            var payload = "{"status":"" + EscapeJson(value) + ""}";
 
             return _mqtt.PublishAsync(topic, payload, 1, false);
         }
@@ -103,10 +112,11 @@ namespace ESP32AIControl.WP81.Core.Protocol
         private static string EscapeJson(string value)
         {
             return (value ?? string.Empty)
-                .Replace("\\", "\\\\")
-                .Replace("\"", "\\\"")
-                .Replace("\r", "\\r")
-                .Replace("\n", "\\n");
+                .Replace("\", "\\")
+                .Replace(""", "\"")
+                .Replace("", "\r")
+                .Replace("
+", "\n");
         }
     }
 }
