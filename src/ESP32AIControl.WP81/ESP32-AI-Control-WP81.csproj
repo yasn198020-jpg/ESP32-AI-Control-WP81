@@ -1,0 +1,66 @@
+<Project ToolsVersion="12.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\Microsoft\WindowsPhone\v$(MSBuildToolsVersion)\Microsoft.WindowsPhone.CSharp.targets" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{9A7C6E32-7B8D-4DCE-9B0A-4D9B9B8B0A81}</ProjectGuid>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>ESP32AIControl.WP81</RootNamespace>
+    <AssemblyName>ESP32-AI-Control-WP81</AssemblyName>
+    <TargetPlatformIdentifier>WindowsPhone</TargetPlatformIdentifier>
+    <TargetPlatformVersion>8.1</TargetPlatformVersion>
+    <TargetPlatformMinVersion>8.1</TargetPlatformMinVersion>
+    <AppxPackageSigningEnabled>False</AppxPackageSigningEnabled>
+    <DefaultLanguage>ru-RU</DefaultLanguage>
+    <AppxManifest>Package.appxmanifest</AppxManifest>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|AnyCPU'">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE;NETFX_CORE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|AnyCPU'">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE;NETFX_CORE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AppxManifest Include="Package.appxmanifest" />
+    <Content Include="Assets\**\*.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="App.xaml.cs" />
+    <Compile Include="MainPage.xaml.cs">
+      <DependentUpon>MainPage.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Core\**\*.cs" />
+    <Compile Include="Models\**\*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Page Include="App.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="MainPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Code</SubType>
+    </Page>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="System.Runtime" />
+    <Reference Include="System.Runtime.WindowsRuntime" />
+    <Reference Include="Windows" />
+  </ItemGroup>
+</Project>
