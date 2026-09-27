@@ -17,49 +17,57 @@ jobs:
         shell: powershell
         run: |
           $candidates = @(
-            "$env:ProgramFiles(x86)\Microsoft Visual Studio\2019\Enterprise\MSBuild\Current\Bin\MSBuild.exe",
-            "$env:ProgramFiles(x86)\Microsoft Visual Studio\2019\Professional\MSBuild\Current\Bin\MSBuild.exe",
+            "$env:ProgramFiles\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe",
+            "$env:ProgramFiles(x86)\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe",
             "$env:ProgramFiles\Microsoft Visual Studio\2019\Enterprise\MSBuild\Current\Bin\MSBuild.exe",
+            "$env:ProgramFiles(x86)\Microsoft Visual Studio\2019\Enterprise\MSBuild\Current\Bin\MSBuild.exe",
             "$env:ProgramFiles\Microsoft Visual Studio\2019\Professional\MSBuild\Current\Bin\MSBuild.exe",
-            "$env:ProgramFiles\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe"
+            "$env:ProgramFiles(x86)\Microsoft Visual Studio\2019\Professional\MSBuild\Current\Bin\MSBuild.exe"
           )
 
           $selected = $null
+          $selectedTarget = $null
+
           foreach ($msbuild in $candidates) {
-            if (Test-Path $msbuild) {
-              $root = Split-Path (Split-Path (Split-Path $msbuild -Parent) -Parent) -Parent
-              $target = Join-Path $root "MSBuild\Microsoft\VisualStudio\v16.0\WindowsXaml\Microsoft.Windows.UI.Xaml.CSharp.targets"
-              if ($msbuild -like "*Visual Studio\2019\*") {
-                $target = Join-Path $root "MSBuild\Microsoft\VisualStudio\v16.0\WindowsXaml\Microsoft.Windows.UI.Xaml.CSharp.targets"
-              } else {
-                $target = Join-Path $root "MSBuild\Microsoft\VisualStudio\v17.0\WindowsXaml\Microsoft.Windows.UI.Xaml.CSharp.targets"
-              }
+            if (-not (Test-Path $msbuild)) {
+              continue
+            }
 
-              Write-Host "Checking: $msbuild"
-              Write-Host "Target:   $target"
+            $msbuildRoot = Split-Path (Split-Path (Split-Path $msbuild -Parent) -Parent) -Parent
+            $targetCandidates = @(
+              (Join-Path $msbuildRoot "Microsoft\WindowsXaml\v17.0\8.1\Microsoft.Windows.UI.Xaml.CSharp.Targets"),
+              (Join-Path $msbuildRoot "Microsoft\WindowsXaml\v16.0\8.1\Microsoft.Windows.UI.Xaml.CSharp.Targets"),
+              (Join-Path $msbuildRoot "Microsoft\VisualStudio\v17.0\WindowsXaml\Microsoft.Windows.UI.Xaml.CSharp.targets"),
+              (Join-Path $msbuildRoot "Microsoft\VisualStudio\v16.0\WindowsXaml\Microsoft.Windows.UI.Xaml.CSharp.targets")
+            )
 
+            Write-Host "Checking MSBuild: $msbuild"
+            foreach ($target in $targetCandidates) {
+              Write-Host "  Target: $target"
               if (Test-Path $target) {
                 $selected = $msbuild
-                "MSBUILD_PATH=$msbuild" | Out-File -FilePath $env:GITHUB_ENV -Append
-                "MSBUILD_TARGET=$target" | Out-File -FilePath $env:GITHUB_ENV -Append
+                $selectedTarget = $target
                 break
               }
+            }
+
+            if ($selected) {
+              break
             }
           }
 
           if (-not $selected) {
-            Write-Host "Installed MSBuild executables:"
-            Get-ChildItem "C:\Program Files\Microsoft Visual Studio","C:\Program Files (x86)\Microsoft Visual Studio" -Filter MSBuild.exe -Recurse -ErrorAction SilentlyContinue |
-              Select-Object -ExpandProperty FullName
-
             Write-Host "WindowsXaml targets found:"
-            Get-ChildItem "C:\Program Files\Microsoft Visual Studio","C:\Program Files (x86)\Microsoft Visual Studio","C:\Program Files (x86)\MSBuild" -Filter Microsoft.Windows.UI.Xaml.CSharp.targets -Recurse -ErrorAction SilentlyContinue |
+            Get-ChildItem "C:\Program Files\Microsoft Visual Studio","C:\Program Files (x86)\Microsoft Visual Studio","C:\Program Files (x86)\MSBuild" -Filter Microsoft.Windows.UI.Xaml.CSharp.Targets -Recurse -ErrorAction SilentlyContinue |
               Select-Object -ExpandProperty FullName
 
-            throw "No installed MSBuild with Microsoft.Windows.UI.Xaml.CSharp.targets was found."
+            throw "No installed MSBuild with WP8.1 Windows XAML targets was found."
           }
 
           Write-Host "Selected MSBuild: $selected"
+          Write-Host "Selected target: $selectedTarget"
+          "MSBUILD_PATH=$selected" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "MSBUILD_TARGET=$selectedTarget" | Out-File -FilePath $env:GITHUB_ENV -Append
           & $selected -version
 
       - name: Locate solution
