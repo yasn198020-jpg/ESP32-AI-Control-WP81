@@ -146,6 +146,19 @@ jobs:
           if (-not (Test-Path (Join-Path $frameworkRoot "mscorlib.dll"))) { throw "NET Framework 4.0 reference assemblies not found." }
           "FRAMEWORK_PATH=$frameworkRoot" | Out-File $env:GITHUB_ENV -Append
 
+      - name: Diagnose XAML metadata resolution
+        shell: powershell
+        run: |
+          Write-Host "=== UniversalApiContract files ==="
+          Get-ChildItem "C:\Program Files (x86)" -Recurse -Filter "Windows.Foundation.UniversalApiContract.winmd" -File -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty FullName
+          Write-Host "=== XAML target around CompileXaml ==="
+          $target = "$env:ProgramFiles\Microsoft Visual Studio\2022\Enterprise\MSBuild\Microsoft\WindowsXaml\v17.0\8.1\Microsoft.Windows.UI.Xaml.Common.targets"
+          if (Test-Path $target) { Get-Content $target | Select-Object -Skip 215 -First 55 }
+          Write-Host "=== SDK registry ==="
+          Get-ItemProperty 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Microsoft SDKs\WindowsPhone\v8.1' -ErrorAction SilentlyContinue | Format-List *
+          Get-ItemProperty 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Microsoft SDKs\WindowsPhoneApp\v8.1' -ErrorAction SilentlyContinue | Format-List *
+
       - name: Build solution
         shell: powershell
         run: |
