@@ -16,10 +16,10 @@ jobs:
       - name: Install Windows 8.1 SDK
         shell: powershell
         run: |
-          $setup = "$env:ProgramFiles(x86)\Microsoft Visual Studio\Installer\setup.exe"
+          $setup = "$env:ProgramFiles(x86)\Microsoft Visual Studio\Installer\vs_installer.exe"
           $vsPath = "$env:ProgramFiles\Microsoft Visual Studio\2022\Enterprise"
           if (-not (Test-Path $setup)) {
-            throw "Visual Studio Installer setup.exe was not found."
+            throw "Visual Studio Installer vs_installer.exe was not found."
           }
           if (-not (Test-Path $vsPath)) {
             throw "Visual Studio 2022 Enterprise installation was not found."
