@@ -112,11 +112,10 @@ namespace ESP32AIControl.WP81.Core.Protocol
         private static string EscapeJson(string value)
         {
             return (value ?? string.Empty)
-                .Replace("\", "\\")
-                .Replace(""", "\"")
-                .Replace("", "\r")
-                .Replace("
-", "\n");
+                .Replace("\\", "\\\\")
+                .Replace("\"", "\\\"")
+                .Replace("\r", "\\r")
+                .Replace("\n", "\\n");
         }
     }
 }
