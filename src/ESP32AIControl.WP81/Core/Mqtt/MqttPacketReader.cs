@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using Windows.Storage.Streams;
 
 namespace ESP32AIControl.WP81.Core.Mqtt
@@ -13,7 +14,7 @@ namespace ESP32AIControl.WP81.Core.Mqtt
             _reader.InputStreamOptions = InputStreamOptions.Partial;
         }
 
-        public async System.Threading.Tasks.Task<MqttPacket> ReadAsync()
+        public async Task<MqttPacket> ReadAsync()
         {
             await _reader.LoadAsync(1);
             var header = _reader.ReadByte();
@@ -21,29 +22,39 @@ namespace ESP32AIControl.WP81.Core.Mqtt
             var multiplier = 1;
             var remaining = 0;
             byte encoded;
+            var bytesUsed = 0;
+
             do
             {
+                if (bytesUsed == 4)
+                    throw new InvalidOperationException("Invalid MQTT remaining length.");
+
                 await _reader.LoadAsync(1);
                 encoded = _reader.ReadByte();
                 remaining += (encoded & 127) * multiplier;
                 multiplier *= 128;
-                if (multiplier > 128 * 128 * 128)
-                    throw new InvalidOperationException("Invalid MQTT remaining length.");
-            } while ((encoded & 128) != 0);
+                bytesUsed++;
+            }
+            while ((encoded & 128) != 0);
 
             if (remaining == 0)
                 return new MqttPacket(header, new byte[0]);
 
             var bytes = new byte[remaining];
             var read = 0;
+
             while (read < remaining)
             {
                 await _reader.LoadAsync((uint)(remaining - read));
+
                 var available = _reader.UnconsumedBufferLength;
                 if (available == 0)
                     throw new InvalidOperationException("MQTT stream closed.");
+
                 var take = (int)Math.Min((uint)(remaining - read), available);
-                _reader.ReadBytes(new ArraySegment<byte>(bytes, read, take).ToArray());
+                var chunk = new byte[take];
+                _reader.ReadBytes(chunk);
+                Buffer.BlockCopy(chunk, 0, bytes, read, take);
                 read += take;
             }
 
