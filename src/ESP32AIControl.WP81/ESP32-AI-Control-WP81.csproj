@@ -59,7 +59,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Reference Include="System.Runtime" />
     <Reference Include="System.Runtime.WindowsRuntime" />
     <Reference Include="Windows" />
   </ItemGroup>
