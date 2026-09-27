@@ -201,8 +201,12 @@ jobs:
           $facades = Join-Path $net45 "Microsoft.NETFramework.ReferenceAssemblies.net45.1.0.3\build\.NETFramework\v4.5\Facades"
           if (-not (Test-Path (Join-Path $facades "System.Runtime.dll"))) { throw "NET 4.5 facade System.Runtime.dll not found." }
           Copy-Item (Join-Path $facades "*.dll") $frameworkRoot -Force
-          $winrtPackage = Join-Path $metadataRoot "System.Runtime.WindowsRuntime.4.6.0"
-          $winrtUiPackage = Join-Path $metadataRoot "System.Runtime.WindowsRuntime.UI.Xaml.4.6.0"
+          $winrtRoot = Join-Path $env:RUNNER_TEMP "winrt-packages"
+          New-Item -ItemType Directory -Force -Path $winrtRoot | Out-Null
+          & $nuget install System.Runtime.WindowsRuntime -Version 4.6.0 -OutputDirectory $winrtRoot -NonInteractive
+          & $nuget install System.Runtime.WindowsRuntime.UI.Xaml -Version 4.6.0 -OutputDirectory $winrtRoot -NonInteractive
+          $winrtPackage = Join-Path $winrtRoot "System.Runtime.WindowsRuntime.4.6.0"
+          $winrtUiPackage = Join-Path $winrtRoot "System.Runtime.WindowsRuntime.UI.Xaml.4.6.0"
           $winrtDll = Get-ChildItem $winrtPackage -Recurse -Filter "System.Runtime.WindowsRuntime.dll" -File -ErrorAction SilentlyContinue | Select-Object -First 1
           $winrtUiDll = Get-ChildItem $winrtUiPackage -Recurse -Filter "System.Runtime.WindowsRuntime.UI.Xaml.dll" -File -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $winrtDll -or -not $winrtUiDll) { throw "Windows Runtime interop assemblies were not found in NuGet packages." }
