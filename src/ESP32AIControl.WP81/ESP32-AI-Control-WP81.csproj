@@ -61,9 +61,6 @@
   <ItemGroup>
     <Reference Include="System.Runtime.WindowsRuntime" />
     <Reference Include="Windows" />
-    <Reference Include="Windows.Foundation.UniversalApiContract">
-      <HintPath>$(WindowsSdkDir)\References\Windows.Foundation.UniversalApiContract\Windows.Foundation.UniversalApiContract.winmd</HintPath>
-    </Reference>
   </ItemGroup>
 
   <!-- VS 2022 keeps the Windows Phone 8.1 XAML targets under WindowsXaml\v17.0\8.1.
