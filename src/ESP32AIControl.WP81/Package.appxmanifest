@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+         xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+         xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest"
+         IgnorableNamespaces="uap mp">
+  <Identity Name="ESP32AIControl.WP81"
+            Publisher="CN=yasn198020-jpg"
+            Version="1.0.0.0" />
+  <mp:PhoneIdentity PhoneProductId="{9A7C6E32-7B8D-4DCE-9B0A-4D9B9B8B0A81}"
+                    PhonePublisherId="{00000000-0000-0000-0000-000000000000}" />
+  <Properties>
+    <DisplayName>ESP32 AI Control</DisplayName>
+    <PublisherDisplayName>yasn198020-jpg</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Mobile"
+                        MinVersion="8.1.0.0"
+                        MaxVersionTested="8.1.0.0" />
+  </Dependencies>
+  <Resources>
+    <Resource Language="x-generate" />
+  </Resources>
+  <Applications>
+    <Application Id="App"
+                 Executable="$targetnametoken$.exe"
+                 EntryPoint="ESP32AIControl.WP81.App">
+      <uap:VisualElements AppListEntry="default"
+                          DisplayName="ESP32 AI Control"
+                          Description="ESP32 MQTT client"
+                          Square44x44Logo="Assets\Square44x44Logo.png"
+                          Square150x150Logo="Assets\Square150x150Logo.png">
+        <uap:DefaultTile Square150x150Logo="Assets\Square150x150Logo.png" />
+      </uap:VisualElements>
+    </Application>
+  </Applications>
+</Package>
