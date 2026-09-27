@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: wp81-build-\${{ github.ref }}
+  group: wp81-build-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -20,7 +20,7 @@ jobs:
       - name: Prepare Windows metadata for legacy XAML compiler
         shell: powershell
         run: |
-          $kitsRoot = Join-Path $env:ProgramFiles(x86) "Windows Kits"
+          $kitsRoot = Join-Path ${env:ProgramFiles(x86)} "Windows Kits"
           $winmd = Get-ChildItem $kitsRoot -Recurse -Filter "Windows.winmd" -File -ErrorAction SilentlyContinue |
             Where-Object { $_.FullName -match "\\References\\CommonConfiguration\\Neutral\\Windows.winmd$" } |
             Sort-Object FullName -Descending |
@@ -31,7 +31,7 @@ jobs:
           }
 
           $legacyRoot = Join-Path $kitsRoot "8.1"
-          $legacyMetadata = Join-Path $legacyRoot "References\\CommonConfiguration\\Neutral"
+          $legacyMetadata = Join-Path $legacyRoot "References\CommonConfiguration\Neutral"
           New-Item -ItemType Directory -Force -Path $legacyMetadata | Out-Null
           Copy-Item $winmd.FullName (Join-Path $legacyMetadata "Windows.winmd") -Force
 
@@ -43,9 +43,9 @@ jobs:
         run: |
           $candidates = @(
             "$env:ProgramFiles\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe",
-            "$env:ProgramFiles(x86)\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe",
+            "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe",
             "$env:ProgramFiles\Microsoft Visual Studio\2019\Enterprise\MSBuild\Current\Bin\MSBuild.exe",
-            "$env:ProgramFiles(x86)\Microsoft Visual Studio\2019\Enterprise\MSBuild\Current\Bin\MSBuild.exe"
+            "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2019\Enterprise\MSBuild\Current\Bin\MSBuild.exe"
           )
 
           $selected = $null
