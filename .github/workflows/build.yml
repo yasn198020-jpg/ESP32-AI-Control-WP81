@@ -66,10 +66,39 @@ jobs:
           if (-not $universal) {
             throw "Windows.Foundation.UniversalApiContract.winmd was not found."
           }
+          # Legacy XAML resolution uses the contract name as an assembly and expects
+          # the historical Windows Kits\8.1\References\<ContractName> layout.
+          $universalReferenceDir = Join-Path $legacyRoot "References\Windows.Foundation.UniversalApiContract"
+          New-Item -ItemType Directory -Force -Path $universalReferenceDir | Out-Null
+          Copy-Item $universal.FullName (Join-Path $universalReferenceDir "Windows.Foundation.UniversalApiContract.winmd") -Force
+
+          # Keep a copy in the neutral reference directory as well; some WP8.1 targets
+          # use that location during the legacy SDK resolution pass.
           Copy-Item $universal.FullName (Join-Path $legacyMetadata "Windows.Foundation.UniversalApiContract.winmd") -Force
+
+          # FoundationContract is a dependency of the Universal API contract on modern
+          # Windows SDK metadata. If available in the package, expose it using the same
+          # historical reference layout.
+          $foundation = Get-ChildItem (Join-Path $kitsRoot "8.1") -Recurse -Filter "Windows.Foundation.FoundationContract.winmd" -File -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+          if (-not $foundation) {
+            $metadataRoot = Join-Path $env:RUNNER_TEMP "windows-sdk-metadata"
+            if (Test-Path $metadataRoot) {
+              $foundation = Get-ChildItem $metadataRoot -Recurse -Filter "Windows.Foundation.FoundationContract.winmd" -File -ErrorAction SilentlyContinue |
+                Select-Object -First 1
+            }
+          }
+          if ($foundation) {
+            $foundationReferenceDir = Join-Path $legacyRoot "References\Windows.Foundation.FoundationContract"
+            New-Item -ItemType Directory -Force -Path $foundationReferenceDir | Out-Null
+            Copy-Item $foundation.FullName (Join-Path $foundationReferenceDir "Windows.Foundation.FoundationContract.winmd") -Force
+            Copy-Item $foundation.FullName (Join-Path $legacyMetadata "Windows.Foundation.FoundationContract.winmd") -Force
+            Write-Host "Using Foundation contract: $($foundation.FullName)"
+          }
 
           Write-Host "Using Windows metadata: $($winmd.FullName)"
           Write-Host "Using Universal API contract: $($universal.FullName)"
+          Write-Host "Prepared Universal API contract reference path: $universalReferenceDir"
           Write-Host "Prepared legacy metadata path: $(Join-Path $legacyMetadata 'Windows.winmd')"
 
       - name: Install Windows Phone 8.1 SDK components
