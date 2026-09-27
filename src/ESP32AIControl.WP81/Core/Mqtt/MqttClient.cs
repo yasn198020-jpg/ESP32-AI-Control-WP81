@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Windows.Networking.Sockets;
 using Windows.Storage.Streams;
@@ -12,11 +13,19 @@ namespace ESP32AIControl.WP81.Core.Mqtt
         private MqttPacketReader _reader;
         private ushort _packetId = 1;
         private bool _running;
+        private ushort _pendingSubscribeId;
+        private TaskCompletionSource<bool> _subscribeCompletion;
+        private readonly SemaphoreSlim _writeGate = new SemaphoreSlim(1, 1);
 
         public event EventHandler<MqttMessageEventArgs> MessageReceived;
         public event EventHandler<MqttConnectionStateChangedEventArgs> ConnectionStateChanged;
 
-        public MqttConnectionState State { get; private set; } = MqttConnectionState.Disconnected;
+        public MqttConnectionState State { get; private set; }
+
+        public MqttClient()
+        {
+            State = MqttConnectionState.Disconnected;
+        }
 
         public async Task ConnectAsync(string host, string port, string clientId, string userName, string password)
         {
@@ -33,6 +42,7 @@ namespace ESP32AIControl.WP81.Core.Mqtt
                 _reader = new MqttPacketReader(_socket.InputStream);
 
                 await WriteAsync(MqttPacketWriter.ConnectPacket(clientId, userName, password, true));
+
                 var response = await _reader.ReadAsync();
                 if (response.PacketType != 2 || response.Body.Length < 2 || response.Body[1] != 0)
                     throw new InvalidOperationException("MQTT CONNACK rejected.");
@@ -51,17 +61,25 @@ namespace ESP32AIControl.WP81.Core.Mqtt
         public async Task SubscribeAsync(string topicFilter, byte qos)
         {
             EnsureConnected();
-            var id = NextPacketId();
-            await WriteAsync(MqttPacketWriter.SubscribePacket(id, topicFilter, qos));
 
-            while (true)
+            if (_subscribeCompletion != null)
+                throw new InvalidOperationException("Another MQTT SUBSCRIBE is already pending.");
+
+            var id = NextPacketId();
+            _pendingSubscribeId = id;
+            _subscribeCompletion = new TaskCompletionSource<bool>();
+
+            try
             {
-                var packet = await _reader.ReadAsync();
-                if (packet.PacketType == 9)
-                {
-                    return;
-                }
-                await HandleIncomingAsync(packet);
+                await WriteAsync(MqttPacketWriter.SubscribePacket(id, topicFilter, qos));
+                var success = await _subscribeCompletion.Task;
+                if (!success)
+                    throw new InvalidOperationException("MQTT SUBSCRIBE was rejected.");
+            }
+            finally
+            {
+                _subscribeCompletion = null;
+                _pendingSubscribeId = 0;
             }
         }
 
@@ -79,8 +97,11 @@ namespace ESP32AIControl.WP81.Core.Mqtt
                 {
                     await WriteAsync(MqttPacketWriter.Disconnect());
                 }
-                catch { }
+                catch
+                {
+                }
             }
+
             Close();
         }
 
@@ -105,40 +126,92 @@ namespace ESP32AIControl.WP81.Core.Mqtt
             switch (packet.PacketType)
             {
                 case 3:
-                    var topicLength = (packet.Body[0] << 8) | packet.Body[1];
-                    var offset = 2;
-                    var topic = System.Text.Encoding.UTF8.GetString(packet.Body, offset, topicLength);
-                    offset += topicLength;
-                    var qos = (byte)((packet.Header >> 1) & 0x03);
-                    ushort id = 0;
-                    if (qos > 0)
-                    {
-                        id = (ushort)((packet.Body[offset] << 8) | packet.Body[offset + 1]);
-                        offset += 2;
-                        await WriteAsync(MqttPacketWriter.PubAck(id));
-                    }
+                    await HandlePublishAsync(packet);
+                    break;
 
-                    var payload = System.Text.Encoding.UTF8.GetString(packet.Body, offset, packet.Body.Length - offset);
-                    var handler = MessageReceived;
-                    if (handler != null)
-                        handler(this, new MqttMessageEventArgs(topic, payload, qos));
+                case 9:
+                    HandleSubAck(packet);
                     break;
 
                 case 13:
                     break;
+
+                case 4:
+                    break;
             }
+        }
+
+        private async Task HandlePublishAsync(MqttPacket packet)
+        {
+            if (packet.Body.Length < 2)
+                return;
+
+            var topicLength = (packet.Body[0] << 8) | packet.Body[1];
+            var offset = 2;
+
+            if (topicLength < 1 || offset + topicLength > packet.Body.Length)
+                return;
+
+            var topic = System.Text.Encoding.UTF8.GetString(packet.Body, offset, topicLength);
+            offset += topicLength;
+
+            var qos = (byte)((packet.Header >> 1) & 0x03);
+            if (qos == 3)
+                return;
+
+            if (qos > 0)
+            {
+                if (offset + 2 > packet.Body.Length)
+                    return;
+
+                var id = (ushort)((packet.Body[offset] << 8) | packet.Body[offset + 1]);
+                offset += 2;
+                await WriteAsync(MqttPacketWriter.PubAck(id));
+            }
+
+            var payload = System.Text.Encoding.UTF8.GetString(packet.Body, offset, packet.Body.Length - offset);
+            var handler = MessageReceived;
+            if (handler != null)
+                handler(this, new MqttMessageEventArgs(topic, payload, qos));
+        }
+
+        private void HandleSubAck(MqttPacket packet)
+        {
+            if (packet.Body.Length < 3 || _subscribeCompletion == null)
+                return;
+
+            var id = (ushort)((packet.Body[0] << 8) | packet.Body[1]);
+            if (id != _pendingSubscribeId)
+                return;
+
+            var granted = packet.Body[2];
+            _subscribeCompletion.TrySetResult(granted != 0x80);
         }
 
         private async Task WriteAsync(byte[] bytes)
         {
-            _writer.WriteBytes(bytes);
-            await _writer.StoreAsync();
-            await _writer.FlushAsync();
+            await _writeGate.WaitAsync();
+
+            try
+            {
+                if (_writer == null)
+                    throw new InvalidOperationException("MQTT output stream is closed.");
+
+                _writer.WriteBytes(bytes);
+                await _writer.StoreAsync();
+                await _writer.FlushAsync();
+            }
+            finally
+            {
+                _writeGate.Release();
+            }
         }
 
         private ushort NextPacketId()
         {
-            if (_packetId == 0) _packetId = 1;
+            if (_packetId == 0)
+                _packetId = 1;
+
             return _packetId++;
         }
 
@@ -159,11 +232,18 @@ namespace ESP32AIControl.WP81.Core.Mqtt
         private void Close()
         {
             _running = false;
+
+            var completion = _subscribeCompletion;
+            if (completion != null)
+                completion.TrySetResult(false);
+
             try { if (_writer != null) _writer.DetachStream(); } catch { }
             try { if (_socket != null) _socket.Dispose(); } catch { }
+
             _writer = null;
             _reader = null;
             _socket = null;
+
             SetState(MqttConnectionState.Disconnected);
         }
     }
