@@ -195,6 +195,12 @@ jobs:
           & $nuget install Microsoft.NETFramework.ReferenceAssemblies.net40 -Version 1.0.3 -OutputDirectory $packages -NonInteractive
           $frameworkRoot = Join-Path $packages "Microsoft.NETFramework.ReferenceAssemblies.net40.1.0.3\build\.NETFramework\v4.0"
           if (-not (Test-Path (Join-Path $frameworkRoot "mscorlib.dll"))) { throw "NET Framework 4.0 reference assemblies not found." }
+          $net45 = Join-Path $env:RUNNER_TEMP "nuget-net45"
+          New-Item -ItemType Directory -Force -Path $net45 | Out-Null
+          & $nuget install Microsoft.NETFramework.ReferenceAssemblies.net45 -Version 1.0.3 -OutputDirectory $net45 -NonInteractive
+          $facades = Join-Path $net45 "Microsoft.NETFramework.ReferenceAssemblies.net45.1.0.3\build\.NETFramework\v4.5\Facades"
+          if (-not (Test-Path (Join-Path $facades "System.Runtime.dll"))) { throw "NET 4.5 facade System.Runtime.dll not found." }
+          Copy-Item (Join-Path $facades "*.dll") $frameworkRoot -Force
           "FRAMEWORK_PATH=$frameworkRoot" | Out-File $env:GITHUB_ENV -Append
 
       - name: Diagnose XAML metadata resolution
