@@ -36,7 +36,7 @@ jobs:
               Invoke-WebRequest -Uri "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe" -OutFile $nuget
             }
             New-Item -ItemType Directory -Force -Path $metadataRoot | Out-Null
-            & $nuget install Microsoft.Windows.SDK.Contracts -Version 10.0.14393.0 -OutputDirectory $metadataRoot -NonInteractive
+            & $nuget install Microsoft.Windows.SDK.Contracts -Version 10.0.19041.1 -OutputDirectory $metadataRoot -NonInteractive
           }
 
           if (-not $winmd) {
@@ -45,7 +45,7 @@ jobs:
           if (-not $winmd) { throw "Windows.winmd was not found." }
           Copy-Item $winmd.FullName (Join-Path $legacyMetadata "Windows.winmd") -Force
 
-          $preferredUniversal = Join-Path $kitsRoot "10\References\10.0.14393.0\Windows.Foundation.UniversalApiContract\1.0.0.0\Windows.Foundation.UniversalApiContract.winmd"
+          $preferredUniversal = Join-Path $kitsRoot "10\References\10.0.19041.0\Windows.Foundation.UniversalApiContract\1.0.0.0\Windows.Foundation.UniversalApiContract.winmd"
           if (Test-Path $preferredUniversal) {
             $universal = Get-Item $preferredUniversal
           } else {
