@@ -23,7 +23,7 @@ jobs:
         run: |
           $installer = Join-Path $env:RUNNER_TEMP 'winsdksetup10240.exe'
           Invoke-WebRequest -Uri 'https://download.microsoft.com/download/E/1/F/E1F1E61E-F3C6-4420-A916-FB7C47FBC89E/standalonesdk/sdksetup.exe' -OutFile $installer
-          $p = Start-Process -FilePath $installer -ArgumentList '/q','/norestart','/ceip','off' -Wait -PassThru
+          $p = Start-Process -FilePath $installer -ArgumentList '/features','+','/q','/norestart','/ceip','off' -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "Windows 10 SDK 10240 installation failed: $($p.ExitCode)" }
           $kitsRoot = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10'
           $contract = Get-ChildItem $kitsRoot -Recurse -Filter 'Windows.Foundation.UniversalApiContract.winmd' -File -ErrorAction SilentlyContinue |
