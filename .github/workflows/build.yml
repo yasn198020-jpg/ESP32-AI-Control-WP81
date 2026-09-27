@@ -64,18 +64,22 @@ jobs:
           if (-not $winmd) { throw "Windows.winmd was not found." }
           Copy-Item $winmd.FullName (Join-Path $legacyMetadata "Windows.winmd") -Force
 
-          if ($env:SDK10240_UNIVERSAL -and (Test-Path $env:SDK10240_UNIVERSAL)) { $universal = Get-Item $env:SDK10240_UNIVERSAL } else { $preferredUniversal = Join-Path $kitsRoot "10\References\10.0.10240.0\Windows.Foundation.UniversalApiContract\1.0.0.0\Windows.Foundation.UniversalApiContract.winmd" }
-          if (Test-Path $preferredUniversal) {
-            $universal = Get-Item $preferredUniversal
+          if ($env:SDK10240_UNIVERSAL -and (Test-Path $env:SDK10240_UNIVERSAL)) {
+            $universal = Get-Item $env:SDK10240_UNIVERSAL
           } else {
-            $legacyMicrosoftSdkRoot = Join-Path ${env:ProgramFiles(x86)} 'Microsoft SDKs'
-          $universal = Get-ChildItem $legacyMicrosoftSdkRoot -Recurse -Filter "Windows.Foundation.UniversalApiContract.winmd" -File -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $universal) {
-            $universal = Get-ChildItem $kitsRoot -Recurse -Filter "Windows.Foundation.UniversalApiContract.winmd" -File -ErrorAction SilentlyContinue | Select-Object -First 1
-          }
-          }
-          if (-not $universal) {
-            $universal = Get-ChildItem $metadataRoot -Recurse -Filter "Windows.Foundation.UniversalApiContract.winmd" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+            $preferredUniversal = Join-Path $kitsRoot "10\References\10.0.10240.0\Windows.Foundation.UniversalApiContract\1.0.0.0\Windows.Foundation.UniversalApiContract.winmd"
+            if (Test-Path $preferredUniversal) {
+              $universal = Get-Item $preferredUniversal
+            } else {
+              $legacyMicrosoftSdkRoot = Join-Path ${env:ProgramFiles(x86)} 'Microsoft SDKs'
+              $universal = Get-ChildItem $legacyMicrosoftSdkRoot -Recurse -Filter "Windows.Foundation.UniversalApiContract.winmd" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+              if (-not $universal) {
+                $universal = Get-ChildItem $kitsRoot -Recurse -Filter "Windows.Foundation.UniversalApiContract.winmd" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+              }
+            }
+            if (-not $universal) {
+              $universal = Get-ChildItem $metadataRoot -Recurse -Filter "Windows.Foundation.UniversalApiContract.winmd" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+            }
           }
           if (-not $universal) { throw "Windows.Foundation.UniversalApiContract.winmd was not found." }
 
