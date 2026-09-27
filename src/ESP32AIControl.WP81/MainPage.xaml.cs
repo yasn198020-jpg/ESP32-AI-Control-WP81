@@ -4,7 +4,6 @@ using System.Globalization;
 using Windows.UI.Core;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
-using Windows.UI.Xaml.Controls.Primitives;
 using ESP32AIControl.WP81.Core.Mqtt;
 using ESP32AIControl.WP81.Core.Protocol;
 using ESP32AIControl.WP81.Core.State;
@@ -20,6 +19,9 @@ namespace ESP32AIControl.WP81
 
         private readonly Dictionary<string, WidgetVisual> _visuals =
             new Dictionary<string, WidgetVisual>();
+
+        private readonly Dictionary<string, PageVisual> _pages =
+            new Dictionary<string, PageVisual>();
 
         private bool _syncingControls;
 
@@ -120,6 +122,14 @@ namespace ESP32AIControl.WP81
                 _visuals[state.Key] = visual;
                 InsertWidgetVisual(visual);
             }
+            else
+            {
+                var newPage = NormalizePage(state.Page);
+                if (!string.Equals(visual.PageName, newPage, StringComparison.Ordinal))
+                    MoveWidgetVisual(visual, newPage);
+
+                visual.State = state;
+            }
 
             _syncingControls = true;
             try
@@ -134,10 +144,13 @@ namespace ESP32AIControl.WP81
 
         private WidgetVisual CreateWidgetVisual(WidgetState state)
         {
+            var pageName = NormalizePage(state.Page);
             var visual = new WidgetVisual
             {
-                State = state
+                State = state,
+                PageName = pageName
             };
+
             visual.Container = new StackPanel
             {
                 Margin = new Thickness(0, 0, 0, 12),
@@ -225,12 +238,18 @@ namespace ESP32AIControl.WP81
 
         private void InsertWidgetVisual(WidgetVisual visual)
         {
-            var insertIndex = WidgetHost.Children.Count;
+            var page = GetOrCreatePageVisual(visual.PageName);
+            InsertWidgetIntoPage(page, visual);
+        }
+
+        private void InsertWidgetIntoPage(PageVisual page, WidgetVisual visual)
+        {
+            var insertIndex = page.Content.Children.Count;
             var state = visual.State;
 
-            for (var i = 0; i < WidgetHost.Children.Count; i++)
+            for (var i = 0; i < page.Content.Children.Count; i++)
             {
-                var existing = WidgetHost.Children[i] as FrameworkElement;
+                var existing = page.Content.Children[i] as FrameworkElement;
                 if (existing == null)
                     continue;
 
@@ -246,7 +265,81 @@ namespace ESP32AIControl.WP81
                 }
             }
 
-            WidgetHost.Children.Insert(insertIndex, visual.Container);
+            page.Content.Children.Insert(insertIndex, visual.Container);
+        }
+
+        private void MoveWidgetVisual(WidgetVisual visual, string newPageName)
+        {
+            PageVisual oldPage;
+            if (_pages.TryGetValue(visual.PageName, out oldPage))
+                oldPage.Content.Children.Remove(visual.Container);
+
+            visual.PageName = newPageName;
+            var newPage = GetOrCreatePageVisual(newPageName);
+            InsertWidgetIntoPage(newPage, visual);
+            CleanupEmptyPages();
+        }
+
+        private PageVisual GetOrCreatePageVisual(string pageName)
+        {
+            PageVisual page;
+            if (_pages.TryGetValue(pageName, out page))
+                return page;
+
+            page = new PageVisual
+            {
+                Name = pageName,
+                Content = new StackPanel
+                {
+                    Margin = new Thickness(0, 0, 0, 8)
+                }
+            };
+
+            var pivotItem = new PivotItem
+            {
+                Header = pageName,
+                Content = page.Content,
+                Tag = pageName
+            };
+            page.Item = pivotItem;
+
+            _pages[pageName] = page;
+
+            var insertIndex = WidgetPages.Items.Count;
+            for (var i = 0; i < WidgetPages.Items.Count; i++)
+            {
+                var existing = WidgetPages.Items[i] as PivotItem;
+                var existingName = existing == null ? string.Empty : existing.Tag as string;
+                if (ComparePageNames(pageName, existingName) < 0)
+                {
+                    insertIndex = i;
+                    break;
+                }
+            }
+
+            WidgetPages.Items.Insert(insertIndex, pivotItem);
+
+            return page;
+        }
+
+        private void CleanupEmptyPages()
+        {
+            var emptyPages = new List<string>();
+            foreach (var pair in _pages)
+            {
+                if (pair.Value.Content.Children.Count == 0)
+                    emptyPages.Add(pair.Key);
+            }
+
+            foreach (var pageName in emptyPages)
+            {
+                PageVisual page;
+                if (!_pages.TryGetValue(pageName, out page))
+                    continue;
+
+                WidgetPages.Items.Remove(page.Item);
+                _pages.Remove(pageName);
+            }
         }
 
         private string GetTitle(WidgetState state)
@@ -263,6 +356,26 @@ namespace ESP32AIControl.WP81
         private static string NormalizeType(string value)
         {
             return (value ?? string.Empty).Trim().ToLowerInvariant();
+        }
+
+        private static string NormalizePage(string value)
+        {
+            var page = (value ?? string.Empty).Trim();
+            return string.IsNullOrEmpty(page) ? "Основная" : page;
+        }
+
+        private static int ComparePageNames(string left, string right)
+        {
+            int leftNumber;
+            int rightNumber;
+
+            if (int.TryParse(left, NumberStyles.Integer, CultureInfo.InvariantCulture, out leftNumber) &&
+                int.TryParse(right, NumberStyles.Integer, CultureInfo.InvariantCulture, out rightNumber))
+            {
+                return leftNumber.CompareTo(rightNumber);
+            }
+
+            return string.Compare(left ?? string.Empty, right ?? string.Empty, StringComparison.OrdinalIgnoreCase);
         }
 
         private void ApplyValueToVisual(WidgetVisual visual, string value)
@@ -348,10 +461,18 @@ namespace ESP32AIControl.WP81
         private sealed class WidgetVisual
         {
             public WidgetState State { get; set; }
+            public string PageName { get; set; }
             public StackPanel Container { get; set; }
             public TextBlock Title { get; set; }
             public TextBlock ValueText { get; set; }
             public FrameworkElement Control { get; set; }
+        }
+
+        private sealed class PageVisual
+        {
+            public string Name { get; set; }
+            public StackPanel Content { get; set; }
+            public PivotItem Item { get; set; }
         }
     }
 }
