@@ -27,7 +27,21 @@ jobs:
             Select-Object -First 1
 
           if (-not $winmd) {
-            throw "No installed Windows SDK Windows.winmd was found on the runner."
+            Write-Host "No Windows.winmd found in installed Windows Kits; obtaining metadata from Microsoft Windows SDK reference package."
+            $nuget = Join-Path $env:RUNNER_TEMP "nuget.exe"
+            Invoke-WebRequest -Uri "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe" -OutFile $nuget
+            $metadataPackageRoot = Join-Path $env:RUNNER_TEMP "windows-sdk-metadata"
+            New-Item -ItemType Directory -Force -Path $metadataPackageRoot | Out-Null
+            & $nuget install Microsoft.Windows.SDK.NET.Ref -Version 10.0.26100.4654 -OutputDirectory $metadataPackageRoot -NonInteractive
+
+            $winmd = Get-ChildItem $metadataPackageRoot -Recurse -Filter "Windows.winmd" -File -ErrorAction SilentlyContinue |
+              Select-Object -First 1
+
+            if (-not $winmd) {
+              Write-Host "Windows SDK package contents:"
+              Get-ChildItem $metadataPackageRoot -Recurse | Select-Object -First 200 FullName
+              throw "Windows.winmd was not found in the Microsoft.Windows.SDK.NET.Ref package."
+            }
           }
 
           $legacyRoot = Join-Path $kitsRoot "8.1"
@@ -35,7 +49,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path $legacyMetadata | Out-Null
           Copy-Item $winmd.FullName (Join-Path $legacyMetadata "Windows.winmd") -Force
 
-          Write-Host "Using installed Windows metadata: $($winmd.FullName)"
+          Write-Host "Using Windows metadata: $($winmd.FullName)"
           Write-Host "Prepared legacy metadata path: $(Join-Path $legacyMetadata 'Windows.winmd')"
 
       - name: Locate WP XAML build tools
