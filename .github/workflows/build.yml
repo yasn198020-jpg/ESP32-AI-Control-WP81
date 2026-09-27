@@ -96,6 +96,12 @@ jobs:
           $legacyReferences = Join-Path $legacyPhoneRoot 'References\CommonConfiguration\Neutral'
           New-Item -ItemType Directory -Force -Path $legacyReferences | Out-Null
           Copy-Item (Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\8.1\References\CommonConfiguration\Neutral\Windows.winmd') (Join-Path $legacyReferences 'Windows.winmd') -Force
+          $phoneUniversalDir = Join-Path $legacyPhoneRoot 'References\Windows.Foundation.UniversalApiContract'
+          New-Item -ItemType Directory -Force -Path $phoneUniversalDir | Out-Null
+          $universalSource = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\8.1\References\Windows.Foundation.UniversalApiContract\Windows.Foundation.UniversalApiContract.winmd'
+          if (-not (Test-Path $universalSource)) { throw "Universal contract source not found: $universalSource" }
+          Copy-Item $universalSource (Join-Path $phoneUniversalDir 'Windows.Foundation.UniversalApiContract.winmd') -Force
+          Copy-Item $universalSource (Join-Path $legacyReferences 'Windows.Foundation.UniversalApiContract.winmd') -Force
 
           $registryPaths = @(
             'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Microsoft SDKs\WindowsPhone\v8.1',
