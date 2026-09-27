@@ -52,6 +52,46 @@ jobs:
           Write-Host "Using Windows metadata: $($winmd.FullName)"
           Write-Host "Prepared legacy metadata path: $(Join-Path $legacyMetadata 'Windows.winmd')"
 
+      - name: Install Windows Phone 8.1 SDK components
+        shell: powershell
+        timeout-minutes: 20
+        run: |
+          $iso = Join-Path $env:RUNNER_TEMP "windowsphone81sdkupdate1.iso"
+          Invoke-WebRequest -Uri "https://download.microsoft.com/download/E/7/D/E7D9744A-06A6-46FB-AEA4-50FAAEC6CE73/windowsphone81sdkupdate1.iso" -OutFile $iso
+          Write-Host "Downloaded Windows Phone SDK ISO: $((Get-Item $iso).Length) bytes"
+          $image = Mount-DiskImage -ImagePath $iso -PassThru
+          try {
+            $volume = $image | Get-Volume | Where-Object DriveLetter | Select-Object -First 1
+            if (-not $volume) { throw "Could not determine mounted Windows Phone SDK ISO drive." }
+            $root = "$($volume.DriveLetter):\\"
+            Write-Host "Mounted SDK ISO at $root"
+            Get-ChildItem $root -Recurse -File -ErrorAction SilentlyContinue |
+              Where-Object { $_.Name -match 'sdksetup|setup|phone|windowsphone' } |
+              Select-Object -First 100 FullName
+            $setups = Get-ChildItem $root -Recurse -File -ErrorAction SilentlyContinue |
+              Where-Object { $_.Name -ieq 'setup.exe' -or $_.Name -ieq 'sdksetup.exe' }
+            if (-not $setups) { throw "No SDK setup executable found on Windows Phone SDK ISO." }
+            $setup = $setups | Select-Object -First 1
+            Write-Host "Running SDK installer: $($setup.FullName)"
+            $proc = Start-Process -FilePath $setup.FullName -ArgumentList '/quiet','/norestart' -Wait -PassThru
+            Write-Host "Windows Phone SDK installer exit code: $($proc.ExitCode)"
+            if ($proc.ExitCode -ne 0 -and $proc.ExitCode -ne 3010) {
+              throw "Windows Phone SDK installer failed with exit code $($proc.ExitCode)."
+            }
+          }
+          finally {
+            Dismount-DiskImage -ImagePath $iso -ErrorAction SilentlyContinue
+          }
+
+          $phoneRoots = @(
+            'C:\Program Files (x86)\Microsoft SDKs\Windows Phone',
+            'C:\Program Files (x86)\Microsoft SDKs\Windows Phone\v8.1',
+            'C:\Program Files (x86)\Microsoft Visual Studio\2015'
+          )
+          foreach ($path in $phoneRoots) { if (Test-Path $path) { Write-Host "Found: $path" } }
+          Get-ChildItem 'C:\Program Files (x86)' -Recurse -Filter 'Microsoft.Windows.UI.Xaml.CSharp.Targets' -ErrorAction SilentlyContinue |
+            Select-Object -First 20 FullName
+
       - name: Locate WP XAML build tools
         shell: powershell
         run: |
