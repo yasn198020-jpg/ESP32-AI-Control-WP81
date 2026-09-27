@@ -16,18 +16,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Windows 10 SDK 14393 contract metadata
-        shell: powershell
-        timeout-minutes: 20
-        run: |
-          $installer = Join-Path $env:RUNNER_TEMP 'winsdksetup14393.exe'
-          Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/p/?LinkId=838916' -OutFile $installer
-          $p = Start-Process -FilePath $installer -ArgumentList '/quiet','/norestart','/features','+' -Wait -PassThru
-          if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { throw "Windows 10 SDK 14393 setup failed: $($p.ExitCode)" }
-          $contract = 'C:\Program Files (x86)\Windows Kits\10\References\10.0.14393.0\Windows.Foundation.UniversalApiContract\1.0.0.0\Windows.Foundation.UniversalApiContract.winmd'
-          if (-not (Test-Path $contract)) { throw "Windows 10 SDK 14393 UniversalApiContract was not installed." }
-          Write-Host "Windows 10 SDK 14393 contract: $contract"
-
       - name: Prepare Windows metadata for legacy XAML compiler
         shell: powershell
         run: |
