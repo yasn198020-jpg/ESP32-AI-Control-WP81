@@ -32,7 +32,7 @@ jobs:
             Invoke-WebRequest -Uri "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe" -OutFile $nuget
             $metadataPackageRoot = Join-Path $env:RUNNER_TEMP "windows-sdk-metadata"
             New-Item -ItemType Directory -Force -Path $metadataPackageRoot | Out-Null
-            & $nuget install Microsoft.Windows.SDK.NET.Ref -Version 10.0.26100.4654 -OutputDirectory $metadataPackageRoot -NonInteractive
+            & $nuget install Microsoft.Windows.SDK.Contracts -Version 10.0.26100.4654 -OutputDirectory $metadataPackageRoot -NonInteractive
 
             $winmd = Get-ChildItem $metadataPackageRoot -Recurse -Filter "Windows.winmd" -File -ErrorAction SilentlyContinue |
               Select-Object -First 1
@@ -40,7 +40,7 @@ jobs:
             if (-not $winmd) {
               Write-Host "Windows SDK package contents:"
               Get-ChildItem $metadataPackageRoot -Recurse | Select-Object -First 200 FullName
-              throw "Windows.winmd was not found in the Microsoft.Windows.SDK.NET.Ref package."
+              throw "Windows.winmd was not found in the Microsoft.Windows.SDK.Contracts package."
             }
           }
 
