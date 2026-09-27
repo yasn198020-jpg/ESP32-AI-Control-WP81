@@ -16,6 +16,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install Windows 10 SDK 10240 for legacy XAML compiler
+        shell: powershell
+        timeout-minutes: 20
+        run: |
+          $installer = Join-Path $env:RUNNER_TEMP 'winsdksetup10240.exe'
+          Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/p/?LinkId=619296' -OutFile $installer
+          $p = Start-Process -FilePath $installer -ArgumentList '/quiet','/norestart','/features','+' -Wait -PassThru
+          if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { throw "Windows 10 SDK 10240 setup failed: $($p.ExitCode)" }
+          $sdk10240 = 'C:\Program Files (x86)\Windows Kits\10\References\10.0.10240.0'
+          if (-not (Test-Path $sdk10240)) { throw "Windows 10 SDK 10.0.10240.0 was not installed." }
+          Write-Host "Windows 10 SDK 10240: $sdk10240"
+
       - name: Prepare Windows metadata for legacy XAML compiler
         shell: powershell
         run: |
