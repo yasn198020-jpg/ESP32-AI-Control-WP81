@@ -83,6 +83,15 @@ jobs:
               $p = Start-Process msiexec.exe -ArgumentList '/i',$msi.FullName,'/qn','/norestart' -Wait -PassThru
               if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { throw "SDK MSI failed: $($msi.Name), code $($p.ExitCode)" }
             }
+            $isoUniversal = Get-ChildItem $root -Recurse -Filter 'Windows.Foundation.UniversalApiContract.winmd' -File -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($isoUniversal) {
+              $kitsUniversalDir = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\8.1\References\Windows.Foundation.UniversalApiContract'
+              New-Item -ItemType Directory -Force -Path $kitsUniversalDir | Out-Null
+              Copy-Item $isoUniversal.FullName (Join-Path $kitsUniversalDir 'Windows.Foundation.UniversalApiContract.winmd') -Force
+              $kitsNeutral = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\8.1\References\CommonConfiguration\Neutral'
+              Copy-Item $isoUniversal.FullName (Join-Path $kitsNeutral 'Windows.Foundation.UniversalApiContract.winmd') -Force
+              Write-Host "Using Universal API contract from WP8.1 SDK media: $($isoUniversal.FullName)"
+            } else { Write-Host 'WP8.1 SDK media did not contain UniversalApiContract.winmd; retaining NuGet fallback.' }
           } finally {
             Dismount-DiskImage -ImagePath $iso -ErrorAction SilentlyContinue
           }
