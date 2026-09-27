@@ -4,6 +4,7 @@ namespace ESP32AIControl.WP81.Models
 {
     public sealed class WidgetState
     {
+        public string DeviceId { get; set; }
         public string Id { get; set; }
         public string Description { get; set; }
         public string WidgetType { get; set; }
@@ -11,5 +12,10 @@ namespace ESP32AIControl.WP81.Models
         public int Order { get; set; }
         public string Value { get; set; }
         public DateTimeOffset UpdatedAt { get; set; }
+
+        public string Key
+        {
+            get { return (DeviceId ?? string.Empty) + "/" + (Id ?? string.Empty); }
+        }
     }
 }
