@@ -16,16 +16,10 @@ jobs:
       - name: Install Windows 8.1 SDK
         shell: powershell
         run: |
-          $setup = "$env:ProgramFiles(x86)\Microsoft Visual Studio\Installer\vs_installer.exe"
-          $vsPath = "$env:ProgramFiles\Microsoft Visual Studio\2022\Enterprise"
-          if (-not (Test-Path $setup)) {
-            throw "Visual Studio Installer vs_installer.exe was not found."
-          }
-          if (-not (Test-Path $vsPath)) {
-            throw "Visual Studio 2022 Enterprise installation was not found."
-          }
-
-          & $setup modify --installPath $vsPath --add Microsoft.VisualStudio.Component.Windows81SDK --quiet --norestart --wait
+          $sdk = Join-Path $env:RUNNER_TEMP "winsdk81.exe"
+          Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/p/?LinkId=323507" -OutFile $sdk
+          Write-Host "Downloaded Windows 8.1 SDK installer: $sdk"
+          & $sdk /quiet /norestart
           $code = $LASTEXITCODE
           if (($code -ne 0) -and ($code -ne 3010)) {
             throw "Windows 8.1 SDK installation failed with exit code $code"
@@ -33,10 +27,7 @@ jobs:
 
           $winmd = "$env:ProgramFiles(x86)\Windows Kits\8.1\References\CommonConfiguration\Neutral\Windows.winmd"
           if (-not (Test-Path $winmd)) {
-            $winmd = "$env:ProgramFiles(x86)\Windows Kits\8.1\References\CommonConfiguration\Neutral\Windows.winmd"
-          }
-          if (-not (Test-Path $winmd)) {
-            Write-Host "Windows 8.1 SDK Windows.winmd files found:"
+            Write-Host "Windows.winmd files found:"
             Get-ChildItem "$env:ProgramFiles(x86)\Windows Kits" -Recurse -Filter Windows.winmd -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName
             throw "Windows 8.1 SDK Windows.winmd was not found after installation."
           }
