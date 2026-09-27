@@ -16,23 +16,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Acquire Windows 10 SDK 10240 metadata
-        shell: powershell
-        timeout-minutes: 25
-        run: |
-          $layout = Join-Path $env:RUNNER_TEMP 'winsdk10240-layout'
-          $installer = Join-Path $env:RUNNER_TEMP 'winsdksetup10240.exe'
-          Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/p/?LinkId=619296' -OutFile $installer
-          if (-not (Test-Path $layout)) { New-Item -ItemType Directory -Force -Path $layout | Out-Null }
-          $p = Start-Process -FilePath $installer -ArgumentList '/layout',$layout -Wait -PassThru
-          if ($p.ExitCode -ne 0) { throw "Windows 10 SDK 10240 layout failed: $($p.ExitCode)" }
-          $contract = Get-ChildItem $layout -Recurse -Filter 'Windows.Foundation.UniversalApiContract.winmd' -File -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $contract) { throw 'Windows 10 SDK 10240 layout did not expose UniversalApiContract.winmd.' }
-          $dest1 = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\8.1\References\Windows.Foundation.UniversalApiContract'
-          $dest2 = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\8.1\References\CommonConfiguration\Neutral'
-          New-Item -ItemType Directory -Force -Path $dest1,$dest2 | Out-Null
-          Copy-Item $contract.FullName (Join-Path $dest1 'Windows.Foundation.UniversalApiContract.winmd') -Force
-          Copy-Item $contract.FullName (Join-Path $dest2 'Windows.Foundation.UniversalApiContract.winmd') -Force
 
       - name: Prepare Windows metadata for legacy XAML compiler
         shell: powershell
