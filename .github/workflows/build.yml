@@ -270,9 +270,15 @@ jobs:
       - name: Build solution
         shell: powershell
         run: |
-          & "$env:MSBUILD_PATH" ".\ESP32-AI-Control-WP81.sln" /m /t:Build /p:Configuration=Debug /p:Platform="ARM" /p:FrameworkPathOverride="$env:FRAMEWORK_PATH" /p:WindowsPhoneSdkDir="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSDKDir="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSdkRoot="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSDKRoot="$env:WINDOWS_PHONE_SDK_DIR" /p:TargetPlatformSdkRootOverride="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:TargetPlatformSdkRoot="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:WindowsSdkDir="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:WindowsSdkDir_8.1="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:WindowsPhoneSdkVersion="8.1" /verbosity:minimal
-          if ($LASTEXITCODE -ne 0) {
-            throw "MSBuild failed with exit code $LASTEXITCODE"
+          $log = Join-Path $env:RUNNER_TEMP "msbuild-diagnostic.log"
+          Write-Host "Starting MSBuild diagnostic build..."
+          & "$env:MSBUILD_PATH" ".\ESP32-AI-Control-WP81.sln" /m:1 /t:Build /p:Configuration=Debug /p:Platform="ARM" /p:FrameworkPathOverride="$env:FRAMEWORK_PATH" /p:WindowsPhoneSdkDir="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSDKDir="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSdkRoot="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSDKRoot="$env:WINDOWS_PHONE_SDK_DIR" /p:TargetPlatformSdkRootOverride="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:TargetPlatformSdkRoot="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:WindowsSdkDir="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:WindowsSdkDir_8.1="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:WindowsPhoneSdkVersion="8.1" /nologo /verbosity:diagnostic 2>&1 | Tee-Object -FilePath $log
+          $code = $LASTEXITCODE
+          Write-Host "MSBuild exit code: $code"
+          Write-Host "==== MSBuild diagnostic tail ===="
+          if (Test-Path $log) { Get-Content $log -Tail 300 }
+          if ($code -ne 0) {
+            throw "MSBuild failed with exit code $code"
           }
 
       - name: Upload build output
