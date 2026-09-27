@@ -137,6 +137,33 @@ jobs:
               Get-ItemProperty $key | Format-List *
             }
           }
+      - name: Configure Windows Phone SDK path
+        shell: powershell
+        run: |
+          $roots = @(
+            'C:\Program Files (x86)\Microsoft SDKs\Windows Phone\v8.1',
+            'C:\Program Files (x86)\Microsoft SDKs\Windows Phone'
+          )
+          $sdkRoot = $null
+          foreach ($root in $roots) {
+            if (Test-Path $root) {
+              $candidate = Get-ChildItem $root -Directory -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -eq 'v8.1' } | Select-Object -First 1
+              if ($candidate) { $sdkRoot = $candidate.FullName; break }
+              if (Test-Path (Join-Path $root 'References')) { $sdkRoot = $root; break }
+            }
+          }
+          if (-not $sdkRoot) {
+            throw "Installed Windows Phone 8.1 SDK root was not found."
+          }
+          Write-Host "Windows Phone SDK root: $sdkRoot"
+          Write-Host "Windows Phone SDK contents:"
+          Get-ChildItem $sdkRoot -Recurse -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -ieq 'Windows.winmd' -or $_.Name -match 'Microsoft.Windows.UI.Xaml' } |
+            Select-Object -First 100 FullName
+          "WINDOWS_PHONE_SDK_DIR=$sdkRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "TARGET_PLATFORM_SDK_ROOT_OVERRIDE=$sdkRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
+
       - name: Locate WP XAML build tools
         shell: powershell
         run: |
