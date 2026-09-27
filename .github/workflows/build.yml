@@ -60,7 +60,11 @@ jobs:
           if (Test-Path $preferredUniversal) {
             $universal = Get-Item $preferredUniversal
           } else {
+            $legacyMicrosoftSdkRoot = Join-Path ${env:ProgramFiles(x86)} 'Microsoft SDKs'
+          $universal = Get-ChildItem $legacyMicrosoftSdkRoot -Recurse -Filter "Windows.Foundation.UniversalApiContract.winmd" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $universal) {
             $universal = Get-ChildItem $kitsRoot -Recurse -Filter "Windows.Foundation.UniversalApiContract.winmd" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+          }
           }
           if (-not $universal) {
             $universal = Get-ChildItem $metadataRoot -Recurse -Filter "Windows.Foundation.UniversalApiContract.winmd" -File -ErrorAction SilentlyContinue | Select-Object -First 1
