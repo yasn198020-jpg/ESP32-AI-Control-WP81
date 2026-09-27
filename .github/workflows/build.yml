@@ -90,12 +90,8 @@ jobs:
       - name: Configure Windows Phone SDK path
         shell: powershell
         run: |
-          $sdkRoot = 'C:\Program Files (x86)\Microsoft SDKs\Windows Phone\v8.1'
-          if (-not (Test-Path (Join-Path $sdkRoot 'References'))) { throw "WP8.1 SDK root not found: $sdkRoot" }
-
           $legacyPhoneRoot = Join-Path ${env:ProgramFiles(x86)} 'Windows Phone Kits\8.1'
-          New-Item -ItemType Directory -Force -Path $legacyPhoneRoot | Out-Null
-          Copy-Item (Join-Path $sdkRoot '*') $legacyPhoneRoot -Recurse -Force
+          if (-not (Test-Path (Join-Path $legacyPhoneRoot 'References'))) { throw "WP8.1 SDK root not found: $legacyPhoneRoot" }
 
           $legacyReferences = Join-Path $legacyPhoneRoot 'References\CommonConfiguration\Neutral'
           New-Item -ItemType Directory -Force -Path $legacyReferences | Out-Null
