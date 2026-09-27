@@ -139,20 +139,33 @@ jobs:
       - name: Locate legacy XAML targets
         shell: powershell
         run: |
-          $root = Join-Path ${env:ProgramFiles(x86)} 'MSBuild\Microsoft\WindowsXaml'
-          Get-ChildItem $root -Directory -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }
-          $targets = Get-ChildItem $root -Recurse -Filter 'Microsoft.Windows.UI.Xaml.CSharp.Targets' -File -ErrorAction SilentlyContinue
-          if (-not $targets) { throw 'No Windows XAML CSharp targets found.' }
-          $targets | Select-Object -ExpandProperty FullName
+          $roots = @(
+            (Join-Path $env:ProgramFiles 'Microsoft Visual Studio'),
+            (Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio'),
+            (Join-Path ${env:ProgramFiles(x86)} 'MSBuild')
+          ) | Where-Object { Test-Path $_ }
+
+          $targets = foreach ($root in $roots) {
+            Get-ChildItem $root -Recurse -Filter 'Microsoft.Windows.UI.Xaml.CSharp.Targets' -File -ErrorAction SilentlyContinue
+          }
+
+          $target81 = $targets | Where-Object { $_.FullName -match '\\8\.1\\Microsoft\.Windows\.UI\.Xaml\.CSharp\.Targets$' } | Select-Object -First 1
+          if (-not $target81) {
+            Write-Host 'Found XAML target files:'
+            $targets | Select-Object -ExpandProperty FullName
+            throw 'No Windows Phone 8.1 XAML CSharp targets found.'
+          }
+
+          Write-Host "Using WP8.1 XAML target: $($target81.FullName)"
+          "XAML_TARGET_PATH=$($target81.FullName)" | Out-File $env:GITHUB_ENV -Append
 
       - name: Locate WP XAML build tools
         shell: powershell
         run: |
           $msbuild = "$env:ProgramFiles\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe"
-          $target = "$env:ProgramFiles\Microsoft Visual Studio\2022\Enterprise\MSBuild\Microsoft\WindowsXaml\v17.0\8.1\Microsoft.Windows.UI.Xaml.CSharp.Targets"
-          if (-not (Test-Path $msbuild) -or -not (Test-Path $target)) { throw "WP8.1 XAML MSBuild tools not found." }
+          if (-not (Test-Path $msbuild)) { throw "MSBuild not found: $msbuild" }
+          if (-not (Test-Path $env:XAML_TARGET_PATH)) { throw "WP8.1 XAML target not found: $env:XAML_TARGET_PATH" }
           "MSBUILD_PATH=$msbuild" | Out-File $env:GITHUB_ENV -Append
-
       - name: Install .NET Framework 4.0 reference assemblies
         shell: powershell
         run: |
