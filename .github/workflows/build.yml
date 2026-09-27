@@ -5,6 +5,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+concurrency:
+  group: wp81-build-\${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: windows-2022
@@ -27,7 +31,22 @@ jobs:
 
           New-Item -ItemType Directory -Force -Path $layout | Out-Null
           Write-Host "Creating offline SDK layout: $layout"
-          $layoutProc = Start-Process -FilePath $bootstrap -ArgumentList "/layout",$layout -Wait -PassThru
+          $layoutProc = Start-Process -FilePath $bootstrap -ArgumentList "/layout",$layout -PassThru
+          $deadline = (Get-Date).AddMinutes(20)
+          while (-not $layoutProc.HasExited) {
+            Start-Sleep -Seconds 30
+            $layoutProc.Refresh()
+            $files = @(Get-ChildItem $layout -Recurse -File -ErrorAction SilentlyContinue)
+            $count = $files.Count
+            $bytes = ($files | Measure-Object Length -Sum).Sum
+            if ($null -eq $bytes) { $bytes = 0 }
+            Write-Host ("SDK layout progress: {0} files, {1:N0} bytes" -f $count,$bytes)
+            if ((Get-Date) -gt $deadline) {
+              try { Stop-Process -Id $layoutProc.Id -Force -ErrorAction SilentlyContinue } catch {}
+              throw "Windows 8.1 SDK layout creation exceeded 20 minutes and was stopped."
+            }
+          }
+          $layoutProc.Refresh()
           $layoutCode = $layoutProc.ExitCode
           Write-Host "SDK layout exit code: $layoutCode"
           if (($layoutCode -ne 0) -and ($layoutCode -ne 3010)) {
