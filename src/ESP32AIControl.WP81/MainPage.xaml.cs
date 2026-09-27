@@ -119,7 +119,6 @@ namespace ESP32AIControl.WP81
                 InsertWidgetVisual(visual);
             }
 
-            visual.State = state;
             _syncingControls = true;
             try
             {
@@ -133,7 +132,10 @@ namespace ESP32AIControl.WP81
 
         private WidgetVisual CreateWidgetVisual(WidgetState state)
         {
-            var visual = new WidgetVisual();
+            var visual = new WidgetVisual
+            {
+                State = state
+            };
             visual.Container = new StackPanel
             {
                 Margin = new Thickness(0, 0, 0, 12),
