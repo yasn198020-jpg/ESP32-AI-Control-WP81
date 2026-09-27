@@ -56,7 +56,12 @@ jobs:
           if (-not $winmd) { throw "Windows.winmd was not found." }
           Copy-Item $winmd.FullName (Join-Path $legacyMetadata "Windows.winmd") -Force
 
-          $universal = Get-ChildItem $kitsRoot -Recurse -Filter "Windows.Foundation.UniversalApiContract.winmd" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+          $preferredUniversal = Join-Path $kitsRoot "10\References\10.0.14393.0\Windows.Foundation.UniversalApiContract\1.0.0.0\Windows.Foundation.UniversalApiContract.winmd"
+          if (Test-Path $preferredUniversal) {
+            $universal = Get-Item $preferredUniversal
+          } else {
+            $universal = Get-ChildItem $kitsRoot -Recurse -Filter "Windows.Foundation.UniversalApiContract.winmd" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+          }
           if (-not $universal) {
             $universal = Get-ChildItem $metadataRoot -Recurse -Filter "Windows.Foundation.UniversalApiContract.winmd" -File -ErrorAction SilentlyContinue | Select-Object -First 1
           }
