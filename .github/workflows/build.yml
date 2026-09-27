@@ -158,26 +158,9 @@ jobs:
       - name: Locate legacy XAML targets
         shell: powershell
         run: |
-          $roots = @(
-            (Join-Path $env:ProgramFiles 'Microsoft Visual Studio'),
-            (Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio'),
-            (Join-Path ${env:ProgramFiles(x86)} 'MSBuild')
-          ) | Where-Object { Test-Path $_ }
-
-          $targets = foreach ($root in $roots) {
-            Get-ChildItem $root -Recurse -Filter 'Microsoft.Windows.UI.Xaml.CSharp.Targets' -File -ErrorAction SilentlyContinue
-          }
-
-          $target81 = $targets | Where-Object { $_.FullName -match '\\8\.1\\Microsoft\.Windows\.UI\.Xaml\.CSharp\.Targets$' } | Select-Object -First 1
-          if (-not $target81) {
-            Write-Host 'Found XAML target files:'
-            $targets | Select-Object -ExpandProperty FullName
-            throw 'No Windows Phone 8.1 XAML CSharp targets found.'
-          }
-
-          Write-Host "Using WP8.1 XAML target: $($target81.FullName)"
-          "XAML_TARGET_PATH=$($target81.FullName)" | Out-File $env:GITHUB_ENV -Append
-
+          $target = "$env:ProgramFiles\Microsoft Visual Studio\2022\Enterprise\MSBuild\Microsoft\WindowsXaml\v17.0\8.1\Microsoft.Windows.UI.Xaml.CSharp.Targets"
+          if (-not (Test-Path $target)) { throw "WP8.1 XAML target not found: $target" }
+          "XAML_TARGET_PATH=$target" | Out-File $env:GITHUB_ENV -Append
       - name: Locate WP XAML build tools
         shell: powershell
         run: |
@@ -213,19 +196,6 @@ jobs:
           Copy-Item $winrtDll.FullName $frameworkRoot -Force
           Copy-Item $winrtUiDll.FullName $frameworkRoot -Force
           "FRAMEWORK_PATH=$frameworkRoot" | Out-File $env:GITHUB_ENV -Append
-
-      - name: Diagnose XAML metadata resolution
-        shell: powershell
-        run: |
-          Write-Host "=== UniversalApiContract files ==="
-          Get-ChildItem "C:\Program Files (x86)" -Recurse -Filter "Windows.Foundation.UniversalApiContract.winmd" -File -ErrorAction SilentlyContinue |
-            Select-Object -ExpandProperty FullName
-          Write-Host "=== XAML target around CompileXaml ==="
-          $target = "$env:ProgramFiles\Microsoft Visual Studio\2022\Enterprise\MSBuild\Microsoft\WindowsXaml\v17.0\8.1\Microsoft.Windows.UI.Xaml.Common.targets"
-          if (Test-Path $target) { Get-Content $target | Select-Object -Skip 215 -First 55 }
-          Write-Host "=== SDK registry ==="
-          Get-ItemProperty 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Microsoft SDKs\WindowsPhone\v8.1' -ErrorAction SilentlyContinue | Format-List *
-          Get-ItemProperty 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Microsoft SDKs\WindowsPhoneApp\v8.1' -ErrorAction SilentlyContinue | Format-List *
 
       - name: Build solution
         shell: powershell
