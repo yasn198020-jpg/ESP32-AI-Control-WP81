@@ -20,7 +20,9 @@
             <StackPanel>
                 <TextBox x:Name="HostBox" Header="MQTT host" Text="m4.wqtt.ru" Margin="0,4,0,4"/>
                 <TextBox x:Name="PortBox" Header="TCP port" Text="2815" Margin="0,4,0,4"/>
-                <TextBox x:Name="PrefixBox" Header="MQTT prefix" Text="dghjko" Margin="0,4,0,8"/>
+                <TextBox x:Name="PrefixBox" Header="MQTT prefix" Text="dghjko" Margin="0,4,0,4"/>
+                <TextBox x:Name="UserNameBox" Header="MQTT username" Margin="0,4,0,4"/>
+                <PasswordBox x:Name="PasswordBox" Header="MQTT password" Margin="0,4,0,8"/>
 
                 <StackPanel Orientation="Horizontal">
                     <Button Content="Подключить" Click="ConnectButton_Click" Margin="0,0,8,0"/>
