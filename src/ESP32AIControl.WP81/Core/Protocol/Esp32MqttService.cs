@@ -68,7 +68,7 @@ namespace ESP32AIControl.WP81.Core.Protocol
             var topic = "/" + _settings.Prefix + "/" +
                         (deviceId ?? string.Empty).Trim('/') + "/" +
                         (widgetId ?? string.Empty).Trim('/') + "/control";
-            var payload = "{"status":"" + EscapeJson(value) + ""}";
+            var payload = "{\"status\":\"" + EscapeJson(value) + "\"}";
 
             return _mqtt.PublishAsync(topic, payload, 1, false);
         }
