@@ -164,7 +164,257 @@ jobs:
           $legacyReferences = Join-Path $legacyPhoneRoot 'References\CommonConfiguration\Neutral'
           New-Item -ItemType Directory -Force -Path $legacyReferences | Out-Null
           $phoneWinmd = Get-ChildItem $sdkRoot -Recurse -Filter 'Windows.winmd' -File -ErrorAction SilentlyContinue |
-            Where-Object { $_.FullName -match '\\References\\CommonConfiguration\\Neutral\\Windows\\.winmd
+            Where-Object { $_.FullName -match '\\References\\CommonConfiguration\\Neutral\\Windows\.winmd
+          if ($phoneWinmd) {
+            Copy-Item $phoneWinmd.FullName (Join-Path $legacyReferences 'Windows.winmd') -Force
+            Write-Host "Windows Phone metadata: $($phoneWinmd.FullName)"
+          } else {
+            $genericWinmd = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\8.1\References\CommonConfiguration\Neutral\Windows.winmd'
+            if (Test-Path $genericWinmd) { Copy-Item $genericWinmd (Join-Path $legacyReferences 'Windows.winmd') -Force }
+            else { throw "Windows.winmd was not found for the Windows Phone SDK." }
+          }
+
+          # Older XAML targets discover WP SDK through these registry keys.
+          $registryPaths = @(
+            'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Microsoft SDKs\WindowsPhone\v8.1',
+            'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Microsoft SDKs\WindowsPhoneApp\v8.1'
+          )
+          foreach ($key in $registryPaths) {
+            New-Item -Path $key -Force | Out-Null
+            New-ItemProperty -Path $key -Name 'Install Path' -PropertyType String -Value ($legacyPhoneRoot + '\') -Force | Out-Null
+            New-ItemProperty -Path $key -Name 'InstallationFolder' -PropertyType String -Value ($legacyPhoneRoot + '\') -Force | Out-Null
+          }
+
+          Write-Host "Windows Phone SDK root: $sdkRoot"
+          Write-Host "Legacy Windows Phone SDK root: $legacyPhoneRoot"
+          Get-ItemProperty $registryPaths[0] | Format-List *
+          Get-ChildItem $legacyPhoneRoot -Recurse -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -ieq 'Windows.winmd' -or $_.Name -ieq 'Windows.props' } |
+            Select-Object -First 150 FullName
+
+          "WINDOWS_PHONE_SDK_DIR=$legacyPhoneRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "TARGET_PLATFORM_SDK_ROOT_OVERRIDE=$legacyPhoneRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Locate WP XAML build tools
+        shell: powershell
+        run: |
+          $candidates = @(
+            "$env:ProgramFiles\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe",
+            "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe",
+            "$env:ProgramFiles\Microsoft Visual Studio\2019\Enterprise\MSBuild\Current\Bin\MSBuild.exe",
+            "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2019\Enterprise\MSBuild\Current\Bin\MSBuild.exe"
+          )
+
+          $selected = $null
+          foreach ($msbuild in $candidates) {
+            if (-not (Test-Path $msbuild)) { continue }
+            $msbuildRoot = Split-Path (Split-Path (Split-Path $msbuild -Parent) -Parent) -Parent
+            $targets = @(
+              (Join-Path $msbuildRoot "Microsoft\WindowsXaml\v17.0\8.1\Microsoft.Windows.UI.Xaml.CSharp.Targets"),
+              (Join-Path $msbuildRoot "Microsoft\WindowsXaml\v16.0\8.1\Microsoft.Windows.UI.Xaml.CSharp.Targets"),
+              (Join-Path $msbuildRoot "Microsoft\VisualStudio\v17.0\WindowsXaml\Microsoft.Windows.UI.Xaml.CSharp.targets"),
+              (Join-Path $msbuildRoot "Microsoft\VisualStudio\v16.0\WindowsXaml\Microsoft.Windows.UI.Xaml.CSharp.targets")
+            )
+            foreach ($target in $targets) {
+              if (Test-Path $target) {
+                $selected = $msbuild
+                Write-Host "Selected MSBuild: $msbuild"
+                Write-Host "Selected XAML targets: $target"
+                break
+              }
+            }
+            if ($selected) { break }
+          }
+
+          if (-not $selected) {
+            throw "No installed MSBuild with WP8.1 Windows XAML targets was found."
+          }
+
+          "MSBUILD_PATH=$selected" | Out-File -FilePath $env:GITHUB_ENV -Append
+          & $selected -version
+
+      - name: Inspect WP8.1 XAML SDK target properties
+        shell: powershell
+        run: |
+          $target = Get-ChildItem "$env:ProgramFiles\Microsoft Visual Studio\2022\Enterprise\MSBuild\Microsoft\WindowsXaml" -Recurse -Filter "Microsoft.Windows.UI.Xaml.CSharp.Targets" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $target) { throw "WP8.1 XAML target file not found for inspection." }
+          Write-Host "Inspecting XAML target: $($target.FullName)"
+          Select-String -Path $target.FullName -Pattern "WindowsPhone|TargetPlatformSdk|Windows.metadata|WindowsSdkDir|SDKRoot" -Context 2,3
+
+      - name: Install .NET Framework 4.0 reference assemblies
+        shell: powershell
+        run: |
+          $nuget = Join-Path $env:RUNNER_TEMP "nuget.exe"
+          Invoke-WebRequest -Uri "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe" -OutFile $nuget
+          $packages = Join-Path $env:RUNNER_TEMP "nuget-packages"
+          New-Item -ItemType Directory -Force -Path $packages | Out-Null
+
+          & $nuget install Microsoft.NETFramework.ReferenceAssemblies.net40 -Version 1.0.3 -OutputDirectory $packages -NonInteractive
+
+          $frameworkRoot = Join-Path $packages "Microsoft.NETFramework.ReferenceAssemblies.net40.1.0.3\build\.NETFramework\v4.0"
+          if (-not (Test-Path (Join-Path $frameworkRoot "mscorlib.dll"))) {
+            Write-Host "Installed reference assemblies:"
+            Get-ChildItem $packages -Recurse -Filter mscorlib.dll | Select-Object -ExpandProperty FullName
+            throw "NET Framework 4.0 reference assemblies were not installed at the expected location."
+          }
+
+          Write-Host "Using .NET Framework 4.0 reference assemblies: $frameworkRoot"
+          "FRAMEWORK_PATH=$frameworkRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Locate solution
+        shell: powershell
+        run: |
+          if (-not (Test-Path ".\ESP32-AI-Control-WP81.sln")) {
+            throw "Solution ESP32-AI-Control-WP81.sln not found."
+          }
+          Get-ChildItem -Recurse -Filter *.csproj | Select-Object FullName
+
+      - name: Build solution
+        shell: powershell
+        run: |
+          & "$env:MSBUILD_PATH" ".\ESP32-AI-Control-WP81.sln" /m /t:Build /p:Configuration=Debug /p:Platform="ARM" /p:FrameworkPathOverride="$env:FRAMEWORK_PATH" /p:WindowsPhoneSdkDir="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSDKDir="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSdkRoot="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSDKRoot="$env:WINDOWS_PHONE_SDK_DIR" /p:TargetPlatformSdkRootOverride="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:TargetPlatformSdkRoot="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:WindowsSdkDir="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:WindowsSdkDir_8.1="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:WindowsPhoneSdkVersion="8.1" /verbosity:minimal
+          if ($LASTEXITCODE -ne 0) {
+            throw "MSBuild failed with exit code $LASTEXITCODE"
+          }
+
+      - name: Upload build output
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: WP81-build-output
+          path: |
+            src/ESP32AIControl.WP81/bin/**
+            src/ESP32AIControl.WP81/obj/**
+          if-no-files-found: warn
+ } |
+            Select-Object -First 1
+          Write-Host "Windows.winmd candidates in WP SDK:"
+          Get-ChildItem $sdkRoot -Recurse -Filter 'Windows.winmd' -File -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty FullName
+          if ($phoneWinmd) {
+            Copy-Item $phoneWinmd.FullName (Join-Path $legacyReferences 'Windows.winmd') -Force
+            Write-Host "Windows Phone metadata: $($phoneWinmd.FullName)"
+          } else {
+            $genericWinmd = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\8.1\References\CommonConfiguration\Neutral\Windows.winmd'
+            if (Test-Path $genericWinmd) { Copy-Item $genericWinmd (Join-Path $legacyReferences 'Windows.winmd') -Force }
+            else { throw "Windows.winmd was not found for the Windows Phone SDK." }
+          }
+
+          # Older XAML targets discover WP SDK through these registry keys.
+          $registryPaths = @(
+            'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Microsoft SDKs\WindowsPhone\v8.1',
+            'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Microsoft SDKs\WindowsPhoneApp\v8.1'
+          )
+          foreach ($key in $registryPaths) {
+            New-Item -Path $key -Force | Out-Null
+            New-ItemProperty -Path $key -Name 'Install Path' -PropertyType String -Value ($legacyPhoneRoot + '\') -Force | Out-Null
+            New-ItemProperty -Path $key -Name 'InstallationFolder' -PropertyType String -Value ($legacyPhoneRoot + '\') -Force | Out-Null
+          }
+
+          Write-Host "Windows Phone SDK root: $sdkRoot"
+          Write-Host "Legacy Windows Phone SDK root: $legacyPhoneRoot"
+          Get-ItemProperty $registryPaths[0] | Format-List *
+          Get-ChildItem $legacyPhoneRoot -Recurse -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -ieq 'Windows.winmd' -or $_.Name -ieq 'Windows.props' } |
+            Select-Object -First 150 FullName
+
+          "WINDOWS_PHONE_SDK_DIR=$legacyPhoneRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "TARGET_PLATFORM_SDK_ROOT_OVERRIDE=$legacyPhoneRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Locate WP XAML build tools
+        shell: powershell
+        run: |
+          $candidates = @(
+            "$env:ProgramFiles\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe",
+            "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe",
+            "$env:ProgramFiles\Microsoft Visual Studio\2019\Enterprise\MSBuild\Current\Bin\MSBuild.exe",
+            "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2019\Enterprise\MSBuild\Current\Bin\MSBuild.exe"
+          )
+
+          $selected = $null
+          foreach ($msbuild in $candidates) {
+            if (-not (Test-Path $msbuild)) { continue }
+            $msbuildRoot = Split-Path (Split-Path (Split-Path $msbuild -Parent) -Parent) -Parent
+            $targets = @(
+              (Join-Path $msbuildRoot "Microsoft\WindowsXaml\v17.0\8.1\Microsoft.Windows.UI.Xaml.CSharp.Targets"),
+              (Join-Path $msbuildRoot "Microsoft\WindowsXaml\v16.0\8.1\Microsoft.Windows.UI.Xaml.CSharp.Targets"),
+              (Join-Path $msbuildRoot "Microsoft\VisualStudio\v17.0\WindowsXaml\Microsoft.Windows.UI.Xaml.CSharp.targets"),
+              (Join-Path $msbuildRoot "Microsoft\VisualStudio\v16.0\WindowsXaml\Microsoft.Windows.UI.Xaml.CSharp.targets")
+            )
+            foreach ($target in $targets) {
+              if (Test-Path $target) {
+                $selected = $msbuild
+                Write-Host "Selected MSBuild: $msbuild"
+                Write-Host "Selected XAML targets: $target"
+                break
+              }
+            }
+            if ($selected) { break }
+          }
+
+          if (-not $selected) {
+            throw "No installed MSBuild with WP8.1 Windows XAML targets was found."
+          }
+
+          "MSBUILD_PATH=$selected" | Out-File -FilePath $env:GITHUB_ENV -Append
+          & $selected -version
+
+      - name: Inspect WP8.1 XAML SDK target properties
+        shell: powershell
+        run: |
+          $target = Get-ChildItem "$env:ProgramFiles\Microsoft Visual Studio\2022\Enterprise\MSBuild\Microsoft\WindowsXaml" -Recurse -Filter "Microsoft.Windows.UI.Xaml.CSharp.Targets" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $target) { throw "WP8.1 XAML target file not found for inspection." }
+          Write-Host "Inspecting XAML target: $($target.FullName)"
+          Select-String -Path $target.FullName -Pattern "WindowsPhone|TargetPlatformSdk|Windows.metadata|WindowsSdkDir|SDKRoot" -Context 2,3
+
+      - name: Install .NET Framework 4.0 reference assemblies
+        shell: powershell
+        run: |
+          $nuget = Join-Path $env:RUNNER_TEMP "nuget.exe"
+          Invoke-WebRequest -Uri "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe" -OutFile $nuget
+          $packages = Join-Path $env:RUNNER_TEMP "nuget-packages"
+          New-Item -ItemType Directory -Force -Path $packages | Out-Null
+
+          & $nuget install Microsoft.NETFramework.ReferenceAssemblies.net40 -Version 1.0.3 -OutputDirectory $packages -NonInteractive
+
+          $frameworkRoot = Join-Path $packages "Microsoft.NETFramework.ReferenceAssemblies.net40.1.0.3\build\.NETFramework\v4.0"
+          if (-not (Test-Path (Join-Path $frameworkRoot "mscorlib.dll"))) {
+            Write-Host "Installed reference assemblies:"
+            Get-ChildItem $packages -Recurse -Filter mscorlib.dll | Select-Object -ExpandProperty FullName
+            throw "NET Framework 4.0 reference assemblies were not installed at the expected location."
+          }
+
+          Write-Host "Using .NET Framework 4.0 reference assemblies: $frameworkRoot"
+          "FRAMEWORK_PATH=$frameworkRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Locate solution
+        shell: powershell
+        run: |
+          if (-not (Test-Path ".\ESP32-AI-Control-WP81.sln")) {
+            throw "Solution ESP32-AI-Control-WP81.sln not found."
+          }
+          Get-ChildItem -Recurse -Filter *.csproj | Select-Object FullName
+
+      - name: Build solution
+        shell: powershell
+        run: |
+          & "$env:MSBUILD_PATH" ".\ESP32-AI-Control-WP81.sln" /m /t:Build /p:Configuration=Debug /p:Platform="ARM" /p:FrameworkPathOverride="$env:FRAMEWORK_PATH" /p:WindowsPhoneSdkDir="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSDKDir="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSdkRoot="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSDKRoot="$env:WINDOWS_PHONE_SDK_DIR" /p:TargetPlatformSdkRootOverride="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:TargetPlatformSdkRoot="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:WindowsSdkDir="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:WindowsSdkDir_8.1="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:WindowsPhoneSdkVersion="8.1" /verbosity:minimal
+          if ($LASTEXITCODE -ne 0) {
+            throw "MSBuild failed with exit code $LASTEXITCODE"
+          }
+
+      - name: Upload build output
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: WP81-build-output
+          path: |
+            src/ESP32AIControl.WP81/bin/**
+            src/ESP32AIControl.WP81/obj/**
+          if-no-files-found: warn
+ } |
+            Select-Object -First 1
+          Write-Host "Windows.winmd candidates in WP SDK:"
+          Get-ChildItem $sdkRoot -Recurse -Filter 'Windows.winmd' -File -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty FullName
           if ($phoneWinmd) {
             Copy-Item $phoneWinmd.FullName (Join-Path $legacyReferences 'Windows.winmd') -Force
             Write-Host "Windows Phone metadata: $($phoneWinmd.FullName)"
