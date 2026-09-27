@@ -54,11 +54,23 @@ jobs:
 
       - name: Install Windows Phone 8.1 SDK components
         shell: powershell
-        timeout-minutes: 15
+        timeout-minutes: 45
         run: |
           $iso = Join-Path $env:RUNNER_TEMP "windowsphone81sdkupdate1.iso"
-          Invoke-WebRequest -Uri "https://download.microsoft.com/download/E/7/D/E7D9744A-06A6-46FB-AEA4-50FAAEC6CE73/windowsphone81sdkupdate1.iso" -OutFile $iso
-          Write-Host "Downloaded Windows Phone SDK ISO: $((Get-Item $iso).Length) bytes"
+          $url = "https://download.microsoft.com/download/E/7/D/E7D9744A-06A6-46FB-AEA4-50FAAEC6CE73/windowsphone81sdkupdate1.iso"
+
+          Write-Host "Downloading official Windows Phone 8.1 Update 1 ISO with BITS..."
+          Start-BitsTransfer -Source $url -Destination $iso -DisplayName "Windows Phone 8.1 SDK ISO" -Description "Microsoft Windows Phone 8.1 Update 1" -Priority High
+
+          if (-not (Test-Path $iso)) {
+            throw "Windows Phone SDK ISO was not downloaded."
+          }
+
+          $size = (Get-Item $iso).Length
+          Write-Host "Downloaded Windows Phone SDK ISO: $size bytes"
+          if ($size -lt 800MB) {
+            throw "Downloaded Windows Phone SDK ISO is unexpectedly small."
+          }
 
           $image = Mount-DiskImage -ImagePath $iso -PassThru
           try {
@@ -69,42 +81,36 @@ jobs:
 
             $msis = Get-ChildItem $root -Recurse -Filter *.msi -File -ErrorAction SilentlyContinue
             Write-Host "MSI packages found: $($msis.Count)"
-            $msis | ForEach-Object { Write-Host $_.FullName }
-
-            $patterns = @(
-              '^WindowsPhoneSdk-(ARM|Desktop|Desktop-x64|x86)\\.msi$',
-              '^mobiletools_wpsdkcore_net\\.msi$',
-              '^phoneaddon_sharedcore\\.msi$',
-              '^typescript_sdk\\.msi$',
-              '^Windows Software Development Kit.*\\.msi$'
-            )
 
             $selected = foreach ($msi in $msis) {
-              $name = $msi.Name
-              if ($name -match '^WindowsPhoneSdk-(ARM|Desktop|Desktop-x64|x86)\\.msi$' -or
-                  $name -ieq 'mobiletools_wpsdkcore_net.msi' -or
-                  $name -ieq 'phoneaddon_sharedcore.msi' -or
-                  $name -ieq 'typescript_sdk.msi' -or
-                  $name -match '^Windows Software Development Kit.*\\.msi$') {
+              if ($msi.Name -ieq 'mobiletools_wpsdkcore_net.msi' -or
+                  $msi.Name -ieq 'phoneaddon_sharedcore.msi' -or
+                  $msi.Name -ieq 'typescript_sdk.msi' -or
+                  $msi.Name -ieq 'WindowsPhoneSdk-ARM.msi' -or
+                  $msi.Name -ieq 'WindowsPhoneSdk-Desktop.msi' -or
+                  $msi.Name -ieq 'WindowsPhoneSdk-Desktop-x64.msi' -or
+                  $msi.Name -ieq 'WindowsPhoneSdk-x86.msi' -or
+                  $msi.Name -like 'Windows Software Development Kit for Windows Store Apps-x86_en-us.msi') {
                 $msi
               }
             }
 
             if (-not $selected) {
-              throw "No standalone Windows Phone SDK MSI packages were found on the ISO."
+              Write-Host "Available MSI packages (first 150):"
+              $msis | Select-Object -First 150 -ExpandProperty FullName
+              throw "No Windows Phone 8.1 SDK MSI packages were found on the ISO."
             }
 
             Write-Host "Selected SDK MSI packages:"
             $selected | ForEach-Object { Write-Host $_.FullName }
 
             foreach ($msi in $selected) {
+              $log = Join-Path $env:RUNNER_TEMP ($msi.BaseName + '.log')
               Write-Host "Installing $($msi.Name)"
-              $proc = Start-Process -FilePath "msiexec.exe" -ArgumentList '/i', $msi.FullName, '/qn', '/norestart', '/L*v', (Join-Path $env:RUNNER_TEMP ($msi.BaseName + '.log')) -Wait -PassThru
+              $proc = Start-Process -FilePath "msiexec.exe" -ArgumentList '/i', $msi.FullName, '/qn', '/norestart', '/L*v', $log -Wait -PassThru
               Write-Host "Exit code: $($proc.ExitCode)"
               if ($proc.ExitCode -ne 0 -and $proc.ExitCode -ne 3010) {
-                Write-Host "MSI log tail:"
-                $log = Join-Path $env:RUNNER_TEMP ($msi.BaseName + '.log')
-                if (Test-Path $log) { Get-Content $log -Tail 80 }
+                if (Test-Path $log) { Get-Content $log -Tail 120 }
                 throw "Windows Phone SDK MSI installation failed: $($msi.Name)"
               }
             }
@@ -121,10 +127,16 @@ jobs:
             if (Test-Path $path) { Write-Host "Found: $path" }
           }
 
-          $sdkFiles = Get-ChildItem 'C:\\Program Files (x86)\\Microsoft SDKs' -Recurse -ErrorAction SilentlyContinue |
-            Where-Object { $_.Name -match 'WindowsPhone|Microsoft.Windows.UI.Xaml.CSharp.Targets|WindowsPhoneSdk' } |
-            Select-Object -First 200 FullName
-          $sdkFiles | ForEach-Object { Write-Host $_ }
+          $registryHints = @(
+            'HKLM:\SOFTWARE\\Microsoft\\Microsoft SDKs\\WindowsPhone',
+            'HKLM:\SOFTWARE\\WOW6432Node\\Microsoft\\Microsoft SDKs\\WindowsPhone'
+          )
+          foreach ($key in $registryHints) {
+            if (Test-Path $key) {
+              Write-Host "Found SDK registry key: $key"
+              Get-ItemProperty $key | Format-List *
+            }
+          }
       - name: Locate WP XAML build tools
         shell: powershell
         run: |
