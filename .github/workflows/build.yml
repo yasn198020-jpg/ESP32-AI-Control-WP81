@@ -27,7 +27,15 @@ jobs:
           if ($p.ExitCode -ne 0) { throw "Windows 10 SDK 10240 installation failed: $($p.ExitCode)" }
           $kitsRoot = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10'
           $contract = Get-ChildItem $kitsRoot -Recurse -Filter 'Windows.Foundation.UniversalApiContract.winmd' -File -ErrorAction SilentlyContinue |
-            Where-Object { $_.FullName -match '\\1\.0\.0\.0\\Windows\.Foundation\.UniversalApiContract\.winmd
+            Where-Object { $_.FullName -match '\\1\.0\.0\.0\\Windows\.Foundation\.UniversalApiContract\.winmd$' } |
+            Select-Object -First 1
+          if (-not $contract) {
+            Write-Host 'Available UniversalApiContract files:'
+            Get-ChildItem $kitsRoot -Recurse -Filter 'Windows.Foundation.UniversalApiContract.winmd' -File -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName
+            throw 'Windows 10 SDK 10240 UniversalApiContract.winmd with version directory 1.0.0.0 was not found.'
+          }
+          Write-Host "SDK 10240 Universal contract: $($contract.FullName)"
+          "SDK10240_UNIVERSAL=$($contract.FullName)" | Out-File $env:GITHUB_ENV -Append
       - name: Prepare Windows metadata for legacy XAML compiler
         shell: powershell
         run: |
