@@ -1,0 +1,46 @@
+name: WP8.1 build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show environment
+        shell: powershell
+        run: |
+          Write-Host "MSBuild:"
+          & "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe" -version
+
+      - name: Locate solution
+        shell: powershell
+        run: |
+          if (-not (Test-Path ".\ESP32-AI-Control-WP81.sln")) {
+            throw "Solution ESP32-AI-Control-WP81.sln not found."
+          }
+          Get-ChildItem -Recurse -Filter *.csproj | Select-Object FullName
+
+      - name: Build solution
+        shell: powershell
+        run: |
+          & "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe" ".\ESP32-AI-Control-WP81.sln" /m /t:Build /p:Configuration=Debug /p:Platform="Any CPU" /verbosity:minimal
+          if ($LASTEXITCODE -ne 0) {
+            throw "MSBuild failed with exit code $LASTEXITCODE"
+          }
+
+      - name: Upload build output
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: WP81-build-output
+          path: |
+            src/ESP32AIControl.WP81/bin/**
+            src/ESP32AIControl.WP81/obj/**
+          if-no-files-found: warn
