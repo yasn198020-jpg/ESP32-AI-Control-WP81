@@ -11,60 +11,42 @@ namespace ESP32AIControl.WP81.Core.Protocol
         [DataContract]
         private sealed class StatusDto
         {
-            [DataMember(Name="status")]
-            public object Status { get; set; }
+            [DataMember(Name="status")] public object Status { get; set; }
+            [DataMember(Name="val")] public object Value { get; set; }
         }
 
         [DataContract]
         private sealed class EventDto
         {
-            [DataMember(Name="id")]
-            public string Id { get; set; }
-
-            [DataMember(Name="val")]
-            public object Value { get; set; }
-
-            [DataMember(Name="int")]
-            public int IntValue { get; set; }
+            [DataMember(Name="id")] public string Id { get; set; }
+            [DataMember(Name="val")] public object Value { get; set; }
+            [DataMember(Name="int")] public int IntValue { get; set; }
         }
 
         [DataContract]
         private sealed class ConfigDto
         {
-            [DataMember(Name="topic")]
-            public string Topic { get; set; }
-
-            [DataMember(Name="descr")]
-            public string Description { get; set; }
-
-            [DataMember(Name="label")]
-            public string Label { get; set; }
-
-            [DataMember(Name="name")]
-            public string Name { get; set; }
-
-            [DataMember(Name="widget")]
-            public string Widget { get; set; }
-
-            [DataMember(Name="page")]
-            public string Page { get; set; }
-
-            [DataMember(Name="order")]
-            public int Order { get; set; }
+            [DataMember(Name="topic")] public string Topic { get; set; }
+            [DataMember(Name="id")] public string Id { get; set; }
+            [DataMember(Name="descr")] public string Description { get; set; }
+            [DataMember(Name="label")] public string Label { get; set; }
+            [DataMember(Name="name")] public string Name { get; set; }
+            [DataMember(Name="widget")] public string Widget { get; set; }
+            [DataMember(Name="type")] public string Type { get; set; }
+            [DataMember(Name="subtype")] public string Subtype { get; set; }
+            [DataMember(Name="page")] public string Page { get; set; }
+            [DataMember(Name="order")] public int Order { get; set; }
+            [DataMember(Name="val")] public object Value { get; set; }
         }
 
         public static Esp32Message Parse(Esp32MessageKind kind, string topic, string payload, Esp32TopicParser topics)
         {
             switch (kind)
             {
-                case Esp32MessageKind.Status:
-                    return ParseStatus(topic, payload, topics);
-                case Esp32MessageKind.Event:
-                    return ParseEvent(topic, payload, topics);
-                case Esp32MessageKind.Config:
-                    return ParseConfig(topic, payload, topics);
-                default:
-                    return new Esp32Message { Kind = Esp32MessageKind.Unknown, Topic = topic, RawPayload = payload };
+                case Esp32MessageKind.Status: return ParseStatus(topic, payload, topics);
+                case Esp32MessageKind.Event: return ParseEvent(topic, payload, topics);
+                case Esp32MessageKind.Config: return ParseConfig(topic, payload, topics);
+                default: return new Esp32Message { Kind = Esp32MessageKind.Unknown, Topic = topic, RawPayload = payload };
             }
         }
 
@@ -76,7 +58,7 @@ namespace ESP32AIControl.WP81.Core.Protocol
             {
                 Kind = Esp32MessageKind.Status,
                 Topic = topic,
-                DeviceId = parts.Length >= 2 ? parts[0] : string.Empty,
+                DeviceId = parts.Length >= 1 ? parts[0] : string.Empty,
                 WidgetId = widgetId,
                 Value = ExtractStatus(payload),
                 RawPayload = payload
@@ -91,7 +73,7 @@ namespace ESP32AIControl.WP81.Core.Protocol
             {
                 Kind = Esp32MessageKind.Event,
                 Topic = topic,
-                DeviceId = parts.Length >= 2 ? parts[0] : string.Empty,
+                DeviceId = parts.Length >= 1 ? parts[0] : string.Empty,
                 WidgetId = !string.IsNullOrEmpty(dto.Id) ? dto.Id : (parts.Length >= 2 ? parts[parts.Length - 2] : string.Empty),
                 Value = ValueToString(dto.Value),
                 RawPayload = payload
@@ -102,17 +84,18 @@ namespace ESP32AIControl.WP81.Core.Protocol
         {
             var dto = Deserialize<ConfigDto>(payload);
             var parts = topics.SplitRelative(topic);
-            var widgetId = GetLastSegment(dto.Topic);
+            var widgetId = First(dto.Id, GetLastSegment(dto.Topic), parts.Length >= 3 ? parts[parts.Length - 2] : string.Empty);
             return new Esp32Message
             {
                 Kind = Esp32MessageKind.Config,
                 Topic = topic,
-                DeviceId = parts.Length >= 2 ? parts[0] : string.Empty,
+                DeviceId = parts.Length >= 1 ? parts[0] : string.Empty,
                 WidgetId = widgetId,
                 Description = First(dto.Description, dto.Label, dto.Name),
-                WidgetType = dto.Widget,
+                WidgetType = First(dto.Widget, dto.Subtype, dto.Type),
                 Page = dto.Page,
                 Order = dto.Order,
+                Value = ValueToString(dto.Value),
                 RawPayload = payload
             };
         }
@@ -122,8 +105,8 @@ namespace ESP32AIControl.WP81.Core.Protocol
             try
             {
                 var dto = Deserialize<StatusDto>(payload);
-                if (dto.Status != null)
-                    return ValueToString(dto.Status);
+                if (dto.Status != null) return ValueToString(dto.Status);
+                if (dto.Value != null) return ValueToString(dto.Value);
             }
             catch { }
             return payload;
@@ -131,8 +114,7 @@ namespace ESP32AIControl.WP81.Core.Protocol
 
         private static string GetLastSegment(string topic)
         {
-            if (string.IsNullOrEmpty(topic))
-                return string.Empty;
+            if (string.IsNullOrEmpty(topic)) return string.Empty;
             var s = topic.Trim('/');
             var p = s.LastIndexOf('/');
             return p >= 0 ? s.Substring(p + 1) : s;
@@ -141,8 +123,7 @@ namespace ESP32AIControl.WP81.Core.Protocol
         private static string First(params string[] values)
         {
             for (var i = 0; i < values.Length; i++)
-                if (!string.IsNullOrWhiteSpace(values[i]))
-                    return values[i];
+                if (!string.IsNullOrWhiteSpace(values[i])) return values[i];
             return string.Empty;
         }
 
