@@ -50,7 +50,7 @@ namespace ESP32AIControl.WP81.Core.Export
             }
 
             sb.Append("</table></body></html>");
-            await FileIO.WriteTextAsync(file, sb.ToString(), UnicodeEncoding.Utf8);
+            await FileIO.WriteTextAsync(file, sb.ToString());
         }
 
         private static string Escape(string text)
