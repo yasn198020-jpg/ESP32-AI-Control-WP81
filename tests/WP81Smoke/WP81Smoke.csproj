@@ -53,7 +53,18 @@
     <Reference Include="System.Runtime.WindowsRuntime" />
     <Reference Include="System.Runtime.InteropServices.WindowsRuntime" />
     <Reference Include="System.Runtime.WindowsRuntime.UI.Xaml" />
-    <Reference Include="Windows" />
+    <Reference Include="Windows">
+      <HintPath>$(WindowsPhoneSdkDir)\References\CommonConfiguration\Neutral\Windows.winmd</HintPath>
+      <IsWinMDFile>true</IsWinMDFile>
+    </Reference>
+    <Reference Include="Windows.Foundation.FoundationContract">
+      <HintPath>$(WindowsPhoneSdkDir)\References\Windows.Foundation.FoundationContract\1.0.0.0\Windows.Foundation.FoundationContract.winmd</HintPath>
+      <IsWinMDFile>true</IsWinMDFile>
+    </Reference>
+    <Reference Include="Windows.Foundation.UniversalApiContract">
+      <HintPath>$(WindowsPhoneSdkDir)\References\Windows.Foundation.UniversalApiContract\1.0.0.0\Windows.Foundation.UniversalApiContract.winmd</HintPath>
+      <IsWinMDFile>true</IsWinMDFile>
+    </Reference>
   </ItemGroup>
 
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\8.1\Microsoft.Windows.UI.Xaml.CSharp.Targets"
