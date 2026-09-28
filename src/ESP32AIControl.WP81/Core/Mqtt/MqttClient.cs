@@ -49,7 +49,7 @@ namespace ESP32AIControl.WP81.Core.Mqtt
 
                 _running = true;
                 SetState(MqttConnectionState.Connected);
-                _ = ReceiveLoopAsync();
+                ReceiveLoopAsync();
             }
             catch
             {

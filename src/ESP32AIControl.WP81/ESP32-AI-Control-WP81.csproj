@@ -6,13 +6,13 @@
     <OutputType>AppContainerExe</OutputType>
     <RootNamespace>ESP32AIControl.WP81</RootNamespace>
     <AssemblyName>ESP32-AI-Control-WP81</AssemblyName>
-    <TargetPlatformIdentifier>WindowsPhone</TargetPlatformIdentifier>
+    <TargetPlatformIdentifier>WindowsPhoneApp</TargetPlatformIdentifier>
     <TargetPlatformVersion>8.1</TargetPlatformVersion>
     <TargetPlatformMinVersion>8.1</TargetPlatformMinVersion>
     <MinimumVisualStudioVersion>12.0</MinimumVisualStudioVersion>
-    <TargetFrameworkIdentifier>.NETFramework</TargetFrameworkIdentifier>
+    <TargetFrameworkIdentifier>.NETCore</TargetFrameworkIdentifier>
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
-    <TargetFrameworkMoniker>.NETFramework,Version=v4.5</TargetFrameworkMoniker>
+    <TargetFrameworkMoniker>.NETCore,Version=v4.5</TargetFrameworkMoniker>
     <DefaultLanguage>ru-RU</DefaultLanguage>
     <AppxManifest>Package.appxmanifest</AppxManifest>
     <AppxPackageSigningEnabled>False</AppxPackageSigningEnabled>
@@ -52,9 +52,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Page Include="App.xaml">
+    <ApplicationDefinition Include="App.xaml">
       <Generator>MSBuild:Compile</Generator>
-    </Page>
+    </ApplicationDefinition>
     <Page Include="MainPage.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Code</SubType>

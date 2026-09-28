@@ -6,6 +6,11 @@ namespace ESP32AIControl.WP81
 {
     public sealed partial class App : Application
     {
+        public static void Main(string[] args)
+        {
+            Application.Start(p => new App());
+        }
+
         public App()
         {
             this.InitializeComponent();
