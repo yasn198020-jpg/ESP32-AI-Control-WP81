@@ -59,7 +59,7 @@ namespace ESP32AIControl.WP81.Core.Export
                 .Replace("&", "&amp;")
                 .Replace("<", "&lt;")
                 .Replace(">", "&gt;")
-                .Replace(""", "&quot;");
+                .Replace("\"", "&quot;");
         }
     }
 }
