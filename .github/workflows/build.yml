@@ -200,20 +200,17 @@ jobs:
           if (-not (Test-Path (Join-Path $frameworkRoot "mscorlib.dll"))) { throw "NET Framework 4.5 reference assemblies not found." }
           if (-not (Test-Path (Join-Path $frameworkRoot "System.dll"))) { throw "NET Framework 4.5 System.dll reference assembly not found." }
 
-          $net451 = Join-Path $env:RUNNER_TEMP "nuget-net451"
-          New-Item -ItemType Directory -Force -Path $net451 | Out-Null
-          & $nuget install Microsoft.NETFramework.ReferenceAssemblies.net451 -Version 1.0.3 -OutputDirectory $net451 -NonInteractive
-          $facadesRoot = Join-Path $net451 "Microsoft.NETFramework.ReferenceAssemblies.net451.1.0.3\build\.NETFramework\v4.5.1\Facades"
-          $systemRuntime = Join-Path $facadesRoot "System.Runtime.dll"
-          if (-not (Test-Path $systemRuntime)) { throw "System.Runtime facade was not found in .NET Framework 4.5.1 reference assemblies." }
-          Copy-Item $systemRuntime $frameworkRoot -Force
-
-          # The VS2022 legacy WP8.1 XAML compiler resolves System.ObjectModel
-          # during markup compilation, but the runner does not ship it in the
-          # .NET 4.5 reference directory. Supply the matching 4.5.1 facade.
-          $systemObjectModel = Join-Path $facadesRoot "System.ObjectModel.dll"
-          if (-not (Test-Path $systemObjectModel)) { throw "System.ObjectModel facade was not found in .NET Framework 4.5.1 reference assemblies." }
-          Copy-Item $systemObjectModel $frameworkRoot -Force
+          # The legacy WP8.1 XAML compiler expects the .NET 4.5 facade
+          # assemblies to be directly visible from the reference directory.
+          # The runner's .NET 4.5 package keeps them under Facades, so flatten
+          # that exact .NET 4.5 facade set into FRAMEWORK_PATH.
+          $facadesRoot = Join-Path $frameworkRoot "Facades"
+          if (-not (Test-Path $facadesRoot)) { throw "NET Framework 4.5 Facades directory was not found: $facadesRoot" }
+          $facades = Get-ChildItem $facadesRoot -Filter "*.dll" -File -ErrorAction SilentlyContinue
+          if (-not $facades) { throw "NET Framework 4.5 facade assemblies were not found." }
+          foreach ($facade in $facades) {
+            Copy-Item $facade.FullName $frameworkRoot -Force
+          }
 
           $winrtRoot = Join-Path $env:RUNNER_TEMP "winrt-packages"
           New-Item -ItemType Directory -Force -Path $winrtRoot | Out-Null
