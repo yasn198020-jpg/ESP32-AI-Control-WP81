@@ -73,9 +73,7 @@
           Condition="Exists('$(MSBuildExtensionsPath32)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\8.1\Microsoft.Windows.UI.Xaml.CSharp.Targets')" />
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\WindowsXaml\Microsoft.Windows.UI.Xaml.CSharp.targets"
           Condition="Exists('$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\WindowsXaml\Microsoft.Windows.UI.Xaml.CSharp.targets')" />
-  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-
-  <!-- The WP8.1 XAML targets import the C# targets themselves.  The legacy
+<!-- The WP8.1 XAML targets import the C# targets themselves.  The legacy
        project otherwise loses the .NET reference assemblies during CoreCompile.
        Add the .NET 4.5 reference DLLs only after XAML compilation has finished,
        immediately before C# compilation, so the XAML compiler does not see
