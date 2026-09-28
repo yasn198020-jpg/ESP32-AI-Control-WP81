@@ -64,6 +64,7 @@
   <ItemGroup>
     <Reference Include="System.Runtime.Serialization" />
     <Reference Include="System.Runtime.WindowsRuntime" />
+    <Reference Include="Windows" />
   </ItemGroup>
 
   <!-- VS 2022 keeps the Windows Phone 8.1 XAML targets under WindowsXaml\v17.0\8.1.
@@ -73,9 +74,8 @@
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\WindowsXaml\Microsoft.Windows.UI.Xaml.CSharp.targets"
           Condition="Exists('$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\WindowsXaml\Microsoft.Windows.UI.Xaml.CSharp.targets')" />
 <!-- WP8.1 performs a temporary C# compile between XAML markup passes.
-       The .NET 4.5 reference DLLs must be visible to that C# compile, but not
-       remain in ReferencePath during XAML Pass2 because the legacy XAML compiler
-       treats them as metadata inputs and can fail with WMC9999. -->
+     The .NET 4.5 reference DLLs must be visible to that C# compile, but
+     WinRT references remain supplied by the WP8.1 SDK metadata. -->
   <Target Name="WP81AddNet45FrameworkReferencesForXamlPreCompile"
           AfterTargets="MarkupCompilePass1"
           BeforeTargets="XamlPreCompile">
@@ -90,15 +90,6 @@
                                 Condition="Exists('$(FrameworkPathOverride)\System.Runtime.dll')" />
       <_WP81FrameworkReferences Include="$(FrameworkPathOverride)\System.Runtime.Serialization.dll"
                                 Condition="Exists('$(FrameworkPathOverride)\System.Runtime.Serialization.dll')" />
-
-      <_WP81WindowsWinmdForXamlPreCompile Include="@(ReferencePath)"
-          Condition="'%(ReferencePath.Filename)%(ReferencePath.Extension)' == 'Windows.winmd'" />
-      <_WP81WindowsWinmdForXamlPreCompileWithRefs Include="@(ReferencePathWithRefAssemblies)"
-          Condition="'%(ReferencePathWithRefAssemblies.Filename)%(ReferencePathWithRefAssemblies.Extension)' == 'Windows.winmd'" />
-
-      <ReferencePath Remove="@(_WP81WindowsWinmdForXamlPreCompile)" />
-      <ReferencePathWithRefAssemblies Remove="@(_WP81WindowsWinmdForXamlPreCompileWithRefs)" />
-
       <ReferencePath Include="@(_WP81FrameworkReferences)" />
       <ReferencePathWithRefAssemblies Include="@(_WP81FrameworkReferences)" />
     </ItemGroup>
@@ -119,16 +110,6 @@
     <ItemGroup>
       <ReferencePath Include="@(_WP81FrameworkReferences)" />
       <ReferencePathWithRefAssemblies Include="@(_WP81FrameworkReferences)" />
-
-      <!-- UniversalApiContract supplies the WP8.1 WinRT types (including
-           LaunchActivatedEventArgs). Remove only the duplicate Windows.winmd
-           entry from the C# compiler inputs. -->
-      <_WP81WindowsWinmdForCoreCompile Include="@(ReferencePath)"
-          Condition="'%(ReferencePath.Filename)%(ReferencePath.Extension)' == 'Windows.winmd'" />
-      <_WP81WindowsWinmdForCoreCompileWithRefs Include="@(ReferencePathWithRefAssemblies)"
-          Condition="'%(ReferencePathWithRefAssemblies.Filename)%(ReferencePathWithRefAssemblies.Extension)' == 'Windows.winmd'" />
-      <ReferencePath Remove="@(_WP81WindowsWinmdForCoreCompile)" />
-      <ReferencePathWithRefAssemblies Remove="@(_WP81WindowsWinmdForCoreCompileWithRefs)" />
     </ItemGroup>
   </Target>
 
