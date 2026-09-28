@@ -1,0 +1,40 @@
+#!/bin/sh
+# Git hook: verify WP8.1 after a successful pull/merge.
+# A failed build returns a non-zero exit code.
+set -e
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+
+echo ""
+echo "========================================"
+echo " Git: WP8.1 build verification"
+echo "========================================"
+
+if [ ! -f ".vscode/build-debug.ps1" ]; then
+  echo "[Git] ERROR: .vscode/build-debug.ps1 not found."
+  exit 1
+fi
+
+if ! command -v powershell.exe >/dev/null 2>&1; then
+  echo "[Git] ERROR: powershell.exe not found."
+  echo "[Git] Install/use Git for Windows on the Windows build machine."
+  exit 1
+fi
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".vscode/build-debug.ps1"
+RESULT=$?
+
+if [ $RESULT -ne 0 ]; then
+  echo ""
+  echo "========================================"
+  echo " BUILD FAILED"
+  echo "========================================"
+  exit $RESULT
+fi
+
+echo ""
+echo "========================================"
+echo " BUILD OK"
+echo "========================================"
+exit 0

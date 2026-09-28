@@ -1,0 +1,6 @@
+{
+ "version":"0.2.0",
+ "configurations":[
+  {"name":"WP8.1: Build Debug ARM","type":"node","request":"launch","program":"${workspaceFolder}\\.vscode\\build-debug.ps1","cwd":"${workspaceFolder}","console":"integratedTerminal","internalConsoleOptions":"neverOpen"}
+ ]
+}

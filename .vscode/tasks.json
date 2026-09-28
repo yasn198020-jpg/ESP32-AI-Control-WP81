@@ -1,0 +1,22 @@
+{
+  "version":"2.0.0",
+  "tasks":[
+    {
+      "label":"WP8.1: Build Debug ARM",
+      "type":"shell",
+      "command":"powershell.exe",
+      "args":["-NoProfile","-ExecutionPolicy","Bypass","-Command","$msbuild=(Get-Command MSBuild.exe -ErrorAction SilentlyContinue).Source;if(-not $msbuild){throw 'MSBuild.exe not found. Install Visual Studio with WP8.1 tools.'};& $msbuild '${workspaceFolder}\\ESP32-AI-Control-WP81.sln' /m /t:Build /p:Configuration=Debug /p:Platform=ARM /verbosity:minimal;if($LASTEXITCODE -ne 0){exit $LASTEXITCODE}"],
+      "options":{"cwd":"${workspaceFolder}"},
+      "group":{"kind":"build","isDefault":true},
+      "problemMatcher":"$msCompile"
+    },
+    {
+      "label":"WP8.1: Build Release ARM",
+      "type":"shell",
+      "command":"powershell.exe",
+      "args":["-NoProfile","-ExecutionPolicy","Bypass","-Command","$msbuild=(Get-Command MSBuild.exe -ErrorAction SilentlyContinue).Source;if(-not $msbuild){throw 'MSBuild.exe not found. Install Visual Studio with WP8.1 tools.'};& $msbuild '${workspaceFolder}\\ESP32-AI-Control-WP81.sln' /m /t:Build /p:Configuration=Release /p:Platform=ARM /verbosity:minimal;if($LASTEXITCODE -ne 0){exit $LASTEXITCODE}"],
+      "options":{"cwd":"${workspaceFolder}"},
+      "problemMatcher":"$msCompile"
+    }
+  ]
+}
