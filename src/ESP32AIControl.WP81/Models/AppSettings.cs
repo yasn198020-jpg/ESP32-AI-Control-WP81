@@ -35,7 +35,7 @@ namespace ESP32AIControl.WP81.Models
 
         public Mqtt.MqttSettings ToMqtt()
         {
-            return new Mqtt.MqttSettings
+            return new ESP32AIControl.WP81.Core.Mqtt.MqttSettings
             {
                 Host = Host,
                 Port = Port,
