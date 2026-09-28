@@ -63,6 +63,7 @@
 
   <ItemGroup>
     <Reference Include="System.Runtime.Serialization" />
+    <Reference Include="System.Runtime.Serialization.Json" />
     <Reference Include="System.Xml" />
     <Reference Include="System.Runtime.WindowsRuntime" />
     <Reference Include="System.Runtime.InteropServices.WindowsRuntime" />
