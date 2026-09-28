@@ -1,18 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="12.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props"
           Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+
   <PropertyGroup>
     <Configuration Condition="'$(Configuration)' == ''">Debug</Configuration>
     <Platform Condition="'$(Platform)' == ''">ARM</Platform>
     <ProjectGuid>{4C7F2C12-6F7B-4E50-9DB1-6F7D6E4A3E81}</ProjectGuid>
-    <OutputType>Library</OutputType>
+    <OutputType>AppContainerExe</OutputType>
     <RootNamespace>WP81Smoke</RootNamespace>
     <AssemblyName>WP81Smoke</AssemblyName>
     <TargetPlatformIdentifier>WindowsPhoneApp</TargetPlatformIdentifier>
-    <ProjectTypeGuids>{76F1466A-8B6D-4E39-A767-685A06062A39};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
     <TargetPlatformVersion>8.1</TargetPlatformVersion>
     <TargetPlatformMinVersion>8.1</TargetPlatformMinVersion>
     <MinimumVisualStudioVersion>12.0</MinimumVisualStudioVersion>
+    <ProjectTypeGuids>{76F1466A-8B6D-4E39-A767-685A06062A39};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
     <TargetFrameworkIdentifier>.NETFramework</TargetFrameworkIdentifier>
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
     <TargetFrameworkMoniker>.NETFramework,Version=v4.5</TargetFrameworkMoniker>
@@ -22,12 +24,12 @@
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|ARM'">
+    <PlatformTarget>ARM</PlatformTarget>
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
     <OutputPath>bin\Debug\</OutputPath>
     <DefineConstants>DEBUG;TRACE;NETFX_CORE;WINDOWS_PHONE_APP</DefineConstants>
-    <PlatformTarget>ARM</PlatformTarget>
     <UseVSHostingProcess>false</UseVSHostingProcess>
     <Prefer32Bit>false</Prefer32Bit>
     <WarningLevel>4</WarningLevel>
@@ -46,98 +48,22 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ApplicationDefinition Include="App.xaml">
+    <Page Include="App.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
-    </ApplicationDefinition>
+    </Page>
     <Page Include="MainPage.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
   </ItemGroup>
 
-  <ItemGroup>
-    <Reference Include="System.Runtime.WindowsRuntime" />
-    <Reference Include="System.Runtime.InteropServices.WindowsRuntime" />
-    <Reference Include="System.Runtime.WindowsRuntime.UI.Xaml" />
-    <Reference Include="Windows">
-      <HintPath>$(WindowsPhoneSdkDir)\References\CommonConfiguration\Neutral\Windows.winmd</HintPath>
-      <IsWinMDFile>true</IsWinMDFile>
-    </Reference>
-    <Reference Include="Windows.Foundation.FoundationContract">
-      <HintPath>$(WindowsPhoneSdkDir)\References\Windows.Foundation.FoundationContract\1.0.0.0\Windows.Foundation.FoundationContract.winmd</HintPath>
-      <IsWinMDFile>true</IsWinMDFile>
-    </Reference>
-    <Reference Include="Windows.Foundation.UniversalApiContract">
-      <HintPath>$(WindowsPhoneSdkDir)\References\Windows.Foundation.UniversalApiContract\1.0.0.0\Windows.Foundation.UniversalApiContract.winmd</HintPath>
-      <IsWinMDFile>true</IsWinMDFile>
-    </Reference>
-  </ItemGroup>
+  <PropertyGroup Condition="'$(VisualStudioVersion)' == '' or '$(VisualStudioVersion)' &lt; '12.0'">
+    <VisualStudioVersion>12.0</VisualStudioVersion>
+  </PropertyGroup>
 
-  <!-- Legacy WP8.1 XAML compiler does not always inherit WinMD HintPath
-       entries from normal Reference items. Put the contract WinMDs directly
-       into the XAML compiler reference path, matching the full app project. -->
-  <Target Name="WP81StageWin10ContractsForXaml" BeforeTargets="ImplicitlyExpandTargetPlatform;MarkupCompilePass1">
-    <ItemGroup>
-      <_WP81Foundation Include="$(WindowsPhoneSdkDir)\References\Windows.Foundation.FoundationContract\1.0.0.0\Windows.Foundation.FoundationContract.winmd"
-                       Condition="Exists('$(WindowsPhoneSdkDir)\References\Windows.Foundation.FoundationContract\1.0.0.0\Windows.Foundation.FoundationContract.winmd')" />
-      <_WP81Universal Include="$(WindowsPhoneSdkDir)\References\Windows.Foundation.UniversalApiContract\1.0.0.0\Windows.Foundation.UniversalApiContract.winmd"
-                       Condition="Exists('$(WindowsPhoneSdkDir)\References\Windows.Foundation.UniversalApiContract\1.0.0.0\Windows.Foundation.UniversalApiContract.winmd')" />
-      <ReferencePath Include="@(_WP81Foundation)" />
-      <ReferencePath Include="@(_WP81Universal)" />
-      <ReferencePathWithRefAssemblies Include="@(_WP81Foundation)" />
-      <ReferencePathWithRefAssemblies Include="@(_WP81Universal)" />
-    </ItemGroup>
-  </Target>
-
-  <Target Name="WP81AddWin10ContractsForXaml" BeforeTargets="MarkupCompilePass1">
-    <ItemGroup>
-      <_WP81Win10Contracts Include="$(WindowsPhoneSdkDir)\References\Windows.Foundation.FoundationContract\1.0.0.0\Windows.Foundation.FoundationContract.winmd"
-                            Condition="Exists('$(WindowsPhoneSdkDir)\References\Windows.Foundation.FoundationContract\1.0.0.0\Windows.Foundation.FoundationContract.winmd')" />
-      <_WP81Win10Contracts Include="$(WindowsPhoneSdkDir)\References\Windows.Foundation.UniversalApiContract\1.0.0.0\Windows.Foundation.UniversalApiContract.winmd"
-                            Condition="Exists('$(WindowsPhoneSdkDir)\References\Windows.Foundation.UniversalApiContract\1.0.0.0\Windows.Foundation.UniversalApiContract.winmd')" />
-      <ReferencePath Include="@(_WP81Win10Contracts)" />
-      <ReferencePathWithRefAssemblies Include="@(_WP81Win10Contracts)" />
-    </ItemGroup>
-  </Target>
-
-  <Target Name="WP81AddNet45FrameworkReferencesForXamlPreCompile"
-          AfterTargets="MarkupCompilePass1"
-          BeforeTargets="XamlPreCompile">
-    <ItemGroup>
-      <_WP81FrameworkReferences Include="$(FrameworkPathOverride)\mscorlib.dll"
-                                Condition="Exists('$(FrameworkPathOverride)\mscorlib.dll')" />
-      <_WP81FrameworkReferences Include="$(FrameworkPathOverride)\System.dll"
-                                Condition="Exists('$(FrameworkPathOverride)\System.dll')" />
-      <_WP81FrameworkReferences Include="$(FrameworkPathOverride)\System.Core.dll"
-                                Condition="Exists('$(FrameworkPathOverride)\System.Core.dll')" />
-      <_WP81FrameworkReferences Include="$(FrameworkPathOverride)\System.Runtime.dll"
-                                Condition="Exists('$(FrameworkPathOverride)\System.Runtime.dll')" />
-      <_WP81FrameworkReferences Include="$(FrameworkPathOverride)\System.Runtime.Serialization.dll"
-                                Condition="Exists('$(FrameworkPathOverride)\System.Runtime.Serialization.dll')" />
-      <ReferencePath Include="@(_WP81FrameworkReferences)" />
-      <ReferencePathWithRefAssemblies Include="@(_WP81FrameworkReferences)" />
-    </ItemGroup>
-  </Target>
-
-  <Target Name="WP81RemoveNet45FrameworkReferencesBeforeXamlPass2"
-          AfterTargets="XamlPreCompile"
-          BeforeTargets="MarkupCompilePass2">
-    <ItemGroup>
-      <ReferencePath Remove="@(_WP81FrameworkReferences)" />
-      <ReferencePathWithRefAssemblies Remove="@(_WP81FrameworkReferences)" />
-    </ItemGroup>
-  </Target>
-
-  <Target Name="WP81AddNet45FrameworkReferencesForCoreCompile"
-          AfterTargets="MarkupCompilePass2;_BeforeVBCSCoreCompile"
-          BeforeTargets="CoreCompile">
-    <ItemGroup>
-      <ReferencePath Include="@(_WP81FrameworkReferences)" />
-      <ReferencePathWithRefAssemblies Include="@(_WP81FrameworkReferences)" />
-    </ItemGroup>
-  </Target>
-
+  <Import Project="$(MSBuildExtensionsPath)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\Microsoft.Windows.UI.Xaml.CSharp.targets"
+          Condition="Exists('$(MSBuildExtensionsPath)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\Microsoft.Windows.UI.Xaml.CSharp.targets')" />
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\8.1\Microsoft.Windows.UI.Xaml.CSharp.Targets"
           Condition="Exists('$(MSBuildExtensionsPath32)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\8.1\Microsoft.Windows.UI.Xaml.CSharp.Targets')" />
 </Project>
