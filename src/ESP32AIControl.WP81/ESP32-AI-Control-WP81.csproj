@@ -78,6 +78,16 @@
 <!-- WP8.1 performs a temporary C# compile between XAML markup passes.
      The .NET 4.5 reference DLLs must be visible to that C# compile, but
      WinRT references remain supplied by the WP8.1 SDK metadata. -->
+  <Target Name="WP81StageWin10ContractsForXaml" BeforeTargets="MarkupCompilePass1">
+    <ItemGroup>
+      <_WP81Foundation Include="$(ProgramFiles(x86))\Windows Kits\10\References\Windows.Foundation.FoundationContract\1.0.0.0\Windows.Foundation.FoundationContract.winmd" Condition="Exists('$(ProgramFiles(x86))\Windows Kits\10\References\Windows.Foundation.FoundationContract\1.0.0.0\Windows.Foundation.FoundationContract.winmd')" />
+      <_WP81Universal Include="$(ProgramFiles(x86))\Windows Kits\10\References\Windows.Foundation.UniversalApiContract\1.0.0.0\Windows.Foundation.UniversalApiContract.winmd" Condition="Exists('$(ProgramFiles(x86))\Windows Kits\10\References\Windows.Foundation.UniversalApiContract\1.0.0.0\Windows.Foundation.UniversalApiContract.winmd')" />
+    </ItemGroup>
+    <MakeDir Directories="$(WindowsPhoneSdkDir)\References\Windows.Foundation.FoundationContract;$(WindowsPhoneSdkDir)\References\Windows.Foundation.UniversalApiContract" />
+    <Copy SourceFiles="@(_WP81Foundation)" DestinationFolder="$(WindowsPhoneSdkDir)\References\Windows.Foundation.FoundationContract" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(_WP81Universal)" DestinationFolder="$(WindowsPhoneSdkDir)\References\Windows.Foundation.UniversalApiContract" SkipUnchangedFiles="true" />
+  </Target>
+
   <Target Name="WP81AddWin10ContractsForXaml" BeforeTargets="MarkupCompilePass1">
     <ItemGroup>
       <_WP81Win10Contracts Include="$(ProgramFiles(x86))\Windows Kits\10\References\Windows.Foundation.FoundationContract\1.0.0.0\Windows.Foundation.FoundationContract.winmd" Condition="Exists('$(ProgramFiles(x86))\Windows Kits\10\References\Windows.Foundation.FoundationContract\1.0.0.0\Windows.Foundation.FoundationContract.winmd')" />
