@@ -240,7 +240,8 @@ jobs:
       - name: Build solution
         shell: powershell
         run: |
-          & "$env:MSBUILD_PATH" ".\ESP32-AI-Control-WP81.sln" /m /t:Build /p:Configuration=Debug /p:Platform="ARM" /p:FrameworkPathOverride="$env:FRAMEWORK_PATH" /p:TargetFrameworkRootPath="$env:FRAMEWORK_PATH" /p:TargetFrameworkVersion="v4.5" /p:WindowsPhoneSdkDir="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSDKDir="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSdkRoot="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSDKRoot="$env:WINDOWS_PHONE_SDK_DIR" /p:TargetPlatformSdkRootOverride="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:TargetPlatformSdkRoot="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:WindowsSdkDir="$env:WINDOWS_SDK_ROOT" /p:WindowsPhoneSdkVersion="8.1" /verbosity:minimal
+          Write-Host "WP81 SMOKE TEST: building tests\\WP81Smoke\\WP81Smoke.csproj"
+          & "$env:MSBUILD_PATH" ".\tests\WP81Smoke\WP81Smoke.csproj" /m /t:Build /p:Configuration=Debug /p:Platform="ARM" /p:FrameworkPathOverride="$env:FRAMEWORK_PATH" /p:TargetFrameworkRootPath="$env:FRAMEWORK_PATH" /p:TargetFrameworkVersion="v4.5" /p:WindowsPhoneSdkDir="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSDKDir="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSdkRoot="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSDKRoot="$env:WINDOWS_PHONE_SDK_DIR" /p:TargetPlatformSdkRootOverride="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:TargetPlatformSdkRoot="$env:TARGET_PLATFORM_SDK_ROOT_OVERRIDE" /p:WindowsSdkDir="$env:WINDOWS_SDK_ROOT" /p:WindowsPhoneSdkVersion="8.1" /verbosity:minimal
           if ($LASTEXITCODE -ne 0) { throw "MSBuild failed with exit code $LASTEXITCODE" }
 
       - name: Upload build output
@@ -249,6 +250,6 @@ jobs:
         with:
           name: WP81-build-output
           path: |
-            src/ESP32AIControl.WP81/bin/**
-            src/ESP32AIControl.WP81/obj/**
+            tests/WP81Smoke/bin/**
+            tests/WP81Smoke/obj/**
           if-no-files-found: warn
