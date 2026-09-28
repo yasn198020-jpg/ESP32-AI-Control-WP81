@@ -1,7 +1,6 @@
 #!/bin/sh
-# Git hook: verify WP8.1 after a successful pull/merge.
-# A failed build returns a non-zero exit code.
-set -e
+# Git hook: verify WP8.1 after a successful pull/merge and publish the result
+# as a GitHub commit status when GitHub CLI authentication is available.
 
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
@@ -22,6 +21,27 @@ if ! command -v powershell.exe >/dev/null 2>&1; then
   exit 1
 fi
 
+COMMIT_SHA="$(git rev-parse HEAD)"
+REPO="yasn198020-jpg/ESP32-AI-Control-WP81"
+STATUS_CONTEXT="WP8.1 / Debug ARM"
+
+publish_status() {
+  STATE="$1"
+  DESCRIPTION="$2"
+
+  # Publishing is optional: it must never hide the real build result.
+  if command -v gh >/dev/null 2>&1; then
+    echo "[GitHub] Publishing commit status: $STATE"
+    if ! gh api       --method POST       "repos/$REPO/statuses/$COMMIT_SHA"       -f "state=$STATE"       -f "context=$STATUS_CONTEXT"       -f "description=$DESCRIPTION"       -f "target_url=https://github.com/$REPO/commit/$COMMIT_SHA"       >/dev/null 2>&1; then
+      echo "[GitHub] WARNING: could not publish status."
+      echo "[GitHub] Run 'gh auth login' once on this PC."
+    fi
+  else
+    echo "[GitHub] gh CLI not found; build result remains local."
+    echo "[GitHub] Install GitHub CLI and run 'gh auth login' to publish status."
+  fi
+}
+
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".vscode/build-debug.ps1"
 RESULT=$?
 
@@ -30,6 +50,7 @@ if [ $RESULT -ne 0 ]; then
   echo "========================================"
   echo " BUILD FAILED"
   echo "========================================"
+  publish_status "failure" "WP8.1 Debug ARM build failed"
   exit $RESULT
 fi
 
@@ -37,4 +58,5 @@ echo ""
 echo "========================================"
 echo " BUILD OK"
 echo "========================================"
+publish_status "success" "WP8.1 Debug ARM build passed"
 exit 0
