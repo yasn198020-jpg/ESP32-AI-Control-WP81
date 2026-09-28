@@ -208,6 +208,13 @@ jobs:
           if (-not (Test-Path $systemRuntime)) { throw "System.Runtime facade was not found in .NET Framework 4.5.1 reference assemblies." }
           Copy-Item $systemRuntime $frameworkRoot -Force
 
+          # The VS2022 legacy WP8.1 XAML compiler resolves System.ObjectModel
+          # during markup compilation, but the runner does not ship it in the
+          # .NET 4.5 reference directory. Supply the matching 4.5.1 facade.
+          $systemObjectModel = Join-Path $facadesRoot "System.ObjectModel.dll"
+          if (-not (Test-Path $systemObjectModel)) { throw "System.ObjectModel facade was not found in .NET Framework 4.5.1 reference assemblies." }
+          Copy-Item $systemObjectModel $frameworkRoot -Force
+
           $winrtRoot = Join-Path $env:RUNNER_TEMP "winrt-packages"
           New-Item -ItemType Directory -Force -Path $winrtRoot | Out-Null
           & $nuget install System.Runtime.WindowsRuntime -Version 4.6.0 -OutputDirectory $winrtRoot -NonInteractive
