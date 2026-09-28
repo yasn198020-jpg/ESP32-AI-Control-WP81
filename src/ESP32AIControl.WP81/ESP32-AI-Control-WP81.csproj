@@ -73,35 +73,45 @@
           Condition="Exists('$(MSBuildExtensionsPath32)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\8.1\Microsoft.Windows.UI.Xaml.CSharp.Targets')" />
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\WindowsXaml\Microsoft.Windows.UI.Xaml.CSharp.targets"
           Condition="Exists('$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\WindowsXaml\Microsoft.Windows.UI.Xaml.CSharp.targets')" />
-<!-- The WP8.1 XAML targets import the C# targets themselves.  The legacy
-       project otherwise loses the .NET reference assemblies during CoreCompile.
-       Add the .NET 4.5 reference DLLs only after XAML compilation has finished,
-       immediately before C# compilation, so the XAML compiler does not see
-       the injected framework references. -->
-  <Target Name="WP81AddNet45FrameworkReferences"
+<!-- WP8.1 performs a temporary C# compile between XAML markup passes.
+       The .NET 4.5 reference DLLs must be visible to that C# compile, but not
+       remain in ReferencePath during XAML Pass2 because the legacy XAML compiler
+       treats them as metadata inputs and can fail with WMC9999. -->
+  <Target Name="WP81AddNet45FrameworkReferencesForXamlPreCompile"
+          AfterTargets="MarkupCompilePass1"
+          BeforeTargets="XamlPreCompile">
+    <ItemGroup>
+      <_WP81FrameworkReferences Include="$(FrameworkPathOverride)\mscorlib.dll"
+                                Condition="Exists('$(FrameworkPathOverride)\mscorlib.dll')" />
+      <_WP81FrameworkReferences Include="$(FrameworkPathOverride)\System.dll"
+                                Condition="Exists('$(FrameworkPathOverride)\System.dll')" />
+      <_WP81FrameworkReferences Include="$(FrameworkPathOverride)\System.Core.dll"
+                                Condition="Exists('$(FrameworkPathOverride)\System.Core.dll')" />
+      <_WP81FrameworkReferences Include="$(FrameworkPathOverride)\System.Runtime.dll"
+                                Condition="Exists('$(FrameworkPathOverride)\System.Runtime.dll')" />
+      <_WP81FrameworkReferences Include="$(FrameworkPathOverride)\System.Runtime.Serialization.dll"
+                                Condition="Exists('$(FrameworkPathOverride)\System.Runtime.Serialization.dll')" />
+      <ReferencePath Include="@(_WP81FrameworkReferences)" />
+      <ReferencePathWithRefAssemblies Include="@(_WP81FrameworkReferences)" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="WP81RemoveNet45FrameworkReferencesBeforeXamlPass2"
+          AfterTargets="XamlPreCompile"
+          BeforeTargets="MarkupCompilePass2">
+    <ItemGroup>
+      <ReferencePath Remove="@(_WP81FrameworkReferences)" />
+      <ReferencePathWithRefAssemblies Remove="@(_WP81FrameworkReferences)" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="WP81AddNet45FrameworkReferencesForCoreCompile"
           AfterTargets="MarkupCompilePass2;_BeforeVBCSCoreCompile"
           BeforeTargets="CoreCompile">
     <ItemGroup>
-      <ReferencePath Include="$(FrameworkPathOverride)\mscorlib.dll"
-                     Condition="Exists('$(FrameworkPathOverride)\mscorlib.dll')" />
-      <ReferencePath Include="$(FrameworkPathOverride)\System.dll"
-                     Condition="Exists('$(FrameworkPathOverride)\System.dll')" />
-      <ReferencePath Include="$(FrameworkPathOverride)\System.Core.dll"
-                     Condition="Exists('$(FrameworkPathOverride)\System.Core.dll')" />
-      <ReferencePath Include="$(FrameworkPathOverride)\System.Runtime.dll"
-                     Condition="Exists('$(FrameworkPathOverride)\System.Runtime.dll')" />
-      <ReferencePath Include="$(FrameworkPathOverride)\System.Runtime.Serialization.dll"
-                     Condition="Exists('$(FrameworkPathOverride)\System.Runtime.Serialization.dll')" />
-      <ReferencePathWithRefAssemblies Include="$(FrameworkPathOverride)\mscorlib.dll"
-                                       Condition="Exists('$(FrameworkPathOverride)\mscorlib.dll')" />
-      <ReferencePathWithRefAssemblies Include="$(FrameworkPathOverride)\System.dll"
-                                       Condition="Exists('$(FrameworkPathOverride)\System.dll')" />
-      <ReferencePathWithRefAssemblies Include="$(FrameworkPathOverride)\System.Core.dll"
-                                       Condition="Exists('$(FrameworkPathOverride)\System.Core.dll')" />
-      <ReferencePathWithRefAssemblies Include="$(FrameworkPathOverride)\System.Runtime.dll"
-                                       Condition="Exists('$(FrameworkPathOverride)\System.Runtime.dll')" />
-      <ReferencePathWithRefAssemblies Include="$(FrameworkPathOverride)\System.Runtime.Serialization.dll"
-                                       Condition="Exists('$(FrameworkPathOverride)\System.Runtime.Serialization.dll')" />
+      <ReferencePath Include="@(_WP81FrameworkReferences)" />
+      <ReferencePathWithRefAssemblies Include="@(_WP81FrameworkReferences)" />
     </ItemGroup>
   </Target>
-</Project>
+
+  </Project>
