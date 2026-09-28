@@ -17,8 +17,8 @@ namespace ESP32AIControl.WP81.Core
         {
             try
             {
-                var file = await ApplicationData.Current.LocalFolder.GetFileAsync(FileName);
-                var json = await FileIO.ReadTextAsync(file);
+                var file = await ApplicationData.Current.LocalFolder.GetFileAsync(FileName).AsTask();
+                var json = await FileIO.ReadTextAsync(file).AsTask();
                 using (var stream = new MemoryStream(Encoding.UTF8.GetBytes(json)))
                 {
                     var serializer = new DataContractJsonSerializer(typeof(AppSettings));
@@ -40,8 +40,8 @@ namespace ESP32AIControl.WP81.Core
                 serializer.WriteObject(stream, settings);
                 var json = Encoding.UTF8.GetString(stream.ToArray(), 0, (int)stream.Length);
                 var file = await ApplicationData.Current.LocalFolder.CreateFileAsync(
-                    FileName, CreationCollisionOption.ReplaceExisting);
-                await FileIO.WriteTextAsync(file, json);
+                    FileName, CreationCollisionOption.ReplaceExisting).AsTask();
+                await FileIO.WriteTextAsync(file, json).AsTask();
             }
         }
     }
