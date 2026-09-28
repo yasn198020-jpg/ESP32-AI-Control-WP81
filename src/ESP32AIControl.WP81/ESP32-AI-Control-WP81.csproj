@@ -111,6 +111,16 @@
     <ItemGroup>
       <ReferencePath Include="@(_WP81FrameworkReferences)" />
       <ReferencePathWithRefAssemblies Include="@(_WP81FrameworkReferences)" />
+
+      <!-- Windows.winmd is the WP8.1 API surface used by this project.
+           UniversalApiContract.winmd overlaps it and causes CS0433 during
+           the final C# compile, while it remains valid for the XAML stages. -->
+      <_WP81UniversalContractForCoreCompile Include="@(ReferencePath)"
+          Condition="'%(ReferencePath.Filename)%(ReferencePath.Extension)' == 'Windows.Foundation.UniversalApiContract.winmd'" />
+      <_WP81UniversalContractForCoreCompileWithRefs Include="@(ReferencePathWithRefAssemblies)"
+          Condition="'%(ReferencePathWithRefAssemblies.Filename)%(ReferencePathWithRefAssemblies.Extension)' == 'Windows.Foundation.UniversalApiContract.winmd'" />
+      <ReferencePath Remove="@(_WP81UniversalContractForCoreCompile)" />
+      <ReferencePathWithRefAssemblies Remove="@(_WP81UniversalContractForCoreCompileWithRefs)" />
     </ItemGroup>
   </Target>
 
