@@ -1,5 +1,6 @@
 using System.IO;
 using System.Runtime.Serialization;
+using System.Runtime.Serialization.Json;
 using System.Text;
 using System.Threading.Tasks;
 using Windows.Storage;
@@ -36,7 +37,7 @@ namespace ESP32AIControl.WP81.Core
             {
                 var serializer = new DataContractJsonSerializer(typeof(AppSettings));
                 serializer.WriteObject(stream, settings);
-                var json = Encoding.UTF8.GetString(stream.ToArray());
+                var json = Encoding.UTF8.GetString(stream.ToArray(), 0, (int)stream.Length);
                 var file = await ApplicationData.Current.LocalFolder.CreateFileAsync(
                     FileName, CreationCollisionOption.ReplaceExisting);
                 await FileIO.WriteTextAsync(file, json);
