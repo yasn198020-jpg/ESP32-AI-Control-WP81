@@ -65,8 +65,13 @@
     <Reference Include="System.Runtime.Serialization" />
     <Reference Include="System.Runtime.WindowsRuntime" />
     <Reference Include="Windows" />
+    <Reference Include="Windows.Foundation.FoundationContract">
+      <HintPath>$(WindowsPhoneSdkDir)\References\Windows.Foundation.FoundationContract\Windows.Foundation.FoundationContract.winmd</HintPath>
+      <IsWinMDFile>true</IsWinMDFile>
+    </Reference>
     <Reference Include="Windows.Foundation.UniversalApiContract">
       <HintPath>$(WindowsPhoneSdkDir)\References\Windows.Foundation.UniversalApiContract\Windows.Foundation.UniversalApiContract.winmd</HintPath>
+      <IsWinMDFile>true</IsWinMDFile>
     </Reference>
   </ItemGroup>
 
