@@ -33,7 +33,7 @@ namespace ESP32AIControl.WP81.Models
             VoiceCloseCommand = string.Empty;
         }
 
-        public Mqtt.MqttSettings ToMqtt()
+        public ESP32AIControl.WP81.Core.Mqtt.MqttSettings ToMqtt()
         {
             return new ESP32AIControl.WP81.Core.Mqtt.MqttSettings
             {
