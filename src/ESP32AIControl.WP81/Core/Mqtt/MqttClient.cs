@@ -15,6 +15,7 @@ namespace ESP32AIControl.WP81.Core.Mqtt
         private bool _running;
         private ushort _pendingSubscribeId;
         private TaskCompletionSource<bool> _subscribeCompletion;
+        private Task _receiveLoopTask;
         private readonly SemaphoreSlim _writeGate = new SemaphoreSlim(1, 1);
 
         public event EventHandler<MqttMessageEventArgs> MessageReceived;
@@ -49,7 +50,7 @@ namespace ESP32AIControl.WP81.Core.Mqtt
 
                 _running = true;
                 SetState(MqttConnectionState.Connected);
-                ReceiveLoopAsync();
+                _receiveLoopTask = ReceiveLoopAsync();
             }
             catch
             {
