@@ -54,7 +54,7 @@ namespace ESP32AIControl.WP81.Core.Mqtt
                 var take = (int)Math.Min((uint)(remaining - read), available);
                 var chunk = new byte[take];
                 _reader.ReadBytes(chunk);
-                Buffer.BlockCopy(chunk, 0, bytes, read, take);
+                System.Buffer.BlockCopy(chunk, 0, bytes, read, take);
                 read += take;
             }
 
