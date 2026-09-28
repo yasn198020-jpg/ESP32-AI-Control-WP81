@@ -7,7 +7,7 @@
     <Configuration Condition="'$(Configuration)' == ''">Debug</Configuration>
     <Platform Condition="'$(Platform)' == ''">ARM</Platform>
     <ProjectGuid>{4C7F2C12-6F7B-4E50-9DB1-6F7D6E4A3E81}</ProjectGuid>
-    <OutputType>Library</OutputType>
+    <OutputType>AppContainerExe</OutputType>
     <RootNamespace>WP81Smoke</RootNamespace>
     <AssemblyName>WP81Smoke</AssemblyName>
     <TargetPlatformIdentifier>WindowsPhoneApp</TargetPlatformIdentifier>
@@ -132,6 +132,4 @@
 
   <Import Project="$(MSBuildExtensionsPath)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\Microsoft.Windows.UI.Xaml.CSharp.targets"
           Condition="Exists('$(MSBuildExtensionsPath)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\Microsoft.Windows.UI.Xaml.CSharp.targets')" />
-  <Import Project="$(MSBuildExtensionsPath32)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\8.1\Microsoft.Windows.UI.Xaml.CSharp.Targets"
-          Condition="Exists('$(MSBuildExtensionsPath32)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\8.1\Microsoft.Windows.UI.Xaml.CSharp.Targets')" />
 </Project>
