@@ -29,6 +29,7 @@
 
   <ItemGroup>
     <AppxManifest Include="Package.appxmanifest" />
+    <Content Include="Assets\**\*.*" />
   </ItemGroup>
 
   <ItemGroup>
