@@ -26,8 +26,7 @@
                           DisplayName="WP81 Smoke"
                           Square150x150Logo="Assets\Logo.png"
                           Square44x44Logo="Assets\SmallLogo.png"
-                          Description="WP81 XAML smoke test"
-                          AppListEntry="none" />
+                          Description="WP81 XAML smoke test" />
     </Application>
   </Applications>
   <Capabilities>
