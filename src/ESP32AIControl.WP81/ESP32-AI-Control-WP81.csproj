@@ -83,9 +83,9 @@
       <_WP81Foundation Include="$(ProgramFiles(x86))\Windows Kits\10\References\Windows.Foundation.FoundationContract\1.0.0.0\Windows.Foundation.FoundationContract.winmd" Condition="Exists('$(ProgramFiles(x86))\Windows Kits\10\References\Windows.Foundation.FoundationContract\1.0.0.0\Windows.Foundation.FoundationContract.winmd')" />
       <_WP81Universal Include="$(ProgramFiles(x86))\Windows Kits\10\References\Windows.Foundation.UniversalApiContract\1.0.0.0\Windows.Foundation.UniversalApiContract.winmd" Condition="Exists('$(ProgramFiles(x86))\Windows Kits\10\References\Windows.Foundation.UniversalApiContract\1.0.0.0\Windows.Foundation.UniversalApiContract.winmd')" />
     </ItemGroup>
-    <MakeDir Directories="$(WindowsPhoneSdkDir)\References\Windows.Foundation.FoundationContract;$(WindowsPhoneSdkDir)\References\Windows.Foundation.UniversalApiContract" />
-    <Copy SourceFiles="@(_WP81Foundation)" DestinationFolder="$(WindowsPhoneSdkDir)\References\Windows.Foundation.FoundationContract" SkipUnchangedFiles="true" />
-    <Copy SourceFiles="@(_WP81Universal)" DestinationFolder="$(WindowsPhoneSdkDir)\References\Windows.Foundation.UniversalApiContract" SkipUnchangedFiles="true" />
+    <MakeDir Directories="$(WindowsPhoneSdkDir)\References\Windows.Foundation.FoundationContract\1.0.0.0;$(WindowsPhoneSdkDir)\References\Windows.Foundation.UniversalApiContract\1.0.0.0" />
+    <Copy SourceFiles="@(_WP81Foundation)" DestinationFolder="$(WindowsPhoneSdkDir)\References\Windows.Foundation.FoundationContract\1.0.0.0" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(_WP81Universal)" DestinationFolder="$(WindowsPhoneSdkDir)\References\Windows.Foundation.UniversalApiContract\1.0.0.0" SkipUnchangedFiles="true" />
   </Target>
 
   <Target Name="WP81AddWin10ContractsForXaml" BeforeTargets="MarkupCompilePass1">
