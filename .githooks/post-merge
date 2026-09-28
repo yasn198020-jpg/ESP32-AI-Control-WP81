@@ -1,6 +1,6 @@
 #!/bin/sh
 # Git hook: verify WP8.1 after a successful pull/merge and publish the result
-# as a GitHub commit status when GitHub CLI authentication is available.
+# to GitHub using curl and GITHUB_TOKEN. No GitHub CLI is required.
 
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
@@ -29,16 +29,29 @@ publish_status() {
   STATE="$1"
   DESCRIPTION="$2"
 
-  # Publishing is optional: it must never hide the real build result.
-  if command -v gh >/dev/null 2>&1; then
-    echo "[GitHub] Publishing commit status: $STATE"
-    if ! gh api       --method POST       "repos/$REPO/statuses/$COMMIT_SHA"       -f "state=$STATE"       -f "context=$STATUS_CONTEXT"       -f "description=$DESCRIPTION"       -f "target_url=https://github.com/$REPO/commit/$COMMIT_SHA"       >/dev/null 2>&1; then
-      echo "[GitHub] WARNING: could not publish status."
-      echo "[GitHub] Run 'gh auth login' once on this PC."
-    fi
-  else
-    echo "[GitHub] gh CLI not found; build result remains local."
-    echo "[GitHub] Install GitHub CLI and run 'gh auth login' to publish status."
+  if [ -z "$GITHUB_TOKEN" ]; then
+    echo "[GitHub] GITHUB_TOKEN is not configured; build result remains local."
+    return 0
+  fi
+
+  if ! command -v curl.exe >/dev/null 2>&1; then
+    echo "[GitHub] curl.exe not found; build result remains local."
+    return 0
+  fi
+
+  echo "[GitHub] Publishing commit status: $STATE"
+
+  BODY="{\"state\":\"$STATE\",\"target_url\":\"https://github.com/$REPO/commit/$COMMIT_SHA\",\"description\":\"$DESCRIPTION\",\"context\":\"$STATUS_CONTEXT\"}"
+
+  if ! curl.exe -sS -o NUL -w "%{http_code}" \
+      -X POST \
+      -H "Accept: application/vnd.github+json" \
+      -H "Authorization: Bearer $GITHUB_TOKEN" \
+      -H "X-GitHub-Api-Version: 2022-11-28" \
+      "https://api.github.com/repos/$REPO/statuses/$COMMIT_SHA" \
+      -d "$BODY" | grep -q '^201$'; then
+    echo "[GitHub] WARNING: could not publish commit status."
+    echo "[GitHub] Check that GITHUB_TOKEN is valid and has commit-status permission."
   fi
 }
 
