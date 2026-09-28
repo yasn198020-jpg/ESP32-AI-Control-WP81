@@ -13,12 +13,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Visual Studio 2013 Community
+      - name: Install Visual Studio 2015 Community
         shell: powershell
         timeout-minutes: 30
         run: |
-          choco install visualstudiocommunity2013 -y --no-progress --ignore-checksums
-          choco install VS2013.5 -y --no-progress --ignore-checksums
+          choco install visualstudio2015community -y --no-progress --ignore-checksums
+          choco install visualstudio2015-update3 -y --no-progress --ignore-checksums
 
       - name: Install Windows Phone 8.1 SDK
         shell: powershell
@@ -51,19 +51,19 @@ jobs:
             'C:\Program Files (x86)\Microsoft Visual Studio 12.0\MSBuild\Bin\MSBuild.exe'
           )
           $msbuild = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
-          if (-not $msbuild) { throw 'MSBuild 12.0 was not installed.' }
+          if (-not $msbuild) { throw 'MSBuild 14.0 was not installed.' }
           $sdk = 'C:\Program Files (x86)\Windows Phone Kits\8.1'
           if (-not (Test-Path $sdk)) { throw "Windows Phone 8.1 SDK not found: $sdk" }
           & $msbuild -version
           Get-ChildItem 'C:\Program Files (x86)\Microsoft Visual Studio 12.0\MSBuild' -Recurse -Filter '*Xaml*.targets' -ErrorAction SilentlyContinue |
             Select-Object -ExpandProperty FullName
-          "MSBUILD12=$msbuild" | Out-File $env:GITHUB_ENV -Append
+          "MSBUILD14=$msbuild" | Out-File $env:GITHUB_ENV -Append
           "WINDOWS_PHONE_SDK_DIR=$sdk" | Out-File $env:GITHUB_ENV -Append
 
       - name: Build Release ARM
         shell: powershell
         run: |
-          & "$env:MSBUILD12" '.\ESP32-AI-Control-WP81.sln' /t:Build /p:Configuration=Release /p:Platform=ARM /verbosity:normal
+          & "$env:MSBUILD14" '.\ESP32-AI-Control-WP81.sln' /t:Build /p:Configuration=Release /p:Platform=ARM /verbosity:normal
           if ($LASTEXITCODE -ne 0) { throw "MSBuild failed: $LASTEXITCODE" }
 
       - name: Upload build
