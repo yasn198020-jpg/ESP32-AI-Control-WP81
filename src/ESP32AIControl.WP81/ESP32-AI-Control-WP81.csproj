@@ -10,7 +10,9 @@
     <TargetPlatformVersion>8.1</TargetPlatformVersion>
     <TargetPlatformMinVersion>8.1</TargetPlatformMinVersion>
     <MinimumVisualStudioVersion>12.0</MinimumVisualStudioVersion>
+    <TargetFrameworkIdentifier>.NETFramework</TargetFrameworkIdentifier>
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
+    <TargetFrameworkMoniker>.NETFramework,Version=v4.5</TargetFrameworkMoniker>
     <DefaultLanguage>ru-RU</DefaultLanguage>
     <AppxManifest>Package.appxmanifest</AppxManifest>
     <AppxPackageSigningEnabled>False</AppxPackageSigningEnabled>
@@ -60,21 +62,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Reference Include="mscorlib">
-      <HintPath>$(FrameworkPathOverride)\mscorlib.dll</HintPath>
-    </Reference>
-    <Reference Include="System">
-      <HintPath>$(FrameworkPathOverride)\System.dll</HintPath>
-    </Reference>
-    <Reference Include="System.Core">
-      <HintPath>$(FrameworkPathOverride)\System.Core.dll</HintPath>
-    </Reference>
-    <Reference Include="System.Runtime">
-      <HintPath>$(FrameworkPathOverride)\System.Runtime.dll</HintPath>
-    </Reference>
-    <Reference Include="System.Runtime.Serialization">
-      <HintPath>$(FrameworkPathOverride)\System.Runtime.Serialization.dll</HintPath>
-    </Reference>
+    <Reference Include="System.Runtime.Serialization" />
     <Reference Include="System.Runtime.WindowsRuntime" />
     <Reference Include="Windows" />
   </ItemGroup>
