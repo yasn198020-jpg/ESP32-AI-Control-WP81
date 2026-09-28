@@ -39,7 +39,8 @@ jobs:
           $sdkVersion = "10.0.10240.0"
           "WINDOWS_10_SDK_ROOT=$kitsRoot" | Out-File $env:GITHUB_ENV -Append
           "WINDOWS_10_SDK_VERSION=$sdkVersion" | Out-File $env:GITHUB_ENV -Append
-                    "WINDOWS_SDK_81_ROOT=$(Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\8.1')" | Out-File $env:GITHUB_ENV -Append
+          "WINDOWS_SDK_81_ROOT=$(Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\8.1')\" | Out-File $env:GITHUB_ENV -Append
+          "WindowsLibPath=$(Join-Path $kitsRoot 'UnionMetadata\10.0.10240.0');$(Join-Path $kitsRoot 'References\10.0.10240.0')" | Out-File $env:GITHUB_ENV -Append
       - name: Prepare Windows metadata for legacy XAML compiler
         shell: powershell
         run: |
@@ -243,7 +244,7 @@ jobs:
         shell: powershell
         run: |
           Write-Host "WP81 SMOKE TEST: building tests\\WP81Smoke\\WP81Smoke.csproj"
-          & "$env:MSBUILD_PATH" ".\tests\WP81Smoke\WP81Smoke.csproj" /m /t:Build /p:Configuration=Debug /p:Platform="ARM" /p:FrameworkPathOverride="$env:FRAMEWORK_PATH" /p:TargetFrameworkRootPath="$env:FRAMEWORK_PATH" /p:TargetFrameworkVersion="v4.5" /p:WindowsPhoneSdkDir="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSDKDir="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSdkRoot="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSDKRoot="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsSdkDir="$env:WINDOWS_10_SDK_ROOT" /p:WindowsSDKVersion="$env:WINDOWS_10_SDK_VERSION\\ " /p:WindowsSDK80Path="$env:WINDOWS_SDK_81_ROOT\\" /p:WindowsPhoneSdkVersion="8.1" /verbosity:minimal
+          & "$env:MSBUILD_PATH" ".\tests\WP81Smoke\WP81Smoke.csproj" /m /t:Build /p:Configuration=Debug /p:Platform="ARM" /p:FrameworkPathOverride="$env:FRAMEWORK_PATH" /p:TargetFrameworkRootPath="$env:FRAMEWORK_PATH" /p:TargetFrameworkVersion="v4.5" /p:WindowsPhoneSdkDir="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSDKDir="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSdkRoot="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsPhoneSDKRoot="$env:WINDOWS_PHONE_SDK_DIR" /p:WindowsSdkDir="$env:WINDOWS_10_SDK_ROOT" /p:WindowsSDKVersion="$env:WINDOWS_10_SDK_VERSION\" /p:WindowsSDK80Path="$env:WINDOWS_SDK_81_ROOT\" /p:WindowsPhoneSdkVersion="8.1" /verbosity:minimal
           if ($LASTEXITCODE -ne 0) { throw "MSBuild failed with exit code $LASTEXITCODE" }
 
       - name: Upload build output
