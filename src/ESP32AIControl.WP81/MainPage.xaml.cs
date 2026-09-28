@@ -691,8 +691,8 @@ namespace ESP32AIControl.WP81
                 var key = GraphWidgetBox.SelectedItem as string;
                 if (string.IsNullOrEmpty(key)) return;
 
-                var from = GraphFrom.Date.Date;
-                var to = GraphTo.Date.Date.AddDays(1).AddTicks(-1);
+                var from = new DateTimeOffset(GraphFrom.Date.Date);
+                var to = new DateTimeOffset(GraphTo.Date.Date.AddDays(1).AddTicks(-1));
                 var points = await _measurementStore.ReadAsync(
                     _widgetIndex[key].DeviceId, _widgetIndex[key].Id, from, to);
 
