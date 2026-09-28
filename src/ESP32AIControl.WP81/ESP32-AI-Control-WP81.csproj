@@ -79,7 +79,7 @@
        immediately before C# compilation, so the XAML compiler does not see
        the injected framework references. -->
   <Target Name="WP81AddNet45FrameworkReferences"
-          AfterTargets="MarkupCompilePass2"
+          AfterTargets="MarkupCompilePass2;_BeforeVBCSCoreCompile"
           BeforeTargets="CoreCompile">
     <ItemGroup>
       <ReferencePath Include="$(FrameworkPathOverride)\mscorlib.dll"
@@ -92,6 +92,16 @@
                      Condition="Exists('$(FrameworkPathOverride)\System.Runtime.dll')" />
       <ReferencePath Include="$(FrameworkPathOverride)\System.Runtime.Serialization.dll"
                      Condition="Exists('$(FrameworkPathOverride)\System.Runtime.Serialization.dll')" />
+      <ReferencePathWithRefAssemblies Include="$(FrameworkPathOverride)\mscorlib.dll"
+                                       Condition="Exists('$(FrameworkPathOverride)\mscorlib.dll')" />
+      <ReferencePathWithRefAssemblies Include="$(FrameworkPathOverride)\System.dll"
+                                       Condition="Exists('$(FrameworkPathOverride)\System.dll')" />
+      <ReferencePathWithRefAssemblies Include="$(FrameworkPathOverride)\System.Core.dll"
+                                       Condition="Exists('$(FrameworkPathOverride)\System.Core.dll')" />
+      <ReferencePathWithRefAssemblies Include="$(FrameworkPathOverride)\System.Runtime.dll"
+                                       Condition="Exists('$(FrameworkPathOverride)\System.Runtime.dll')" />
+      <ReferencePathWithRefAssemblies Include="$(FrameworkPathOverride)\System.Runtime.Serialization.dll"
+                                       Condition="Exists('$(FrameworkPathOverride)\System.Runtime.Serialization.dll')" />
     </ItemGroup>
   </Target>
 </Project>
