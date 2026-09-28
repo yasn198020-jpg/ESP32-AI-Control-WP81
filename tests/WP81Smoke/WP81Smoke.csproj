@@ -131,6 +131,22 @@
     </ItemGroup>
   </Target>
 
+  <Target Name="WP81PrepareXamlPreCompile" BeforeTargets="XamlPreCompile">
+    <PropertyGroup>
+      <_WP81OriginalOutputType>$(OutputType)</_WP81OriginalOutputType>
+      <_WP81OriginalPrefer32Bit>$(Prefer32Bit)</_WP81OriginalPrefer32Bit>
+      <OutputType>Library</OutputType>
+      <Prefer32Bit>false</Prefer32Bit>
+    </PropertyGroup>
+  </Target>
+
+  <Target Name="WP81RestoreOutputType" AfterTargets="XamlPreCompile">
+    <PropertyGroup>
+      <OutputType>$(_WP81OriginalOutputType)</OutputType>
+      <Prefer32Bit>$(_WP81OriginalPrefer32Bit)</Prefer32Bit>
+    </PropertyGroup>
+  </Target>
+
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\8.1\Microsoft.Windows.UI.Xaml.CSharp.Targets"
           Condition="Exists('$(MSBuildExtensionsPath32)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\8.1\Microsoft.Windows.UI.Xaml.CSharp.Targets')" />
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\WindowsXaml\Microsoft.Windows.UI.Xaml.CSharp.targets"
