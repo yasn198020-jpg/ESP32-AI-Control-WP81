@@ -91,6 +91,15 @@
                                 Condition="Exists('$(FrameworkPathOverride)\System.Runtime.dll')" />
       <_WP81FrameworkReferences Include="$(FrameworkPathOverride)\System.Runtime.Serialization.dll"
                                 Condition="Exists('$(FrameworkPathOverride)\System.Runtime.Serialization.dll')" />
+
+      <_WP81UniversalContractForXamlPreCompile Include="@(ReferencePath)"
+          Condition="'%(ReferencePath.Filename)%(ReferencePath.Extension)' == 'Windows.Foundation.UniversalApiContract.winmd'" />
+      <_WP81UniversalContractForXamlPreCompileWithRefs Include="@(ReferencePathWithRefAssemblies)"
+          Condition="'%(ReferencePathWithRefAssemblies.Filename)%(ReferencePathWithRefAssemblies.Extension)' == 'Windows.Foundation.UniversalApiContract.winmd'" />
+
+      <ReferencePath Remove="@(_WP81UniversalContractForXamlPreCompile)" />
+      <ReferencePathWithRefAssemblies Remove="@(_WP81UniversalContractForXamlPreCompileWithRefs)" />
+
       <ReferencePath Include="@(_WP81FrameworkReferences)" />
       <ReferencePathWithRefAssemblies Include="@(_WP81FrameworkReferences)" />
     </ItemGroup>
