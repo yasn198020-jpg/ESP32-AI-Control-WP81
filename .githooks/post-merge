@@ -1,0 +1,14 @@
+#!/bin/sh
+# Git hook: run the WP8.1 build after a successful git pull/merge.
+# Installed from .githooks by setup-git-check.ps1.
+if [ -f ".githooks/disabled" ]; then
+  exit 0
+fi
+echo "[Git] Running WP8.1 Debug ARM build..."
+if command -v powershell.exe >/dev/null 2>&1; then
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".vscode/build-debug.ps1"
+else
+  echo "[Git] powershell.exe not found; skipping build."
+  exit 0
+fi
+exit $?
