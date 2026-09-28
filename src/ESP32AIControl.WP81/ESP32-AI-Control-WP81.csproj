@@ -63,6 +63,7 @@
 
   <ItemGroup>
     <Reference Include="System.Runtime.Serialization" />
+    <Reference Include="System.Xml" />
     <Reference Include="System.Runtime.WindowsRuntime" />
     <Reference Include="System.Runtime.WindowsRuntime.UI.Xaml" />
     <Reference Include="System.Threading.Tasks" />
