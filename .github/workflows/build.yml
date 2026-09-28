@@ -285,4 +285,3 @@ jobs:
             tests/WP81Smoke/bin/**
             tests/WP81Smoke/obj/**
           if-no-files-found: warn
- } |
