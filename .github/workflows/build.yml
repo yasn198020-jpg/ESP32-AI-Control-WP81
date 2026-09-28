@@ -146,7 +146,20 @@ jobs:
           $universalSource = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\8.1\References\Windows.Foundation.UniversalApiContract\Windows.Foundation.UniversalApiContract.winmd'
           if (-not (Test-Path $universalSource)) { throw "Universal contract source not found: $universalSource" }
           Copy-Item $universalSource (Join-Path $phoneUniversalDir 'Windows.Foundation.UniversalApiContract.winmd') -Force
+          $phoneUniversalVersionDir = Join-Path $legacyPhoneRoot 'References\Windows.Foundation.UniversalApiContract\1.0.0.0'
+          New-Item -ItemType Directory -Force -Path $phoneUniversalVersionDir | Out-Null
+          Copy-Item $universalSource (Join-Path $phoneUniversalVersionDir 'Windows.Foundation.UniversalApiContract.winmd') -Force
           Copy-Item $universalSource (Join-Path $legacyReferences 'Windows.Foundation.UniversalApiContract.winmd') -Force
+
+          $foundationSource = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\References\Windows.Foundation.FoundationContract\1.0.0.0\Windows.Foundation.FoundationContract.winmd'
+          if (-not (Test-Path $foundationSource)) { throw "FoundationContract source not found: $foundationSource" }
+          $phoneFoundationDir = Join-Path $legacyPhoneRoot 'References\Windows.Foundation.FoundationContract\1.0.0.0'
+          New-Item -ItemType Directory -Force -Path $phoneFoundationDir | Out-Null
+          Copy-Item $foundationSource (Join-Path $phoneFoundationDir 'Windows.Foundation.FoundationContract.winmd') -Force
+          $foundationRootDir = Join-Path $legacyPhoneRoot 'References\Windows.Foundation.FoundationContract'
+          New-Item -ItemType Directory -Force -Path $foundationRootDir | Out-Null
+          Copy-Item $foundationSource (Join-Path $foundationRootDir 'Windows.Foundation.FoundationContract.winmd') -Force
+          Copy-Item $foundationSource (Join-Path $legacyReferences 'Windows.Foundation.FoundationContract.winmd') -Force
 
           $registryPaths = @(
             'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Microsoft SDKs\WindowsPhone\v8.1',
