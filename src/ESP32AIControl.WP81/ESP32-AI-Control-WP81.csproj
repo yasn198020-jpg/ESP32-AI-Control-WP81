@@ -79,7 +79,7 @@
        immediately before C# compilation, so the XAML compiler does not see
        the injected framework references. -->
   <Target Name="WP81AddNet45FrameworkReferences"
-          AfterTargets="ResolveAssemblyReferences"
+          AfterTargets="MarkupCompilePass2"
           BeforeTargets="CoreCompile">
     <ItemGroup>
       <ReferencePath Include="$(FrameworkPathOverride)\mscorlib.dll"
