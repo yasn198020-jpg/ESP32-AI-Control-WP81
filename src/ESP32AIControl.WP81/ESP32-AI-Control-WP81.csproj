@@ -6,7 +6,7 @@
     <OutputType>AppContainerExe</OutputType>
     <RootNamespace>ESP32AIControl.WP81</RootNamespace>
     <AssemblyName>ESP32-AI-Control-WP81</AssemblyName>
-    <TargetPlatformIdentifier>WindowsPhone</TargetPlatformIdentifier>
+    <TargetPlatformIdentifier>WindowsPhoneApp</TargetPlatformIdentifier>
     <TargetPlatformVersion>8.1</TargetPlatformVersion>
     <TargetPlatformMinVersion>8.1</TargetPlatformMinVersion>
     <MinimumVisualStudioVersion>12.0</MinimumVisualStudioVersion>
