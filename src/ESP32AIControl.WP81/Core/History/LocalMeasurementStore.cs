@@ -76,6 +76,39 @@ namespace ESP32AIControl.WP81.Core.History
             return result;
         }
 
+        public async Task<IList<MeasurementPoint>> ReadAllAsync(DateTimeOffset from, DateTimeOffset to)
+        {
+            var result = new List<MeasurementPoint>();
+            StorageFile file;
+            try { file = await GetFileAsync(false); }
+            catch (Exception) { return result; }
+
+            var text = await FileIO.ReadTextAsync(file);
+            var lines = text.Split(new[] { '\\r', '\\n' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (var line in lines)
+            {
+                var parts = line.Split(new[] { '\\t' });
+                if (parts.Length < 4) continue;
+                DateTime timestamp;
+                if (!DateTime.TryParseExact(parts[0], "o", CultureInfo.InvariantCulture,
+                    DateTimeStyles.RoundtripKind, out timestamp)) continue;
+                var pointTime = new DateTimeOffset(timestamp.ToUniversalTime());
+                if (pointTime < from || pointTime > to) continue;
+                result.Add(new MeasurementPoint
+                {
+                    Timestamp = pointTime,
+                    DeviceId = Unescape(parts[1]),
+                    WidgetId = Unescape(parts[2]),
+                    Value = Unescape(parts[3])
+                });
+            }
+            result.Sort(delegate(MeasurementPoint a, MeasurementPoint b)
+            {
+                return a.Timestamp.CompareTo(b.Timestamp);
+            });
+            return result;
+        }
+
         public async Task DeleteBeforeAsync(DateTimeOffset timestamp)
         {
             StorageFile file;
