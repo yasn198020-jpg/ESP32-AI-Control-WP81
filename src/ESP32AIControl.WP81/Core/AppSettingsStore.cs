@@ -4,6 +4,7 @@ using System.Runtime.Serialization.Json;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Text;
 using System.Threading.Tasks;
+using System.Runtime.InteropServices.WindowsRuntime;
 using Windows.Storage;
 using ESP32AIControl.WP81.Models;
 
@@ -17,7 +18,7 @@ namespace ESP32AIControl.WP81.Core
         {
             try
             {
-                var file = await ApplicationData.Current.LocalFolder.GetFileAsync(FileName).AsTask();
+                var file = await ApplicationData.Current.LocalFolder.GetFileAsync(FileName);
                 var json = await FileIO.ReadTextAsync(file).AsTask();
                 using (var stream = new MemoryStream(Encoding.UTF8.GetBytes(json)))
                 {
@@ -40,8 +41,8 @@ namespace ESP32AIControl.WP81.Core
                 serializer.WriteObject(stream, settings);
                 var json = Encoding.UTF8.GetString(stream.ToArray(), 0, (int)stream.Length);
                 var file = await ApplicationData.Current.LocalFolder.CreateFileAsync(
-                    FileName, CreationCollisionOption.ReplaceExisting).AsTask();
-                await FileIO.WriteTextAsync(file, json).AsTask();
+                    FileName, CreationCollisionOption.ReplaceExisting);
+                await FileIO.WriteTextAsync(file, json);
             }
         }
     }
