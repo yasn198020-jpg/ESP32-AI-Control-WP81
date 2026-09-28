@@ -112,13 +112,18 @@
   <Target Name="WP81PrepareXamlPreCompile" BeforeTargets="XamlPreCompile">
     <PropertyGroup>
       <_WP81OriginalOutputType>$(OutputType)</_WP81OriginalOutputType>
+      <_WP81OriginalPrefer32Bit>$(Prefer32Bit)</_WP81OriginalPrefer32Bit>
       <OutputType>Library</OutputType>
+      <!-- XamlPreCompile emits a temporary DLL. AnyCPU32BitPreferred is valid
+           for executables, but C# rejects it for /target:library (CS4023). -->
+      <Prefer32Bit>false</Prefer32Bit>
     </PropertyGroup>
   </Target>
 
   <Target Name="WP81RestoreOutputType" AfterTargets="XamlPreCompile">
     <PropertyGroup>
       <OutputType>$(_WP81OriginalOutputType)</OutputType>
+      <Prefer32Bit>$(_WP81OriginalPrefer32Bit)</Prefer32Bit>
     </PropertyGroup>
   </Target>
 
