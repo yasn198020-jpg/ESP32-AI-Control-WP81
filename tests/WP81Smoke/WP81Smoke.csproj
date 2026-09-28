@@ -94,6 +94,43 @@
     </ItemGroup>
   </Target>
 
+  <Target Name="WP81AddNet45FrameworkReferencesForXamlPreCompile"
+          AfterTargets="MarkupCompilePass1"
+          BeforeTargets="XamlPreCompile">
+    <ItemGroup>
+      <_WP81FrameworkReferences Include="$(FrameworkPathOverride)\mscorlib.dll"
+                                Condition="Exists('$(FrameworkPathOverride)\mscorlib.dll')" />
+      <_WP81FrameworkReferences Include="$(FrameworkPathOverride)\System.dll"
+                                Condition="Exists('$(FrameworkPathOverride)\System.dll')" />
+      <_WP81FrameworkReferences Include="$(FrameworkPathOverride)\System.Core.dll"
+                                Condition="Exists('$(FrameworkPathOverride)\System.Core.dll')" />
+      <_WP81FrameworkReferences Include="$(FrameworkPathOverride)\System.Runtime.dll"
+                                Condition="Exists('$(FrameworkPathOverride)\System.Runtime.dll')" />
+      <_WP81FrameworkReferences Include="$(FrameworkPathOverride)\System.Runtime.Serialization.dll"
+                                Condition="Exists('$(FrameworkPathOverride)\System.Runtime.Serialization.dll')" />
+      <ReferencePath Include="@(_WP81FrameworkReferences)" />
+      <ReferencePathWithRefAssemblies Include="@(_WP81FrameworkReferences)" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="WP81RemoveNet45FrameworkReferencesBeforeXamlPass2"
+          AfterTargets="XamlPreCompile"
+          BeforeTargets="MarkupCompilePass2">
+    <ItemGroup>
+      <ReferencePath Remove="@(_WP81FrameworkReferences)" />
+      <ReferencePathWithRefAssemblies Remove="@(_WP81FrameworkReferences)" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="WP81AddNet45FrameworkReferencesForCoreCompile"
+          AfterTargets="MarkupCompilePass2;_BeforeVBCSCoreCompile"
+          BeforeTargets="CoreCompile">
+    <ItemGroup>
+      <ReferencePath Include="@(_WP81FrameworkReferences)" />
+      <ReferencePathWithRefAssemblies Include="@(_WP81FrameworkReferences)" />
+    </ItemGroup>
+  </Target>
+
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\8.1\Microsoft.Windows.UI.Xaml.CSharp.Targets"
           Condition="Exists('$(MSBuildExtensionsPath32)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\8.1\Microsoft.Windows.UI.Xaml.CSharp.Targets')" />
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\WindowsXaml\Microsoft.Windows.UI.Xaml.CSharp.targets"
