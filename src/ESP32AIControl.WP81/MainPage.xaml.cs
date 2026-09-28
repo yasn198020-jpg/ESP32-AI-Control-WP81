@@ -183,8 +183,8 @@ namespace ESP32AIControl.WP81
                     Content = "Включено",
                     Margin = new Thickness(0, 0, 0, 2)
                 };
-                check.add_Checked((s, e) => PublishSwitchValue(visual, true));
-                check.add_Unchecked((s, e) => PublishSwitchValue(visual, false));
+                check.Checked += (s, e) => PublishSwitchValue(visual, true);
+                check.Unchecked += (s, e) => PublishSwitchValue(visual, false);
                 visual.Control = check;
                 visual.Container.Children.Add(check);
             }
@@ -195,7 +195,7 @@ namespace ESP32AIControl.WP81
                     Content = "Выполнить",
                     MinWidth = 160
                 };
-                button.add_Click(async (s, e) =>
+                button.Click += async (s, e) =>
                 {
                     await PublishControl(visual, "1");
                 });
@@ -211,7 +211,7 @@ namespace ESP32AIControl.WP81
                     StepFrequency = 1,
                     Width = 280
                 };
-                slider.add_ValueChanged(async (s, e) =>
+                slider.ValueChanged += async (s, e) =>
                 {
                     if (_syncingControls)
                         return;
