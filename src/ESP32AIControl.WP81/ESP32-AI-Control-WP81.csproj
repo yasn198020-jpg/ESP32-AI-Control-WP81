@@ -109,6 +109,19 @@
     </ItemGroup>
   </Target>
 
+  <Target Name="WP81PrepareXamlPreCompile" BeforeTargets="XamlPreCompile">
+    <PropertyGroup>
+      <_WP81OriginalOutputType>$(OutputType)</_WP81OriginalOutputType>
+      <OutputType>Library</OutputType>
+    </PropertyGroup>
+  </Target>
+
+  <Target Name="WP81RestoreOutputType" AfterTargets="XamlPreCompile">
+    <PropertyGroup>
+      <OutputType>$(_WP81OriginalOutputType)</OutputType>
+    </PropertyGroup>
+  </Target>
+
   <Target Name="WP81AddNet45FrameworkReferencesForXamlPreCompile"
           AfterTargets="MarkupCompilePass1"
           BeforeTargets="XamlPreCompile">
