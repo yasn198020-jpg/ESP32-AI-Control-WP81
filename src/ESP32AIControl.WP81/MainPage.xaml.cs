@@ -198,7 +198,7 @@ namespace ESP32AIControl.WP81
                 button.Click += async (s, e) =>
                 {
                     await PublishControl(visual, "1");
-                });
+                };
                 visual.Control = button;
                 visual.Container.Children.Add(button);
             }
@@ -217,7 +217,7 @@ namespace ESP32AIControl.WP81
                         return;
 
                     await PublishControl(visual, e.NewValue.ToString(CultureInfo.InvariantCulture));
-                });
+                };
                 visual.Control = slider;
                 visual.Container.Children.Add(slider);
             }
