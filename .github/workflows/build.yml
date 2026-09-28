@@ -74,7 +74,7 @@ jobs:
               }
             }
             if (-not $universal) {
-              $universal = Get-ChildItem $metadataRoot -Recurse -Filter "Windows.Foundation.UniversalApiContract.winmd" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+              $universal = Get-ChildItem $kitsRoot -Recurse -Filter "Windows.Foundation.UniversalApiContract.winmd" -File -ErrorAction SilentlyContinue | Select-Object -First 1
             }
           }
           if (-not $universal) { throw "Windows.Foundation.UniversalApiContract.winmd was not found." }
@@ -179,6 +179,14 @@ jobs:
           $frameworkRoot = Join-Path $net45 "Microsoft.NETFramework.ReferenceAssemblies.net45.1.0.3\build\.NETFramework\v4.5"
           if (-not (Test-Path (Join-Path $frameworkRoot "mscorlib.dll"))) { throw "NET Framework 4.5 reference assemblies not found." }
           if (-not (Test-Path (Join-Path $frameworkRoot "System.dll"))) { throw "NET Framework 4.5 System.dll reference assembly not found." }
+
+          $net451 = Join-Path $env:RUNNER_TEMP "nuget-net451"
+          New-Item -ItemType Directory -Force -Path $net451 | Out-Null
+          & $nuget install Microsoft.NETFramework.ReferenceAssemblies.net451 -Version 1.0.3 -OutputDirectory $net451 -NonInteractive
+          $facadesRoot = Join-Path $net451 "Microsoft.NETFramework.ReferenceAssemblies.net451.1.0.3\build\.NETFramework\v4.5.1\Facades"
+          $systemRuntime = Join-Path $facadesRoot "System.Runtime.dll"
+          if (-not (Test-Path $systemRuntime)) { throw "System.Runtime facade was not found in .NET Framework 4.5.1 reference assemblies." }
+          Copy-Item $systemRuntime $frameworkRoot -Force
 
           $winrtRoot = Join-Path $env:RUNNER_TEMP "winrt-packages"
           New-Item -ItemType Directory -Force -Path $winrtRoot | Out-Null
