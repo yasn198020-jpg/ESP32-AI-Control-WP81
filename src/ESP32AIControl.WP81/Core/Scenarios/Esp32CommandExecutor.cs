@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using ESP32AIControl.WP81.Core.Protocol;
+using ESP32AIControl.WP81.Core.Mqtt;
 
 namespace ESP32AIControl.WP81.Core.Scenarios
 {
