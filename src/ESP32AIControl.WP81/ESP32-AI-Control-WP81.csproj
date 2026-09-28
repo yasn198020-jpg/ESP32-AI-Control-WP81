@@ -78,6 +78,15 @@
 <!-- WP8.1 performs a temporary C# compile between XAML markup passes.
      The .NET 4.5 reference DLLs must be visible to that C# compile, but
      WinRT references remain supplied by the WP8.1 SDK metadata. -->
+  <Target Name="WP81AddWin10ContractsForXaml" BeforeTargets="MarkupCompilePass1">
+    <ItemGroup>
+      <_WP81Win10Contracts Include="$(ProgramFiles(x86))\Windows Kits\10\References\Windows.Foundation.FoundationContract\1.0.0.0\Windows.Foundation.FoundationContract.winmd" Condition="Exists('$(ProgramFiles(x86))\Windows Kits\10\References\Windows.Foundation.FoundationContract\1.0.0.0\Windows.Foundation.FoundationContract.winmd')" />
+      <_WP81Win10Contracts Include="$(ProgramFiles(x86))\Windows Kits\10\References\Windows.Foundation.UniversalApiContract\1.0.0.0\Windows.Foundation.UniversalApiContract.winmd" Condition="Exists('$(ProgramFiles(x86))\Windows Kits\10\References\Windows.Foundation.UniversalApiContract\1.0.0.0\Windows.Foundation.UniversalApiContract.winmd')" />
+      <ReferencePath Include="@(_WP81Win10Contracts)" />
+      <ReferencePathWithRefAssemblies Include="@(_WP81Win10Contracts)" />
+    </ItemGroup>
+  </Target>
+
   <Target Name="WP81AddNet45FrameworkReferencesForXamlPreCompile"
           AfterTargets="MarkupCompilePass1"
           BeforeTargets="XamlPreCompile">
