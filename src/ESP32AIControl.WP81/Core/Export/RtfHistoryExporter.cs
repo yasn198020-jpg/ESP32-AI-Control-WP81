@@ -24,13 +24,13 @@ namespace ESP32AIControl.WP81.Core.Export
                 name, CreationCollisionOption.ReplaceExisting);
 
             var sb = new StringBuilder();
-            sb.Append("<html><head><meta charset="utf-8"><title>ESP32 AI Control</title></head><body>");
+            sb.Append("<html><head><meta charset=\"utf-8\"><title>ESP32 AI Control</title></head><body>");
             sb.Append("<h2>ESP32 AI Control - Measurement History</h2>");
             sb.Append("<p>From: ");
             sb.Append(Escape(from.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)));
             sb.Append(" &nbsp; To: ");
             sb.Append(Escape(to.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)));
-            sb.Append("</p><table border="1" cellspacing="0" cellpadding="4">");
+            sb.Append("</p><table border=\"1\" cellspacing=\"0\" cellpadding=\"4\">");
             sb.Append("<tr><th>Timestamp</th><th>Device</th><th>Widget</th><th>Value</th></tr>");
 
             if (points != null)
