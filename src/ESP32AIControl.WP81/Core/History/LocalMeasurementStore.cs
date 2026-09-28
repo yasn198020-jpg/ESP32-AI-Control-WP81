@@ -81,7 +81,7 @@ namespace ESP32AIControl.WP81.Core.History
             var result = new List<MeasurementPoint>();
             StorageFile file;
             try { file = await GetFileAsync(false); }
-            catch (Exception) { return result; }
+            catch (FileNotFoundException) { return result; }
 
             var text = await FileIO.ReadTextAsync(file);
             var lines = text.Split(new[] { '\\r', '\\n' }, StringSplitOptions.RemoveEmptyEntries);
@@ -138,8 +138,11 @@ namespace ESP32AIControl.WP81.Core.History
 
         private static async Task<StorageFile> GetFileAsync(bool create)
         {
-            var options = create ? CreationCollisionOption.OpenIfExists : CreationCollisionOption.FailIfExists;
-            return await ApplicationData.Current.LocalFolder.CreateFileAsync(FileName, options);
+            if (!create)
+                return await ApplicationData.Current.LocalFolder.GetFileAsync(FileName);
+
+            return await ApplicationData.Current.LocalFolder.CreateFileAsync(
+                FileName, CreationCollisionOption.OpenIfExists);
         }
 
         private static string Escape(string value)
