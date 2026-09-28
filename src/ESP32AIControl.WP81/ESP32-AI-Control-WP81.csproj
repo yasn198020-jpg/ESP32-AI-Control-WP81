@@ -61,6 +61,7 @@
 
   <ItemGroup>
     <Reference Include="System.Runtime.WindowsRuntime" />
+    <Reference Include="System.Runtime.Serialization" />
     <Reference Include="Windows" />
   </ItemGroup>
 
@@ -70,4 +71,5 @@
           Condition="Exists('$(MSBuildExtensionsPath32)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\8.1\Microsoft.Windows.UI.Xaml.CSharp.Targets')" />
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\WindowsXaml\Microsoft.Windows.UI.Xaml.CSharp.targets"
           Condition="Exists('$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\WindowsXaml\Microsoft.Windows.UI.Xaml.CSharp.targets')" />
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
