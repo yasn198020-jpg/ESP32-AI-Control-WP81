@@ -74,4 +74,26 @@
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\WindowsXaml\Microsoft.Windows.UI.Xaml.CSharp.targets"
           Condition="Exists('$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\WindowsXaml\Microsoft.Windows.UI.Xaml.CSharp.targets')" />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-</Project>
+
+  <!-- The WP8.1 XAML targets import the C# targets themselves.  The legacy
+       project otherwise loses the .NET reference assemblies during CoreCompile.
+       Add the .NET 4.5 reference DLLs only after XAML compilation has finished,
+       immediately before C# compilation, so the XAML compiler does not see
+       the injected framework references. -->
+  <Target Name="WP81AddNet45FrameworkReferences"
+          AfterTargets="ResolveAssemblyReferences"
+          BeforeTargets="CoreCompile">
+    <ItemGroup>
+      <ReferencePath Include="$(FrameworkPathOverride)\mscorlib.dll"
+                     Condition="Exists('$(FrameworkPathOverride)\mscorlib.dll')" />
+      <ReferencePath Include="$(FrameworkPathOverride)\System.dll"
+                     Condition="Exists('$(FrameworkPathOverride)\System.dll')" />
+      <ReferencePath Include="$(FrameworkPathOverride)\System.Core.dll"
+                     Condition="Exists('$(FrameworkPathOverride)\System.Core.dll')" />
+      <ReferencePath Include="$(FrameworkPathOverride)\System.Runtime.dll"
+                     Condition="Exists('$(FrameworkPathOverride)\System.Runtime.dll')" />
+      <ReferencePath Include="$(FrameworkPathOverride)\System.Runtime.Serialization.dll"
+                     Condition="Exists('$(FrameworkPathOverride)\System.Runtime.Serialization.dll')" />
+    </ItemGroup>
+  </Target>
+\n</Project>
