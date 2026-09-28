@@ -10,6 +10,7 @@
     <TargetPlatformVersion>8.1</TargetPlatformVersion>
     <TargetPlatformMinVersion>8.1</TargetPlatformMinVersion>
     <MinimumVisualStudioVersion>12.0</MinimumVisualStudioVersion>
+    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
     <DefaultLanguage>ru-RU</DefaultLanguage>
     <AppxManifest>Package.appxmanifest</AppxManifest>
     <AppxPackageSigningEnabled>False</AppxPackageSigningEnabled>
