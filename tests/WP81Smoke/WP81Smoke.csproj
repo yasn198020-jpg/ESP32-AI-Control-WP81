@@ -29,7 +29,7 @@
     <DefineConstants>DEBUG;TRACE;NETFX_CORE;WINDOWS_PHONE_APP</DefineConstants>
     <PlatformTarget>ARM</PlatformTarget>
     <UseVSHostingProcess>false</UseVSHostingProcess>
-    <Prefer32Bit>true</Prefer32Bit>
+    <Prefer32Bit>false</Prefer32Bit>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
 
@@ -52,7 +52,7 @@
     </ApplicationDefinition>
     <Page Include="MainPage.xaml">
       <Generator>MSBuild:Compile</Generator>
-      <SubType>Code</SubType>
+      <SubType>Designer</SubType>
     </Page>
   </ItemGroup>
 
@@ -136,22 +136,6 @@
       <ReferencePath Include="@(_WP81FrameworkReferences)" />
       <ReferencePathWithRefAssemblies Include="@(_WP81FrameworkReferences)" />
     </ItemGroup>
-  </Target>
-
-  <Target Name="WP81PrepareXamlPreCompile" BeforeTargets="XamlPreCompile">
-    <PropertyGroup>
-      <_WP81OriginalOutputType>$(OutputType)</_WP81OriginalOutputType>
-      <_WP81OriginalPrefer32Bit>$(Prefer32Bit)</_WP81OriginalPrefer32Bit>
-      <OutputType>Library</OutputType>
-      <Prefer32Bit>false</Prefer32Bit>
-    </PropertyGroup>
-  </Target>
-
-  <Target Name="WP81RestoreOutputType" AfterTargets="XamlPreCompile">
-    <PropertyGroup>
-      <OutputType>$(_WP81OriginalOutputType)</OutputType>
-      <Prefer32Bit>$(_WP81OriginalPrefer32Bit)</Prefer32Bit>
-    </PropertyGroup>
   </Target>
 
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\8.1\Microsoft.Windows.UI.Xaml.CSharp.Targets"
