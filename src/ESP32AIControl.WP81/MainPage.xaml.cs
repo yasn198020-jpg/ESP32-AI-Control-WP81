@@ -601,8 +601,8 @@ namespace ESP32AIControl.WP81
                 }
 
                 var state = _widgetIndex[key];
-                var from = GraphFrom.Date.Date;
-                var to = GraphTo.Date.Date.AddDays(1).AddTicks(-1);
+                var from = new DateTimeOffset(GraphFrom.Date.Date);
+                var to = new DateTimeOffset(GraphTo.Date.Date.AddDays(1).AddTicks(-1));
 
                 var points = await _measurementStore.ReadAsync(state.DeviceId, state.Id, from, to);
                 _lastGraphPoints.Clear();
@@ -866,7 +866,7 @@ namespace ESP32AIControl.WP81
 
             var item = _scheduleRows[index];
             ScheduleCommandBox.Text = item.Command;
-            ScheduleDate.Date = item.ExecuteAt.LocalDateTime.Date;
+            ScheduleDate.Date = new DateTimeOffset(item.ExecuteAt.LocalDateTime.Date);
             ScheduleTime.Time = item.ExecuteAt.LocalDateTime.TimeOfDay;
         }
 
