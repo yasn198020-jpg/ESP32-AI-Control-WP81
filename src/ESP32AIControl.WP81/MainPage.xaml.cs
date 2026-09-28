@@ -852,9 +852,9 @@ namespace ESP32AIControl.WP81
             }
         }
 
-        private void Scheduler_TaskChanged(object sender, ScheduledCommand e)
+        private async void Scheduler_TaskChanged(object sender, ScheduledCommand e)
         {
-            Dispatcher.RunAsync(CoreDispatcherPriority.Normal, async delegate
+            await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, async delegate
             {
                 await RefreshScheduleAsync();
             });
