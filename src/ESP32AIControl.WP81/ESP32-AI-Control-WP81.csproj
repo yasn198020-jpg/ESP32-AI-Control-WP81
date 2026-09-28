@@ -94,4 +94,4 @@
                      Condition="Exists('$(FrameworkPathOverride)\System.Runtime.Serialization.dll')" />
     </ItemGroup>
   </Target>
-\n</Project>
+</Project>
