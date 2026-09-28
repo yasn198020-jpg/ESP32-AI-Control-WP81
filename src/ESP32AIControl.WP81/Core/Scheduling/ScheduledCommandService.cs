@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.Serialization;
+using System.Runtime.Serialization.Json;
 using System.Threading.Tasks;
 using Windows.System.Threading;
 using Windows.Storage;
@@ -243,7 +244,7 @@ namespace ESP32AIControl.WP81.Core.Scheduling
             {
                 var serializer = new DataContractJsonSerializer(typeof(List<ScheduledCommand>));
                 serializer.WriteObject(stream, snapshot);
-                var json = System.Text.Encoding.UTF8.GetString(stream.ToArray());
+                var json = System.Text.Encoding.UTF8.GetString(stream.ToArray(), 0, (int)stream.Length);
 
                 var file = await ApplicationData.Current.LocalFolder.CreateFileAsync(
                     FileName, CreationCollisionOption.ReplaceExisting);
