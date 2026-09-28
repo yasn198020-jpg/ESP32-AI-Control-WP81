@@ -221,9 +221,21 @@ jobs:
           $winrtDll = Get-ChildItem $winrtPackage -Recurse -Filter "System.Runtime.WindowsRuntime.dll" -File -ErrorAction SilentlyContinue | Select-Object -First 1
           $winrtUiDll = Get-ChildItem $winrtUiPackage -Recurse -Filter "System.Runtime.WindowsRuntime.UI.Xaml.dll" -File -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $winrtDll -or -not $winrtUiDll) { throw "Windows Runtime interop assemblies were not found in NuGet packages." }
-          Copy-Item $winrtDll.FullName $frameworkRoot -Force
-          Copy-Item $winrtUiDll.FullName $frameworkRoot -Force
-          "FRAMEWORK_PATH=$frameworkRoot" | Out-File $env:GITHUB_ENV -Append
+          # Prefer the real Windows Phone 8.1 reference-assembly set.
+          # It contains the exact WP8.1 System.ObjectModel/System.Runtime/etc.
+          # assemblies expected by the legacy XAML compiler.
+          $wpFrameworkRoot = Join-Path ${env:ProgramFiles(x86)} 'Reference Assemblies\\Microsoft\\Framework\\WindowsPhone\\v8.1'
+          if (-not (Test-Path (Join-Path $wpFrameworkRoot 'mscorlib.dll'))) {
+            throw "Windows Phone 8.1 reference assemblies not found: $wpFrameworkRoot"
+          }
+
+          $wpWinrtDll = Join-Path $wpFrameworkRoot 'System.Runtime.WindowsRuntime.dll'
+          $wpWinrtUiDll = Join-Path $wpFrameworkRoot 'System.Runtime.WindowsRuntime.UI.Xaml.dll'
+          if (-not (Test-Path $wpWinrtDll)) { Copy-Item $winrtDll.FullName $wpFrameworkRoot -Force }
+          if (-not (Test-Path $wpWinrtUiDll)) { Copy-Item $winrtUiDll.FullName $wpFrameworkRoot -Force }
+
+          Write-Host "Using WP8.1 reference assemblies: $wpFrameworkRoot"
+          "FRAMEWORK_PATH=$wpFrameworkRoot" | Out-File $env:GITHUB_ENV -Append
 
       - name: Build solution
         shell: powershell
