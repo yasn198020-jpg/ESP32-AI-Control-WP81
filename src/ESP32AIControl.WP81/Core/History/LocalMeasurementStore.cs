@@ -31,14 +31,8 @@ namespace ESP32AIControl.WP81.Core.History
             var result = new List<MeasurementPoint>();
             StorageFile file;
 
-            try
-            {
-                file = await GetFileAsync(false);
-            }
-            catch (FileNotFoundException)
-            {
-                return result;
-            }
+            try { file = await GetFileAsync(false); }
+            catch (FileNotFoundException) { return result; }
 
             var text = await FileIO.ReadTextAsync(file);
             var lines = text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
@@ -84,10 +78,10 @@ namespace ESP32AIControl.WP81.Core.History
             catch (FileNotFoundException) { return result; }
 
             var text = await FileIO.ReadTextAsync(file);
-            var lines = text.Split(new[] { '\\r', '\\n' }, StringSplitOptions.RemoveEmptyEntries);
+            var lines = text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
             foreach (var line in lines)
             {
-                var parts = line.Split(new[] { '\\t' });
+                var parts = line.Split(new[] { '\t' });
                 if (parts.Length < 4) continue;
                 DateTime timestamp;
                 if (!DateTime.TryParseExact(parts[0], "o", CultureInfo.InvariantCulture,
