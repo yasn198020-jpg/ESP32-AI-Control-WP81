@@ -100,25 +100,40 @@ namespace ESP32AIControl.WP81.Core.Scenarios
 
             var widgets = _devices.GetWidgetsSnapshot();
             var targetPage = targetState == null ? string.Empty : (targetState.Page ?? string.Empty);
+            var targetDescription = targetState == null ? string.Empty : (targetState.Description ?? string.Empty);
             WidgetState candidate = null;
             var bestScore = 0;
 
             for (var i = 0; i < widgets.Count; i++)
             {
                 var w = widgets[i];
-                if (!string.Equals(w.DeviceId, target.DeviceId, StringComparison.OrdinalIgnoreCase))
+
+                if (string.Equals(w.DeviceId, target.DeviceId, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(w.Id, target.WidgetId, StringComparison.OrdinalIgnoreCase))
                     continue;
-                if (string.Equals(w.Id, target.WidgetId, StringComparison.OrdinalIgnoreCase))
-                    continue;
+
                 if (!HasAny(w.Description, AutomationWords))
                     continue;
 
-                var score = 1;
+                var score = 0;
+
                 if (!string.IsNullOrEmpty(targetPage) &&
                     string.Equals(w.Page, targetPage, StringComparison.OrdinalIgnoreCase))
-                    score += 3;
+                    score += 5;
+
+                if (HasSharedObjectWords(targetDescription, w.Description))
+                    score += 5;
+
+                // Device identity is only a secondary context hint. It is not
+                // required for dependency discovery.
+                if (string.Equals(w.DeviceId, target.DeviceId, StringComparison.OrdinalIgnoreCase))
+                    score += 2;
+
                 if (HasAny(w.Description, ManualWords))
                     score += 2;
+
+                if (score == 0)
+                    continue;
 
                 if (score > bestScore)
                 {
