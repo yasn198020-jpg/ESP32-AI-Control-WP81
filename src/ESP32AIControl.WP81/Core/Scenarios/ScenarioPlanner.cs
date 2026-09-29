@@ -91,6 +91,13 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             if (!IsOperationalAction(target, targetState))
                 return;
 
+            // Changing the automatic/manual mode is itself a mode command.
+            // It must never trigger a second automatic-mode dependency.
+            if (targetState != null &&
+                (HasAny(targetState.Description, AutomationWords) ||
+                 HasAny(targetState.Description, ManualWords)))
+                return;
+
             var widgets = _devices.GetWidgetsSnapshot();
             var targetPage = targetState == null ? string.Empty : (targetState.Page ?? string.Empty);
             WidgetState candidate = null;
