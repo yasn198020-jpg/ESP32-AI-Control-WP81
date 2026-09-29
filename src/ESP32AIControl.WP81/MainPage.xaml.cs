@@ -71,7 +71,7 @@ namespace ESP32AIControl.WP81
                 delegate { return Math.Max(1, _appSettings.MeasurementIntervalSeconds); });
 
             _exporter = new RtfHistoryExporter();
-            _commandExecutor = new Esp32CommandExecutor(_mqtt);
+            _commandExecutor = new Esp32CommandExecutor(_mqtt, _devices);
             _scheduler = new ScheduledCommandService(_commandExecutor);
             _voice = new Wp81VoiceCommandService();
             _voiceParser = new VoiceCommandParser(string.Empty, string.Empty);
