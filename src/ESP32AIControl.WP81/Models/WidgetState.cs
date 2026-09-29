@@ -17,5 +17,20 @@ namespace ESP32AIControl.WP81.Models
         {
             get { return (DeviceId ?? string.Empty) + "/" + (Id ?? string.Empty); }
         }
+
+        public WidgetState Clone()
+        {
+            return new WidgetState
+            {
+                DeviceId = DeviceId,
+                Id = Id,
+                Description = Description,
+                WidgetType = WidgetType,
+                Page = Page,
+                Order = Order,
+                Value = Value,
+                UpdatedAt = UpdatedAt
+            };
+        }
     }
 }
