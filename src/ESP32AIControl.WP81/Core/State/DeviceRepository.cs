@@ -13,6 +13,12 @@ namespace ESP32AIControl.WP81.Core.State
         private readonly Dictionary<string, DateTimeOffset> _lastUpdates =
             new Dictionary<string, DateTimeOffset>();
 
+        // IoTManager element IDs are globally unique across ESPs. The index
+        // lets scenario code resolve "btn43" to the real widget/device without
+        // putting a device ID into the exported scenario.
+        private readonly Dictionary<string, string> _widgetIdIndex =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
         public event EventHandler<WidgetState> WidgetChanged;
 
         public IEnumerable<WidgetState> Widgets
@@ -26,6 +32,25 @@ namespace ESP32AIControl.WP81.Core.State
 
             lock (_widgets)
             {
+                WidgetState state;
+                if (_widgets.TryGetValue(key, out state))
+                    return state.Clone();
+            }
+
+            return null;
+        }
+
+        public WidgetState GetByWidgetId(string widgetId)
+        {
+            if (string.IsNullOrWhiteSpace(widgetId))
+                return null;
+
+            lock (_widgets)
+            {
+                string key;
+                if (!_widgetIdIndex.TryGetValue(widgetId, out key) || string.IsNullOrEmpty(key))
+                    return null;
+
                 WidgetState state;
                 if (_widgets.TryGetValue(key, out state))
                     return state.Clone();
@@ -71,6 +96,8 @@ namespace ESP32AIControl.WP81.Core.State
                     _widgets[key] = state;
                 }
 
+                UpdateWidgetIdIndex(state.Id, key);
+
                 if (!string.IsNullOrEmpty(message.DeviceId))
                     state.DeviceId = message.DeviceId;
                 if (!string.IsNullOrEmpty(message.Description))
@@ -96,6 +123,26 @@ namespace ESP32AIControl.WP81.Core.State
             var handler = WidgetChanged;
             if (handler != null)
                 handler(this, state.Clone());
+        }
+
+        private void UpdateWidgetIdIndex(string widgetId, string key)
+        {
+            if (string.IsNullOrWhiteSpace(widgetId))
+                return;
+
+            string existing;
+            if (!_widgetIdIndex.TryGetValue(widgetId, out existing))
+            {
+                _widgetIdIndex[widgetId] = key;
+                return;
+            }
+
+            if (string.Equals(existing, key, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            // Same element ID appeared on two devices. Treat it as ambiguous
+            // instead of silently selecting the wrong ESP.
+            _widgetIdIndex[widgetId] = string.Empty;
         }
 
         private bool IsDuplicate(string key, string value)
