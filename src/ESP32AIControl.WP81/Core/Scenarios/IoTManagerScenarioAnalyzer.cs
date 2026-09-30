@@ -522,6 +522,12 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                 }
 
                 var plainEnd = FindStatementEnd(text, pos, end);
+                var plainStatement = text.Substring(pos, plainEnd - pos);
+                var plainRule = CreateRule(inherited, plainStatement);
+
+                if (plainRule.Assignments.Count > 0)
+                    output.Add(plainRule);
+
                 pos = plainEnd + 1;
             }
         }
