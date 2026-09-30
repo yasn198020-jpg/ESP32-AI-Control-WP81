@@ -69,6 +69,11 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             _scenarioAnalyzer = new IoTManagerScenarioAnalyzer(script ?? string.Empty);
         }
 
+        public int GetScenarioRuleCount()
+        {
+            return _scenarioAnalyzer == null ? 0 : _scenarioAnalyzer.RuleCount;
+        }
+
         public ScenarioPlan BuildPlan(string command)
         {
             var plan = new ScenarioPlan();

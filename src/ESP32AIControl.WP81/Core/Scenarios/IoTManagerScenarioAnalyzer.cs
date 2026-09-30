@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using ESP32AIControl.WP81.Models;
+using ESP32AIControl.WP81.Core.State;
 
 namespace ESP32AIControl.WP81.Core.Scenarios
 {
@@ -92,8 +93,9 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             if (string.IsNullOrWhiteSpace(script))
                 return;
 
-            var normalized = ExtractScenario(script);
-            ParseBlock(normalized, 0, normalized.Length, new List<ScenarioCondition>(), _rules);
+            var sections = ExtractScenarioSections(script);
+            for (var i = 0; i < sections.Count; i++)
+                ParseBlock(sections[i], 0, sections[i].Length, new List<ScenarioCondition>(), _rules);
         }
 
         public ScenarioAnalysis AnalyzeControl(
@@ -136,13 +138,20 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                 if (!HasCondition(rule.Conditions, targetState.Id, targetValue))
                     continue;
 
+                if (!RuleBelongsToDevice(rule, devices, targetState.DeviceId))
+                    continue;
+
                 for (var a = 0; a < rule.Assignments.Count; a++)
                 {
                     var assignment = rule.Assignments[a];
                     if (!IsValue(assignment.Value, "1"))
                         continue;
 
-                    var widget = devices.Get(targetState.DeviceId, assignment.Variable);
+                    var widget = ResolveOnDevice(
+                        assignment.Variable,
+                        devices,
+                        targetState.DeviceId);
+
                     if (widget == null || !IsActuator(widget, expectedDirection))
                         continue;
 
@@ -151,8 +160,8 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                     if (HasSharedObjectWords(targetObject, widget.Description))
                         score += 10;
 
-                    if (IsValue(assignment.Value, "1"))
-                        score += 2;
+                    if (HasAssignment(rule.Assignments, targetState.Id, targetValue))
+                        score += 4;
 
                     if (string.Equals(widget.Page, targetState.Page, StringComparison.OrdinalIgnoreCase))
                         score += 2;
@@ -217,6 +226,9 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             {
                 var candidate = candidates[i];
 
+                if (!RuleBelongsToDevice(candidate, devices, deviceId))
+                    continue;
+
                 if (!requireTargetCondition ||
                     HasCondition(candidate.Conditions, analysis.TargetVariable, analysis.TargetValue))
                 {
@@ -226,7 +238,16 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             }
 
             if (selected == null && candidates.Count > 0 && !requireTargetCondition)
-                selected = candidates[0];
+            {
+                for (var i = 0; i < candidates.Count; i++)
+                {
+                    if (RuleBelongsToDevice(candidates[i], devices, deviceId))
+                    {
+                        selected = candidates[i];
+                        break;
+                    }
+                }
+            }
 
             if (selected == null)
             {
@@ -245,7 +266,7 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                     IsValue(condition.Value, analysis.TargetValue))
                     continue;
 
-                var state = devices.Get(deviceId, condition.Variable);
+                var state = ResolveOnDevice(condition.Variable, devices, deviceId);
 
                 if (state != null && IsUserControllable(state))
                 {
@@ -289,6 +310,99 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             }
 
             return result;
+        }
+
+        private static bool RuleBelongsToDevice(
+            ScenarioRule rule,
+            DeviceRepository devices,
+            string deviceId)
+        {
+            if (rule == null || devices == null)
+                return false;
+
+            for (var i = 0; i < rule.Conditions.Count; i++)
+            {
+                if (!IdentifierMatchesDevice(rule.Conditions[i].Variable, devices, deviceId))
+                    return false;
+            }
+
+            for (var i = 0; i < rule.Assignments.Count; i++)
+            {
+                if (!IdentifierMatchesDevice(rule.Assignments[i].Variable, devices, deviceId))
+                    return false;
+            }
+
+            return true;
+        }
+
+        private static bool RuleBelongsToDevice(
+            ScenarioAssignment assignment,
+            DeviceRepository devices,
+            string deviceId)
+        {
+            if (assignment == null)
+                return false;
+
+            if (ResolveOnDevice(assignment.Variable, devices, deviceId) == null)
+                return false;
+
+            for (var i = 0; i < assignment.Conditions.Count; i++)
+            {
+                if (!IdentifierMatchesDevice(assignment.Conditions[i].Variable, devices, deviceId))
+                    return false;
+            }
+
+            return true;
+        }
+
+        private static bool IdentifierMatchesDevice(
+            string identifier,
+            DeviceRepository devices,
+            string deviceId)
+        {
+            var state = devices.GetByWidgetId(identifier);
+
+            // IoTManager also contains interpreter/internal names such as
+            // onStart and calculated variables. Unknown identifiers are left
+            // untouched; known widget IDs must belong to this ESP.
+            if (state == null)
+                return true;
+
+            return string.Equals(
+                state.DeviceId,
+                deviceId,
+                StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static WidgetState ResolveOnDevice(
+            string identifier,
+            DeviceRepository devices,
+            string deviceId)
+        {
+            var state = devices.GetByWidgetId(identifier);
+
+            if (state == null)
+                return null;
+
+            if (!string.Equals(state.DeviceId, deviceId, StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            return state;
+        }
+
+        private static bool HasAssignment(
+            IList<ScenarioAssignment> assignments,
+            string variable,
+            string value)
+        {
+            for (var i = 0; i < assignments.Count; i++)
+            {
+                if (string.Equals(assignments[i].Variable, variable, StringComparison.OrdinalIgnoreCase) &&
+                    IsValue(assignments[i].Value, value))
+                    return true;
+            }
+
+            return false;
         }
 
         private static void AddDependency(
@@ -434,19 +548,37 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             DeviceRepository devices,
             string deviceId)
         {
-            var state = devices.Get(deviceId, variable);
+            var state = ResolveOnDevice(variable, devices, deviceId);
             return state == null || string.IsNullOrWhiteSpace(state.Description)
                 ? variable
                 : state.Description;
         }
 
-        private static string ExtractScenario(string script)
+        private static IList<string> ExtractScenarioSections(string script)
         {
-            var marker = script.IndexOf("scenario=>", StringComparison.OrdinalIgnoreCase);
-            if (marker >= 0)
-                return script.Substring(marker + "scenario=>".Length);
+            var result = new List<string>();
+            var marker = "scenario=>";
+            var position = 0;
 
-            return script;
+            while (position < script.Length)
+            {
+                var start = script.IndexOf(marker, position, StringComparison.OrdinalIgnoreCase);
+                if (start < 0)
+                    break;
+
+                start += marker.Length;
+                var next = script.IndexOf(marker, start, StringComparison.OrdinalIgnoreCase);
+                if (next < 0)
+                    next = script.Length;
+
+                result.Add(script.Substring(start, next - start));
+                position = next;
+            }
+
+            if (result.Count == 0)
+                result.Add(script);
+
+            return result;
         }
 
         private void ParseBlock(

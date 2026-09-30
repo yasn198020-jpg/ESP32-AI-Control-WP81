@@ -295,6 +295,9 @@ namespace ESP32AIControl.WP81
             {
                 _commandExecutor.SetScenarioScript(ScenarioTextBox.Text ?? string.Empty);
 
+                Log("SCENARIO READ: разобрано правил = " +
+                    _commandExecutor.GetScenarioRuleCount().ToString(CultureInfo.InvariantCulture));
+
                 var open = VoiceOpenCommandBox.Text.Trim();
                 var close = VoiceCloseCommandBox.Text.Trim();
 
