@@ -10,6 +10,7 @@ using Windows.UI.Xaml.Controls.Primitives;
 using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Shapes;
 using Windows.Media.SpeechRecognition;
+using Windows.Storage.Pickers;
 using ESP32AIControl.WP81.Core;
 using ESP32AIControl.WP81.Core.Export;
 using ESP32AIControl.WP81.Core.History;
@@ -256,6 +257,77 @@ namespace ESP32AIControl.WP81
             _settings.Prefix = PrefixBox.Text.Trim().Trim('/');
             _settings.UserName = UserNameBox.Text.Trim();
             _settings.Password = PasswordBox.Password;
+        }
+
+        private async void ImportScenarioButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var picker = new FileOpenPicker();
+                picker.ViewMode = PickerViewMode.List;
+                picker.SuggestedStartLocation = PickerLocationId.DocumentsLibrary;
+                picker.FileTypeFilter.Add(".json");
+                picker.FileTypeFilter.Add(".txt");
+
+                var file = await picker.PickSingleFileAsync();
+                if (file == null)
+                    return;
+
+                var scenario = await Windows.Storage.FileIO.ReadTextAsync(file);
+                ScenarioTextBox.Text = scenario;
+                _appSettings.IoTManagerScenario = scenario;
+                _commandExecutor.SetScenarioScript(scenario);
+                await _settingsStore.SaveAsync(_appSettings);
+
+                SettingsStatus.Text = "Сценарий IoTManager загружен.";
+                Log("SCENARIO IMPORT: " + file.Name);
+            }
+            catch (Exception ex)
+            {
+                SettingsStatus.Text = "Ошибка импорта сценария: " + ex.Message;
+                Log("SCENARIO IMPORT ERROR: " + ex.Message);
+            }
+        }
+
+        private void TestScenarioButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                _commandExecutor.SetScenarioScript(ScenarioTextBox.Text ?? string.Empty);
+
+                var open = VoiceOpenCommandBox.Text.Trim();
+                var close = VoiceCloseCommandBox.Text.Trim();
+
+                if (string.IsNullOrEmpty(open) && string.IsNullOrEmpty(close))
+                    throw new InvalidOperationException("Заполните команды открытия/закрытия.");
+
+                if (!string.IsNullOrEmpty(open))
+                    LogScenarioPlan("OPEN", open);
+
+                if (!string.IsNullOrEmpty(close))
+                    LogScenarioPlan("CLOSE", close);
+
+                SettingsStatus.Text = "План проверен. См. диагностику MQTT.";
+            }
+            catch (Exception ex)
+            {
+                SettingsStatus.Text = "Ошибка проверки: " + ex.Message;
+                Log("SCENARIO TEST ERROR: " + ex.Message);
+            }
+        }
+
+        private void LogScenarioPlan(string name, string command)
+        {
+            Log("SCENARIO TEST " + name + ": " + command);
+
+            var plan = _commandExecutor.BuildPlan(command);
+
+            for (var i = 0; i < plan.Actions.Count; i++)
+            {
+                var action = plan.Actions[i];
+                Log("PLAN " + (action.IsDependency ? "DEP " : "ACT ") + action.Command +
+                    (string.IsNullOrEmpty(action.Reason) ? string.Empty : " | " + action.Reason));
+            }
         }
 
         private string GetAutoExportTag()
