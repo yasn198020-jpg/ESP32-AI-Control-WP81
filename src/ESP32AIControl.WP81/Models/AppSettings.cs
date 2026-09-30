@@ -17,6 +17,7 @@ namespace ESP32AIControl.WP81.Models
         [DataMember] public string AutoExportPeriod { get; set; }
         [DataMember] public string VoiceOpenCommand { get; set; }
         [DataMember] public string VoiceCloseCommand { get; set; }
+        [DataMember] public string IoTManagerScenario { get; set; }
 
         public AppSettings()
         {
@@ -31,6 +32,7 @@ namespace ESP32AIControl.WP81.Models
             AutoExportPeriod = "Never";
             VoiceOpenCommand = string.Empty;
             VoiceCloseCommand = string.Empty;
+            IoTManagerScenario = string.Empty;
         }
 
         public ESP32AIControl.WP81.Core.Mqtt.MqttSettings ToMqtt()
