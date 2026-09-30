@@ -115,14 +115,14 @@ namespace ESP32AIControl.WP81.Core.Scenarios
 
             if (targetIsControl)
             {
-                // For a virtual control such as vbtn78 the control state is the
-                // event that the IoTManager scenario consumes. Send it first.
-                // This avoids the current manual-mode rule briefly selecting
-                // the opposite relay when vbtn90 changes before vbtn78.
-                plan.Actions.Add(target);
-
+                // First satisfy the mode conditions discovered from the
+                // reverse scenario analysis, then fire the user-facing control
+                // event (for example vbtn78). This matches the IoTManager
+                // dependency chain: mode -> control -> actuator.
                 for (var i = 0; i < analysis.Dependencies.Count; i++)
                     AddScenarioDependency(plan, target.DeviceId, analysis.Dependencies[i]);
+
+                plan.Actions.Add(target);
             }
             else
             {
