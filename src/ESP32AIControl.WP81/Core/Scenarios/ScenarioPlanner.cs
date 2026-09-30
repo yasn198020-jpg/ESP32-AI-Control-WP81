@@ -55,11 +55,18 @@ namespace ESP32AIControl.WP81.Core.Scenarios
         };
 
         private readonly DeviceRepository _devices;
+        private IoTManagerScenarioAnalyzer _scenarioAnalyzer;
 
         public ScenarioPlanner(DeviceRepository devices)
         {
             if (devices == null) throw new ArgumentNullException("devices");
             _devices = devices;
+            _scenarioAnalyzer = new IoTManagerScenarioAnalyzer(string.Empty);
+        }
+
+        public void SetScenarioScript(string script)
+        {
+            _scenarioAnalyzer = new IoTManagerScenarioAnalyzer(script ?? string.Empty);
         }
 
         public ScenarioPlan BuildPlan(string command)
@@ -73,16 +80,104 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                 if (action == null)
                     throw new ArgumentException("Формат команды: device/widget=value", "command");
 
-                AddAutomationDependency(plan, action);
-                AddInterlockDependency(plan, action);
-
-                plan.Actions.Add(action);
+                if (!TryAddReverseScenarioPlan(plan, action))
+                {
+                    AddAutomationDependency(plan, action);
+                    AddInterlockDependency(plan, action);
+                    plan.Actions.Add(action);
+                }
             }
 
             if (plan.Actions.Count == 0)
                 throw new ArgumentException("Пустой сценарий.", "command");
 
             return plan;
+        }
+
+        private bool TryAddReverseScenarioPlan(
+            ScenarioPlan plan,
+            ScenarioAction target)
+        {
+            var targetState = _devices.Get(target.DeviceId, target.WidgetId);
+
+            if (targetState == null || _scenarioAnalyzer == null || !_scenarioAnalyzer.HasRules)
+                return false;
+
+            var analysis = _scenarioAnalyzer.AnalyzeControl(
+                targetState,
+                target.Value,
+                _devices);
+
+            if (analysis == null || string.IsNullOrEmpty(analysis.ActuatorVariable))
+                return false;
+
+            var targetIsControl = IsUserControl(targetState);
+
+            if (targetIsControl)
+            {
+                // For a virtual control such as vbtn78 the control state is the
+                // event that the IoTManager scenario consumes. Send it first.
+                // This avoids the current manual-mode rule briefly selecting
+                // the opposite relay when vbtn90 changes before vbtn78.
+                plan.Actions.Add(target);
+
+                for (var i = 0; i < analysis.Dependencies.Count; i++)
+                    AddScenarioDependency(plan, target.DeviceId, analysis.Dependencies[i]);
+            }
+            else
+            {
+                for (var i = 0; i < analysis.Dependencies.Count; i++)
+                    AddScenarioDependency(plan, target.DeviceId, analysis.Dependencies[i]);
+
+                plan.Actions.Add(target);
+            }
+
+            return true;
+        }
+
+        private void AddScenarioDependency(
+            ScenarioPlan plan,
+            string deviceId,
+            ScenarioDependency dependency)
+        {
+            if (dependency == null ||
+                string.IsNullOrEmpty(dependency.Variable) ||
+                ContainsAction(plan, deviceId, dependency.Variable, dependency.Value))
+                return;
+
+            var state = _devices.Get(deviceId, dependency.Variable);
+            if (state == null)
+                return;
+
+            if (IsValue(state.Value, dependency.Value))
+                return;
+
+            plan.Actions.Add(new ScenarioAction
+            {
+                Command = deviceId + "/" + dependency.Variable + "=" + dependency.Value,
+                DeviceId = deviceId,
+                WidgetId = dependency.Variable,
+                Value = dependency.Value,
+                Reason = dependency.Reason,
+                IsDependency = true
+            });
+        }
+
+        private static bool IsUserControl(WidgetState state)
+        {
+            if (state == null)
+                return false;
+
+            var type = (state.WidgetType ?? string.Empty).ToLowerInvariant();
+
+            return type == "vbutton" ||
+                   type == "vbtn" ||
+                   type == "buttonin" ||
+                   type == "toggle" ||
+                   type == "switch" ||
+                   type == "checkbox" ||
+                   type == "range" ||
+                   type == "slider";
         }
 
         private void AddAutomationDependency(ScenarioPlan plan, ScenarioAction target)
@@ -124,8 +219,6 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                 if (HasSharedObjectWords(targetDescription, w.Description))
                     score += 5;
 
-                // Device identity is only a secondary context hint. It is not
-                // required for dependency discovery.
                 if (string.Equals(w.DeviceId, target.DeviceId, StringComparison.OrdinalIgnoreCase))
                     score += 2;
 
@@ -145,10 +238,6 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             if (candidate == null)
                 return;
 
-            // The IoTManager configurations used by this application can expose
-            // an automatic/manual virtual flag with 0=automatic and 1=manual.
-            // We add the dependency only when the live state says automatic mode
-            // is active. If it is already manual, nothing is sent.
             if (!IsValue(candidate.Value, "0"))
                 return;
 
@@ -283,7 +372,9 @@ namespace ESP32AIControl.WP81.Core.Scenarios
 
         private static bool IsValue(string current, string expected)
         {
-            return string.Equals((current ?? string.Empty).Trim(), expected,
+            return string.Equals(
+                (current ?? string.Empty).Trim(),
+                (expected ?? string.Empty).Trim(),
                 StringComparison.OrdinalIgnoreCase);
         }
 
@@ -319,8 +410,7 @@ namespace ESP32AIControl.WP81.Core.Scenarios
 
             for (var i = 0; i < a.Count; i++)
                 for (var j = 0; j < b.Count; j++)
-                    if (string.Equals(a[i], b[j], StringComparison.Ordinal) &&
-                        a[i].Length >= 3)
+                    if (string.Equals(a[i], b[j], StringComparison.Ordinal) && a[i].Length >= 3)
                         return true;
 
             return false;
@@ -336,6 +426,7 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             for (var i = 0; i < parts.Length; i++)
             {
                 var word = parts[i];
+
                 if (word.Length < 3)
                     continue;
 
