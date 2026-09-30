@@ -95,6 +95,7 @@ namespace ESP32AIControl.WP81
             {
                 _appSettings = await _settingsStore.LoadAsync();
                 ApplySettingsToMqtt();
+                _commandExecutor.SetScenarioScript(_appSettings.IoTManagerScenario);
                 ApplySettingsToUi();
                 await _scheduler.InitializeAsync();
 
