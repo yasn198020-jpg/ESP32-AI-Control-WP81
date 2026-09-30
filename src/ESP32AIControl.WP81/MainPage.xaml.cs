@@ -939,6 +939,14 @@ namespace ESP32AIControl.WP81
                     }
                     else
                     {
+                        var plan = _commandExecutor.BuildPlan(parsed.Command);
+                        for (var p = 0; p < plan.Actions.Count; p++)
+                        {
+                            var planned = plan.Actions[p];
+                            Log("PLAN " + (planned.IsDependency ? "DEP " : "ACT ") + planned.Command +
+                                (string.IsNullOrEmpty(planned.Reason) ? string.Empty : " | " + planned.Reason));
+                        }
+
                         await _commandExecutor.ExecuteAsync(parsed.Command);
                         Log("VOICE EXECUTE: " + parsed.Command);
                     }
