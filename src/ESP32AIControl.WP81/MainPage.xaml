@@ -104,6 +104,16 @@
                         <TextBox x:Name="VoiceOpenCommandBox" Header="Команда «открой теплицу»" PlaceholderText="device/widget=1"/>
                         <TextBox x:Name="VoiceCloseCommandBox" Header="Команда «закрой теплицу»" PlaceholderText="device/widget=0"/>
 
+                        <TextBlock Text="Сценарий IoTManager" FontSize="24" Margin="0,16,0,4"/>
+                        <TextBlock Text="Вставьте сюда блок scenario=> из export.json. Марфа ищет зависимости от реле вверх по условиям сценария."
+                                   TextWrapping="Wrap" Opacity="0.7"/>
+                        <TextBox x:Name="ScenarioTextBox"
+                                 Header="Сценарий"
+                                 AcceptsReturn="True"
+                                 TextWrapping="Wrap"
+                                 Height="220"
+                                 VerticalScrollBarVisibility="Auto"/>
+
                         <Button Content="Сохранить настройки" Click="SaveSettingsButton_Click" Margin="0,12,0,8"/>
                         <TextBlock x:Name="SettingsStatus" Text="" TextWrapping="Wrap"/>
 
