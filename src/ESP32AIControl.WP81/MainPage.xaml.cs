@@ -190,10 +190,12 @@ namespace ESP32AIControl.WP81
                 _appSettings.AutoExportPeriod = GetAutoExportTag();
                 _appSettings.VoiceOpenCommand = VoiceOpenCommandBox.Text.Trim();
                 _appSettings.VoiceCloseCommand = VoiceCloseCommandBox.Text.Trim();
+                _appSettings.IoTManagerScenario = ScenarioTextBox.Text ?? string.Empty;
 
                 _voiceParser = new VoiceCommandParser(
                     _appSettings.VoiceOpenCommand,
                     _appSettings.VoiceCloseCommand);
+                _commandExecutor.SetScenarioScript(_appSettings.IoTManagerScenario);
 
                 await _settingsStore.SaveAsync(_appSettings);
                 await CleanupHistoryAsync();
@@ -234,6 +236,7 @@ namespace ESP32AIControl.WP81
             RetentionDaysBox.Text = _appSettings.RetentionDays.ToString(CultureInfo.InvariantCulture);
             VoiceOpenCommandBox.Text = _appSettings.VoiceOpenCommand;
             VoiceCloseCommandBox.Text = _appSettings.VoiceCloseCommand;
+            ScenarioTextBox.Text = _appSettings.IoTManagerScenario;
 
             foreach (var item in AutoExportBox.Items)
             {
