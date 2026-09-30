@@ -30,6 +30,11 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             _planner.SetScenarioScript(script);
         }
 
+        public int GetScenarioRuleCount()
+        {
+            return _planner.GetScenarioRuleCount();
+        }
+
         public ScenarioPlan BuildPlan(string command)
         {
             return _planner.BuildPlan(command);
