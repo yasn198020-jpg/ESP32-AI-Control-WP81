@@ -25,6 +25,16 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             _planner = new ScenarioPlanner(devices);
         }
 
+        public void SetScenarioScript(string script)
+        {
+            _planner.SetScenarioScript(script);
+        }
+
+        public ScenarioPlan BuildPlan(string command)
+        {
+            return _planner.BuildPlan(command);
+        }
+
         public async Task ExecuteAsync(string command)
         {
             if (string.IsNullOrWhiteSpace(command))
