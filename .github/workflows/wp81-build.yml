@@ -118,22 +118,32 @@ jobs:
             throw "Windows 8.1 MakePri.exe was not found."
           }
 
-          # Windows Phone 8.1 MakePri uses the phone-specific MRT extension DLL.
-          # Without it, the generic 8.1 MakePri rejects phone qualifiers such as Scale.
-          $phoneKitRoots = @(
-            "$pf86\Windows Phone Kits\8.1",
-            "$pf86\Microsoft SDKs\WindowsPhoneApp\v8.1",
-            "$pf86\Microsoft SDKs\Windows Phone\v8.1"
-          ) | Where-Object { Test-Path $_ }
+          # Windows Phone 8.1 MakePri needs the phone-specific MRT extension DLL
+          # with the SAME architecture as MakePri.exe. A mismatched x64 extension
+          # with the x86 MakePri produces "Invalid qualifier: Scale".
+          $isX86MakePri = $makepri -match "\\bin\\x86\\MakePri\.exe$"
+          $extensionCandidates = if ($isX86MakePri) {
+            @(
+              "$pf86\Windows Phone Kits\8.1\bin\x86\MrmEnvironmentExtDl.dll",
+              "$pf86\Windows Phone Kits\8.1\bin\x64\MrmEnvironmentExtDl.dll",
+              "$pf86\Microsoft SDKs\WindowsPhoneApp\v8.1\bin\x86\MrmEnvironmentExtDl.dll",
+              "$pf86\Microsoft SDKs\Windows Phone\v8.1\bin\x86\MrmEnvironmentExtDl.dll"
+            )
+          } else {
+            @(
+              "$pf86\Windows Phone Kits\8.1\bin\x64\MrmEnvironmentExtDl.dll",
+              "$pf86\Windows Phone Kits\8.1\bin\x86\MrmEnvironmentExtDl.dll",
+              "$pf86\Microsoft SDKs\WindowsPhoneApp\v8.1\bin\x64\MrmEnvironmentExtDl.dll",
+              "$pf86\Microsoft SDKs\Windows Phone\v8.1\bin\x64\MrmEnvironmentExtDl.dll"
+            )
+          }
 
-          $makepriExtension = $phoneKitRoots |
-            ForEach-Object {
-              Get-ChildItem $_ -Filter "MrmEnvironmentExtDl.dll" -Recurse -ErrorAction SilentlyContinue
-            } |
-            Select-Object -First 1 -ExpandProperty FullName
+          $makepriExtension = $extensionCandidates |
+            Where-Object { Test-Path $_ } |
+            Select-Object -First 1
 
           if (-not $makepriExtension) {
-            throw "Windows Phone 8.1 MrmEnvironmentExtDl.dll was not found."
+            throw "Windows Phone 8.1 MrmEnvironmentExtDl.dll matching MakePri architecture was not found."
           }
 
           Write-Host "Using WP8.1 MakePri: $makepri"
