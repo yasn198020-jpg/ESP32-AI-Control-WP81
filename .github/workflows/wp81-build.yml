@@ -250,6 +250,41 @@ jobs:
         run: |
           & "$env:MSBUILD_EXE" "$env:GITHUB_WORKSPACE\ESP32-AI-Control-WP81.sln" /m /nologo /verbosity:detailed /p:Configuration=Debug /p:Platform=ARM /p:AppxPackageSigningEnabled=False /p:RestorePackages=false /p:TargetFrameworkRootPath="$env:TARGET_FRAMEWORK_ROOT" /p:FrameworkPathOverride="$env:FRAMEWORK_PATH_OVERRIDE" /p:_TargetFrameworkDirectories="$env:FRAMEWORK_PATH_OVERRIDE" /p:_FullFrameworkReferenceAssemblyPaths="$env:FRAMEWORK_PATH_OVERRIDE" /p:MakePriExeFullPath="$env:MAKEPRI_EXE" /p:MakePriExtensionPath="$env:MAKEPRI_EXTENSION_PATH" /p:OutOfProcessMakePriExtensionPath="$env:MAKEPRI_EXTENSION_PATH" /p:InProcessMakePriExtensionPath="$env:MAKEPRI_EXTENSION_PATH" /p:AppxValidateAppxManifest=false /p:AppxPackageValidationEnabled=false /p:AppxStrictManifestValidationEnabled=false
 
+      - name: Locate WP81 install package
+        if: success()
+        shell: powershell
+        run: |
+          Write-Host "=== Searching for WP81 install packages ==="
+          $packages = Get-ChildItem "$env:GITHUB_WORKSPACE" -Recurse -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Extension.ToLowerInvariant() -in @(".appx",".xap",".appxbundle",".msixbundle") }
+
+          if (-not $packages) {
+            Write-Host "No .xap/.appx package was generated."
+            Write-Host "=== Candidate build/package directories ==="
+            Get-ChildItem "$env:GITHUB_WORKSPACE" -Recurse -Directory -ErrorAction SilentlyContinue |
+              Where-Object { $_.FullName -match "\\(bin|AppPackages|ARM|Debug|Release)(\\|$)" } |
+              Select-Object -First 200 FullName
+            throw "WP81 install package was not found."
+          }
+
+          Write-Host "=== WP81 install packages found ==="
+          $packages | ForEach-Object {
+            $size = [math]::Round($_.Length / 1MB, 2)
+            Write-Host ("{0} ({1} MB)" -f $_.FullName, $size)
+          }
+
+      - name: Upload WP81 install package
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: WP81-install
+          path: |
+            **/*.appx
+            **/*.xap
+            **/*.appxbundle
+            **/*.msixbundle
+          if-no-files-found: error
+
       - name: Upload MSBuild binary log
         if: failure()
         uses: actions/upload-artifact@v4
