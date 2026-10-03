@@ -16,41 +16,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install WP8.1 SDK payload
+      - name: Check WP8.1 SDK availability
         shell: powershell
         run: |
-          Write-Host "=== Installing WP8.1 SDK payload ==="
-          $dir = Join-Path $env:RUNNER_TEMP "WindowsPhone81SDK"
-          New-Item -ItemType Directory -Force -Path $dir | Out-Null
-
-          # Microsoft legacy WP8.1 payload links; no VS2013 ISO.
-          $packages = @(
-            @{ Name = "WindowsPhoneSdk-Desktop.msi"; Url = "https://go.microsoft.com/fwlink/?LinkId=351282&clcid=0x409" },
-            @{ Name = "WindowsPhoneSdk-Desktop-x64.msi"; Url = "https://go.microsoft.com/fwlink/?LinkId=351283&clcid=0x409" },
-            @{ Name = "WindowsPhoneSdk-x86.msi"; Url = "https://go.microsoft.com/fwlink/?LinkId=351284&clcid=0x409" },
-            @{ Name = "WindowsPhoneSdk-ARM.msi"; Url = "https://go.microsoft.com/fwlink/?LinkId=351286&clcid=0x409" }
-          )
-
-          foreach ($pkg in $packages) {
-            $out = Join-Path $dir $pkg.Name
-            Write-Host "Downloading $($pkg.Name)"
-            Invoke-WebRequest -Uri $pkg.Url -OutFile $out -UseBasicParsing
-            if (-not (Test-Path $out) -or (Get-Item $out).Length -lt 100KB) { throw "WP8.1 package download failed: $($pkg.Name)" }
-            Write-Host "$($pkg.Name): $((Get-Item $out).Length) bytes"
-          }
-
-          $install = @("WindowsPhoneSdk-Desktop.msi","WindowsPhoneSdk-Desktop-x64.msi","WindowsPhoneSdk-ARM.msi")
-          foreach ($name in $install) {
-            $msi = Join-Path $dir $name
-            Write-Host "Installing $name"
-            $p = Start-Process msiexec.exe -ArgumentList @("/i",$msi,"/qn","/norestart") -Wait -PassThru
-            if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { throw "MSI installation failed: $name, exit code $($p.ExitCode)" }
-          }
-
-          Write-Host "=== WP8.1 SDK after installation ==="
-          @("${env:ProgramFiles(x86)}\Microsoft SDKs\Windows Phone","${env:ProgramFiles(x86)}\Microsoft SDKs\WindowsPhoneApp") | ForEach-Object {
-            if (Test-Path $_) { Get-ChildItem $_ -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 30 FullName }
-            else { Write-Host "MISSING: $_" }
+          Write-Host "=== WP8.1 SDK availability ==="
+          Write-Host "Previous direct fwlink package URLs returned HTTP 404; do not download them."
+          @(
+            "${env:ProgramFiles(x86)}\Microsoft SDKs\Windows Phone",
+            "${env:ProgramFiles(x86)}\Microsoft SDKs\WindowsPhoneApp",
+            "${env:ProgramFiles(x86)}\Microsoft SDKs\Windows\v8.1",
+            "${env:ProgramFiles(x86)}\Microsoft SDKs\Windows\v8.1A"
+          ) | ForEach-Object {
+            if (Test-Path $_) { Write-Host "FOUND: $_" } else { Write-Host "MISSING: $_" }
           }
 
       - name: Inspect local toolchain
