@@ -86,6 +86,11 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             get { return _rules.Count > 0; }
         }
 
+        public int RuleCount
+        {
+            get { return _rules.Count; }
+        }
+
         public void Load(string script)
         {
             _rules.Clear();
