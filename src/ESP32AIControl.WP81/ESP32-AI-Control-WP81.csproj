@@ -9,6 +9,8 @@
     <TargetPlatformIdentifier>WindowsPhoneApp</TargetPlatformIdentifier>
     <TargetPlatformVersion>8.1</TargetPlatformVersion>
     <TargetPlatformMinVersion>8.1</TargetPlatformMinVersion>
+    <AppxOSMinVersion>6.3.1</AppxOSMinVersion>
+    <AppxOSMaxVersionTested>6.3.1</AppxOSMaxVersionTested>
     <MinimumVisualStudioVersion>12.0</MinimumVisualStudioVersion>
     <TargetFrameworkIdentifier>.NETCore</TargetFrameworkIdentifier>
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
@@ -85,11 +87,11 @@
   <!-- Modern VS18 Appx targets generate a Windows 10 PRI config even for this WP8.1 project.
        Patch the generated config immediately before MakePri runs, so the legacy
        Windows 8.1 MakePri receives the WP8.1 schema value (6.3.0). -->
-  <Target Name="WP81FixGeneratedPriConfig" AfterTargets="_GenerateProjectPriConfigurationFiles" BeforeTargets="_GenerateProjectPriFileCore">
+  <Target Name="WP81FixGeneratedPriConfig" AfterTargets="_GenerateProjectPriConfigurationFiles">
     <PropertyGroup>
       <WP81PriConfigFile>$(IntermediateOutputPath)priconfig.xml</WP81PriConfigFile>
     </PropertyGroup>
-    <Exec Condition="Exists('$(WP81PriConfigFile)')" Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;$p='$(WP81PriConfigFile)'; $s=[IO.File]::ReadAllText($p); $s=$s -replace 'targetOsVersion=&quot;10\.0\.0&quot;','targetOsVersion=&quot;6.3.0&quot;'; $s=$s -replace 'targetOsVersion=''10\.0\.0''','targetOsVersion=''6.3.0'''; [IO.File]::WriteAllText($p,$s,(New-Object Text.UTF8Encoding($false)))&quot;" />
+    <Exec Condition="Exists('$(WP81PriConfigFile)')" Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;$p='$(WP81PriConfigFile)'; $s=[IO.File]::ReadAllText($p); $s=$s -replace 'targetOsVersion=&quot;10\.0\.0&quot;','targetOsVersion=&quot;6.3.1&quot;'; $s=$s -replace 'targetOsVersion=''10\.0\.0''','targetOsVersion=''6.3.1'''; [IO.File]::WriteAllText($p,$s,(New-Object Text.UTF8Encoding($false)))&quot;" />
   </Target>
 
   <Target Name="WP81StageWin10ContractsForXaml" BeforeTargets="ImplicitlyExpandTargetPlatform;MarkupCompilePass1">
