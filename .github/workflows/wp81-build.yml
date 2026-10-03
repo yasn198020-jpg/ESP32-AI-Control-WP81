@@ -16,6 +16,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install WP8.1 development tools payload
+        shell: powershell
+        timeout-minutes: 20
+        run: |
+          # Keep the actual build on the runner's current VS/MSBuild.
+          # Install only the legacy Windows 8.1 / Windows Phone 8.0/8.1
+          # development payload required by the XAML compiler.
+          $installer = Join-Path $env:RUNNER_TEMP "vs_community_2015.exe"
+          Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/p/?LinkId=534599" -OutFile $installer
+          & $installer /InstallSelectableItems ToolsForWin81_WP80_WP81;NativeLanguageSupport_Group /Passive /NoRestart /Log $env:RUNNER_TEMP\vs2015-wp81.log
+          $exitCode = $LASTEXITCODE
+          if ($exitCode -notin @(0,3010)) {
+            Get-Content $env:RUNNER_TEMP\vs2015-wp81.log -Tail 200 -ErrorAction SilentlyContinue
+            throw "WP8.1 development tools installation failed with exit code $exitCode"
+          }
+
       - name: Check WP8.1 SDK availability
         shell: powershell
         run: |
