@@ -1,0 +1,18 @@
+name: Actions Smoke Test
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: windows-2025-vs2026
+    steps:
+      - name: Runner smoke
+        shell: powershell
+        run: |
+          Write-Host "GitHub Actions runner started"
+          Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber
+          Write-Host "Runner image: $env:ImageOS"
+          Write-Host "Runner image version: $env:ImageVersion"
