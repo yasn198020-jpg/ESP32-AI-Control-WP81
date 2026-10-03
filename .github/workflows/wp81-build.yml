@@ -167,6 +167,21 @@ jobs:
             Write-Host "No Facades directory found in reference package."
           }
 
+          # This reference is required by the WP8.1 XAML compiler and is not
+          # present in the plain net45 reference-assemblies NuGet package.
+          # The WP8.1 tooling/Windows installation supplies it on the runner.
+          $uiXaml = Get-ChildItem @(
+            "$env:ProgramFiles(x86)\Reference Assemblies\Microsoft\Framework\.NETCore\v4.5",
+            "$env:WINDIR\Microsoft.NET\Framework\v4.0.30319",
+            "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319"
+          ) -Filter "System.Runtime.WindowsRuntime.UI.Xaml.dll" -Recurse -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+          if (-not $uiXaml) {
+            throw "System.Runtime.WindowsRuntime.UI.Xaml.dll was not found on the runner after WP8.1 SDK installation."
+          }
+          Copy-Item $uiXaml.FullName (Join-Path $target "System.Runtime.WindowsRuntime.UI.Xaml.dll") -Force
+          Write-Host "Staged System.Runtime.WindowsRuntime.UI.Xaml.dll from $($uiXaml.FullName)"
+
           # MSBuild resolves TargetFrameworkIdentifier=.NETCore through framework-list metadata.
           $redist = Join-Path $target "RedistList"
           New-Item -ItemType Directory -Force -Path $redist | Out-Null
