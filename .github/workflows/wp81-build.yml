@@ -24,47 +24,28 @@ jobs:
           Write-Host "=== Visual Studio ==="
           & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -format json
           Write-Host "=== MSBuild candidates ==="
-          Get-ChildItem "$env:ProgramFiles\Microsoft Visual Studio","${env:ProgramFiles(x86)}\Microsoft Visual Studio","${env:ProgramFiles(x86)}\MSBuild" -Filter MSBuild.exe -Recurse -ErrorAction SilentlyContinue |
-            Select-Object FullName
+          Get-ChildItem "$env:ProgramFiles\Microsoft Visual Studio","${env:ProgramFiles(x86)}\Microsoft Visual Studio","${env:ProgramFiles(x86)}\MSBuild" -Filter MSBuild.exe -Recurse -ErrorAction SilentlyContinue | Select-Object FullName
           Write-Host "=== SDKs ==="
-          Get-ChildItem "${env:ProgramFiles(x86)}\Microsoft SDKs\Windows" -Directory -ErrorAction SilentlyContinue |
-            Select-Object FullName
+          Get-ChildItem "${env:ProgramFiles(x86)}\Microsoft SDKs\Windows" -Directory -ErrorAction SilentlyContinue | Select-Object FullName
           Write-Host "=== Windows Phone / WP8.1 ==="
-          @(
-            "${env:ProgramFiles(x86)}\Microsoft SDKs\Windows Phone",
-            "${env:ProgramFiles(x86)}\Microsoft SDKs\WindowsPhoneApp",
-            "${env:ProgramFiles(x86)}\Microsoft SDKs\Windows\v8.1",
-            "${env:ProgramFiles(x86)}\Microsoft SDKs\Windows\v8.1A"
-          ) | ForEach-Object {
-            if (Test-Path $_) {
-              Write-Host "FOUND: $_"
-              Get-ChildItem $_ -Directory -ErrorAction SilentlyContinue | Select-Object FullName
-            } else {
-              Write-Host "MISSING: $_"
-            }
+          @("${env:ProgramFiles(x86)}\Microsoft SDKs\Windows Phone","${env:ProgramFiles(x86)}\Microsoft SDKs\WindowsPhoneApp","${env:ProgramFiles(x86)}\Microsoft SDKs\Windows\v8.1","${env:ProgramFiles(x86)}\Microsoft SDKs\Windows\v8.1A") | ForEach-Object {
+            if (Test-Path $_) { Write-Host "FOUND: $_"; Get-ChildItem $_ -Directory -ErrorAction SilentlyContinue | Select-Object FullName }
+            else { Write-Host "MISSING: $_" }
           }
           Write-Host "=== XAML targets ==="
-          Get-ChildItem "$env:ProgramFiles\Microsoft Visual Studio","${env:ProgramFiles(x86)}\Microsoft Visual Studio" -Filter Microsoft.Windows.UI.Xaml.CSharp.Targets -Recurse -ErrorAction SilentlyContinue |
-            Select-Object FullName
+          Get-ChildItem "$env:ProgramFiles\Microsoft Visual Studio","${env:ProgramFiles(x86)}\Microsoft Visual Studio" -Filter Microsoft.Windows.UI.Xaml.CSharp.Targets -Recurse -ErrorAction SilentlyContinue | Select-Object FullName
 
       - name: Select latest MSBuild
         shell: powershell
         run: |
           $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
           $vs = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -property installationPath
-          if (-not $vs) {
-            throw "Visual Studio with MSBuild was not found."
-          }
-
+          if (-not $vs) { throw "Visual Studio with MSBuild was not found." }
           $msbuild = Join-Path $vs "MSBuild\Current\Bin\MSBuild.exe"
           if (-not (Test-Path $msbuild)) {
-            $msbuild = Get-ChildItem $vs -Filter MSBuild.exe -Recurse -ErrorAction SilentlyContinue |
-              Select-Object -First 1 -ExpandProperty FullName
+            $msbuild = Get-ChildItem $vs -Filter MSBuild.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
           }
-          if (-not $msbuild) {
-            throw "MSBuild executable was not found under $vs"
-          }
-
+          if (-not $msbuild) { throw "MSBuild executable was not found under $vs" }
           Write-Host "Using Visual Studio: $vs"
           Write-Host "Using MSBuild: $msbuild"
           & $msbuild -version -nologo
@@ -74,11 +55,13 @@ jobs:
         shell: powershell
         run: |
           $root = Join-Path $env:GITHUB_WORKSPACE ".ci\reference-assemblies"
-          $zip = Join-Path $env:RUNNER_TEMP "net45-ref.nupkg"
+          $nupkg = Join-Path $env:RUNNER_TEMP "net45-ref.nupkg"
+          $zip = Join-Path $env:RUNNER_TEMP "net45-ref.zip"
           $extract = Join-Path $env:RUNNER_TEMP "net45-ref"
 
           New-Item -ItemType Directory -Force -Path $root | Out-Null
-          Invoke-WebRequest -Uri "https://www.nuget.org/api/v2/package/Microsoft.NETFramework.ReferenceAssemblies.net45/1.0.3" -OutFile $zip
+          Invoke-WebRequest -Uri "https://www.nuget.org/api/v2/package/Microsoft.NETFramework.ReferenceAssemblies.net45/1.0.3" -OutFile $nupkg
+          Copy-Item $nupkg $zip -Force
           Expand-Archive -Path $zip -DestinationPath $extract -Force
 
           $source = Join-Path $extract "build\.NETFramework\v4.5"
@@ -90,10 +73,8 @@ jobs:
 
           New-Item -ItemType Directory -Force -Path $target | Out-Null
           Copy-Item (Join-Path $source "*") $target -Recurse -Force
-
           Write-Host "Using .NET 4.5 reference assemblies: $target"
           Get-ChildItem $target | Select-Object Name
-
           "TARGET_FRAMEWORK_ROOT=$root" | Out-File $env:GITHUB_ENV -Encoding utf8
           "FRAMEWORK_PATH_OVERRIDE=$target" | Out-File $env:GITHUB_ENV -Encoding utf8
 
