@@ -104,11 +104,14 @@ jobs:
         shell: powershell
         run: |
           $pf86 = [Environment]::GetEnvironmentVariable("ProgramFiles(x86)")
+          # Prefer the x86 Windows 8.1 MakePri on the modern Server 2025 runner.
+          # The x64 legacy MakePri can fail with 0x800700c1 (bad executable format)
+          # even though the file exists. x86 runs correctly under WoW64.
           $makepriCandidates = @(
-            "$pf86\Windows Kits\8.1\bin\x64\MakePri.exe",
             "$pf86\Windows Kits\8.1\bin\x86\MakePri.exe",
-            "$pf86\Windows Kits\8.1A\bin\x64\MakePri.exe",
-            "$pf86\Windows Kits\8.1A\bin\x86\MakePri.exe"
+            "$pf86\Windows Kits\8.1A\bin\x86\MakePri.exe",
+            "$pf86\Windows Kits\8.1\bin\x64\MakePri.exe",
+            "$pf86\Windows Kits\8.1A\bin\x64\MakePri.exe"
           )
           $makepri = $makepriCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
           if (-not $makepri) {
