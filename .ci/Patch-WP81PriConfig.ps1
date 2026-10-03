@@ -23,22 +23,9 @@ $resources.SetAttribute("targetOsVersion", "6.3.0")
 
 $indexes = $xml.SelectNodes("//*[local-name()='index']")
 foreach ($index in $indexes) {
-  if ($index.GetAttribute("root") -eq "") {
-    $index.SetAttribute("root", "\")
-  }
-}
+  $index.SetAttribute("root", "")
 
-# Modern VS XAML/Appx targets emit Windows 10-style default qualifiers.
-# The legacy Windows Phone 8.1 MakePri accepts the phone schema but rejects
-# the Scale qualifier unless the matching phone resource qualification stack
-# is present. This project contains no scale-qualified resource variants, so
-# remove only the generated Scale defaults for WP8.1 packaging.
-$scaleNodes = $xml.SelectNodes("/*[local-name()='resources']/*[local-name()='index']/*[local-name()='default']/*[local-name()='qualifier'][@name='Scale']")
-$scaleCount = @($scaleNodes).Count
-foreach ($node in @($scaleNodes)) {
-  $node.ParentNode.RemoveChild($node) | Out-Null
 }
-Write-Host "Removed WP8.1-incompatible Scale default qualifiers: $scaleCount"
 
 $settings = New-Object System.Xml.XmlWriterSettings
 $settings.Encoding = New-Object System.Text.UTF8Encoding($false)
@@ -58,6 +45,12 @@ $verify.Load($Path)
 $root = $verify.SelectSingleNode("/*[local-name()='resources']")
 $after = $root.GetAttribute("targetOsVersion")
 Write-Host "PRI targetOsVersion after patch: $after"
+
+$badRoots = @($verify.SelectNodes("//*[local-name()='index']") | Where-Object { $_.GetAttribute("root") -ne "" })
+if ($badRoots.Count -ne 0) {
+  throw "PRI config still contains an index with root different from \": $Path"
+}
+Write-Host "PRI index roots verified: \" 
 
 if ($after -ne "6.3.0") {
   throw "PRI config targetOsVersion is '$after'; expected 6.3.0 for Windows 8.1 MakePri."
