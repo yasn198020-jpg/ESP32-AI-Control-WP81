@@ -170,14 +170,24 @@ jobs:
           # This reference is required by the WP8.1 XAML compiler and is not
           # present in the plain net45 reference-assemblies NuGet package.
           # The WP8.1 tooling/Windows installation supplies it on the runner.
-          $uiXaml = Get-ChildItem @(
-            "$env:ProgramFiles(x86)\Reference Assemblies\Microsoft\Framework\.NETCore\v4.5",
-            "$env:WINDIR\Microsoft.NET\Framework\v4.0.30319",
-            "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319"
-          ) -Filter "System.Runtime.WindowsRuntime.UI.Xaml.dll" -Recurse -ErrorAction SilentlyContinue |
+          $sdkRoots = @(
+            "$env:ProgramFiles(x86)\Microsoft SDKs\WindowsPhoneApp",
+            "$env:ProgramFiles(x86)\Reference Assemblies\Microsoft\Framework\WindowsPhone",
+            "$env:ProgramFiles(x86)\Windows Phone Silverlight Kits"
+          ) | Where-Object { Test-Path $_ }
+
+          $runtimeWinRt = Get-ChildItem $sdkRoots -Filter "System.Runtime.WindowsRuntime.dll" -Recurse -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+          if (-not $runtimeWinRt) {
+            throw "System.Runtime.WindowsRuntime.dll was not found in the installed WP8.1 SDK."
+          }
+          Copy-Item $runtimeWinRt.FullName (Join-Path $target "System.Runtime.WindowsRuntime.dll") -Force
+          Write-Host "Staged System.Runtime.WindowsRuntime.dll from $($runtimeWinRt.FullName)"
+
+          $uiXaml = Get-ChildItem $sdkRoots -Filter "System.Runtime.WindowsRuntime.UI.Xaml.dll" -Recurse -ErrorAction SilentlyContinue |
             Select-Object -First 1
           if (-not $uiXaml) {
-            throw "System.Runtime.WindowsRuntime.UI.Xaml.dll was not found on the runner after WP8.1 SDK installation."
+            throw "System.Runtime.WindowsRuntime.UI.Xaml.dll was not found in the installed WP8.1 SDK."
           }
           Copy-Item $uiXaml.FullName (Join-Path $target "System.Runtime.WindowsRuntime.UI.Xaml.dll") -Force
           Write-Host "Staged System.Runtime.WindowsRuntime.UI.Xaml.dll from $($uiXaml.FullName)"
