@@ -73,6 +73,11 @@ jobs:
 
           New-Item -ItemType Directory -Force -Path $target | Out-Null
           Copy-Item (Join-Path $source "*") $target -Recurse -Force
+          $redist = Join-Path $target "RedistList"
+          New-Item -ItemType Directory -Force -Path $redist | Out-Null
+          @'
+<List Name=".NETCore,Version=v4.5" />
+'@ | Set-Content (Join-Path $redist "FrameworkList.xml") -Encoding UTF8
           Write-Host "Using .NET 4.5 reference assemblies: $target"
           Get-ChildItem $target | Select-Object Name
           "TARGET_FRAMEWORK_ROOT=$root" | Out-File $env:GITHUB_ENV -Encoding utf8
