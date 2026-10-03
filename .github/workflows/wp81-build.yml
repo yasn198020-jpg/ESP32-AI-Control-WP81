@@ -29,11 +29,14 @@ jobs:
           # installation finishes. Start-Process -Wait gives us the real installer exit code.
           $log = Join-Path $env:RUNNER_TEMP "vs2015-wp81.log"
           $p = Start-Process -FilePath $installer -ArgumentList @(
-            "/InstallSelectableItems", "Win81SDK;NativeLanguageSupport_Group",
+            "/InstallSelectableItems", "ToolsForWin81_WP80_WP81;NativeLanguageSupport_VC",
             "/Passive", "/NoRestart", "/Log", $log
           ) -Wait -PassThru
           $exitCode = $p.ExitCode
           Write-Host "VS2015 bootstrapper exit code: $exitCode"
+          Write-Host "=== VS2015 WP81 package detection ==="
+          Get-ChildItem "C:\ProgramData\Package Cache" -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match "WindowsPhone|WP_SDK|8\.1\.14194" } | Select-Object FullName
+          if (Test-Path $log) { Select-String -Path $log -Pattern "WindowsPhone81SDK|ToolsForWin81_WP80_WP81|Package Cache|Error|failed" | Select-Object -Last 100 | ForEach-Object { Write-Host $_.Line } }
           if ($exitCode -notin @(0,3010)) {
             Get-Content $log -Tail 300 -ErrorAction SilentlyContinue
             throw "WP8.1 development tools installation failed with exit code $exitCode"
