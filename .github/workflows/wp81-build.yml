@@ -157,6 +157,15 @@ jobs:
 
           New-Item -ItemType Directory -Force -Path $target | Out-Null
           Copy-Item (Join-Path $source "*") $target -Recurse -Force
+          # XAML compiler resolves facade assemblies (System.Runtime, etc.)
+          # from the framework root, not only from the package's Facades folder.
+          $facades = Join-Path $extract "build\.NETFramework\v4.5\Facades"
+          if (Test-Path $facades) {
+            Copy-Item (Join-Path $facades "*.dll") $target -Force -ErrorAction Stop
+            Write-Host "Copied .NET facade assemblies into framework root."
+          } else {
+            Write-Host "No Facades directory found in reference package."
+          }
 
           # MSBuild resolves TargetFrameworkIdentifier=.NETCore through framework-list metadata.
           $redist = Join-Path $target "RedistList"
