@@ -22,19 +22,19 @@ jobs:
           Write-Host "=== OS ==="
           Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber
           Write-Host "=== Visual Studio ==="
-          & "$env:ProgramFiles(x86)\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -format json
+          & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -format json
           Write-Host "=== MSBuild candidates ==="
-          Get-ChildItem "$env:ProgramFiles\Microsoft Visual Studio","$env:ProgramFiles(x86)\Microsoft Visual Studio","$env:ProgramFiles(x86)\MSBuild" -Filter MSBuild.exe -Recurse -ErrorAction SilentlyContinue |
+          Get-ChildItem "$env:ProgramFiles\Microsoft Visual Studio","${env:ProgramFiles(x86)}\Microsoft Visual Studio","${env:ProgramFiles(x86)}\MSBuild" -Filter MSBuild.exe -Recurse -ErrorAction SilentlyContinue |
             Select-Object FullName
           Write-Host "=== SDKs ==="
-          Get-ChildItem "$env:ProgramFiles(x86)\Microsoft SDKs\Windows" -Directory -ErrorAction SilentlyContinue |
+          Get-ChildItem "${env:ProgramFiles(x86)}\Microsoft SDKs\Windows" -Directory -ErrorAction SilentlyContinue |
             Select-Object FullName
           Write-Host "=== Windows Phone / WP8.1 ==="
           @(
-            "$env:ProgramFiles(x86)\Microsoft SDKs\Windows Phone",
-            "$env:ProgramFiles(x86)\Microsoft SDKs\WindowsPhoneApp",
-            "$env:ProgramFiles(x86)\Microsoft SDKs\Windows\v8.1",
-            "$env:ProgramFiles(x86)\Microsoft SDKs\Windows\v8.1A"
+            "${env:ProgramFiles(x86)}\Microsoft SDKs\Windows Phone",
+            "${env:ProgramFiles(x86)}\Microsoft SDKs\WindowsPhoneApp",
+            "${env:ProgramFiles(x86)}\Microsoft SDKs\Windows\v8.1",
+            "${env:ProgramFiles(x86)}\Microsoft SDKs\Windows\v8.1A"
           ) | ForEach-Object {
             if (Test-Path $_) {
               Write-Host "FOUND: $_"
@@ -44,13 +44,13 @@ jobs:
             }
           }
           Write-Host "=== XAML targets ==="
-          Get-ChildItem "$env:ProgramFiles\Microsoft Visual Studio","$env:ProgramFiles(x86)\Microsoft Visual Studio" -Filter Microsoft.Windows.UI.Xaml.CSharp.Targets -Recurse -ErrorAction SilentlyContinue |
+          Get-ChildItem "$env:ProgramFiles\Microsoft Visual Studio","${env:ProgramFiles(x86)}\Microsoft Visual Studio" -Filter Microsoft.Windows.UI.Xaml.CSharp.Targets -Recurse -ErrorAction SilentlyContinue |
             Select-Object FullName
 
       - name: Select latest MSBuild
         shell: powershell
         run: |
-          $vswhere = "$env:ProgramFiles(x86)\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
           $vs = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -property installationPath
           if (-not $vs) {
             throw "Visual Studio with MSBuild was not found."
