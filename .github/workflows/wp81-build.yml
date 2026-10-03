@@ -1,0 +1,88 @@
+name: WP81 Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2019
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show runner
+        shell: powershell
+        run: |
+          Write-Host "OS:"
+          Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber
+          Write-Host "PowerShell: $($PSVersionTable.PSVersion)"
+          Write-Host "Git: $(git --version)"
+
+      - name: Install legacy WP81 build toolchain
+        shell: powershell
+        run: |
+          choco install visualstudio2015community --version=2015.03.03 -y --no-progress
+          choco install windows-sdk-8.1 --version=8.100.26654.0 -y --no-progress
+
+      - name: Locate MSBuild and WP81 SDK
+        shell: powershell
+        run: |
+          $msbuild = @(
+            "$env:ProgramFiles(x86)\MSBuild\14.0\Bin\MSBuild.exe",
+            "$env:ProgramFiles(x86)\Microsoft Visual Studio 14.0\MSBuild\14.0\Bin\MSBuild.exe"
+          ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+          if (-not $msbuild) {
+            $msbuild = Get-ChildItem "$env:ProgramFiles(x86)\Microsoft Visual Studio" -Filter MSBuild.exe -Recurse -ErrorAction SilentlyContinue |
+              Where-Object { $_.FullName -match "\\14\.0\\.*\\MSBuild\.exe$" } |
+              Select-Object -First 1 -ExpandProperty FullName
+          }
+
+          if (-not $msbuild) {
+            throw "MSBuild 14.0 was not installed/found."
+          }
+
+          $version = & $msbuild -version -nologo
+          Write-Host "MSBuild: $msbuild"
+          Write-Host "MSBuild version: $version"
+          "MSBUILD_EXE=$msbuild" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8
+
+          $phoneRoots = @(
+            "$env:ProgramFiles(x86)\Microsoft SDKs\Windows Phone",
+            "$env:ProgramFiles(x86)\Microsoft SDKs\WindowsPhoneApp",
+            "$env:ProgramFiles(x86)\Microsoft SDKs\Windows\v8.1"
+          )
+          foreach ($root in $phoneRoots) {
+            if (Test-Path $root) {
+              Write-Host "SDK root: $root"
+              Get-ChildItem $root -Directory -ErrorAction SilentlyContinue | Select-Object FullName
+            }
+          }
+
+          $xamlTargets = Get-ChildItem "$env:ProgramFiles(x86)\Microsoft Visual Studio" -Filter Microsoft.Windows.UI.Xaml.CSharp.Targets -Recurse -ErrorAction SilentlyContinue
+          if ($xamlTargets) {
+            $xamlTargets | Select-Object -First 20 -ExpandProperty FullName
+          } else {
+            Write-Warning "WP8.1 XAML targets were not found."
+          }
+
+      - name: Build WP81 Debug ARM
+        shell: powershell
+        run: |
+          & "$env:MSBUILD_EXE" "$env:GITHUB_WORKSPACE\ESP32-AI-Control-WP81.sln" /m /nologo /verbosity:minimal /p:Configuration=Debug /p:Platform=ARM /p:AppxPackageSigningEnabled=False /p:RestorePackages=false
+
+      - name: Upload build logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wp81-build-logs
+          path: |
+            **/msbuild*.log
+            **/bin/**/*.log
+          if-no-files-found: ignore
