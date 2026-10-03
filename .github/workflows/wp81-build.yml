@@ -16,64 +16,70 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install WP8.1 development tools payload
+      - name: Install WP8.1 SDK payload from official VS2015 Update 3 ISO
         shell: powershell
-        timeout-minutes: 20
+        timeout-minutes: 30
         run: |
-          # Keep the actual build on the runner's current VS/MSBuild.
-          # Install only the legacy Windows 8.1 / Windows Phone 8.0/8.1
-          # development payload required by the XAML compiler.
-          $installer = Join-Path $env:RUNNER_TEMP "vs_community_2015.exe"
-          Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/p/?LinkId=534599" -OutFile $installer
-          # The legacy bootstrapper can spawn a child installer and return before the
-          # installation finishes. Start-Process -Wait gives us the real installer exit code.
-          $log = Join-Path $env:RUNNER_TEMP "vs2015-wp81.log"
-          $p = Start-Process -FilePath $installer -ArgumentList @(
-            "/InstallSelectableItems", "ToolsForWin81_WP80_WP81;NativeLanguageSupport_VC",
-            "/Passive", "/NoRestart", "/Log", $log
-          ) -Wait -PassThru
-          $exitCode = $p.ExitCode
-          Write-Host "VS2015 bootstrapper exit code: $exitCode"
-          Write-Host "=== VS2015 WP81 package detection ==="
-          Get-ChildItem "C:\ProgramData\Package Cache" -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match "WindowsPhone|WP_SDK|8\.1\.14194" } | Select-Object FullName
-          if (Test-Path $log) { Select-String -Path $log -Pattern "WindowsPhone81SDK|ToolsForWin81_WP80_WP81|Package Cache|Error|failed" | Select-Object -Last 100 | ForEach-Object { Write-Host $_.Line } }
-          if ($exitCode -notin @(0,3010)) {
-            Get-Content $log -Tail 300 -ErrorAction SilentlyContinue
-            throw "WP8.1 development tools installation failed with exit code $exitCode"
+          # The VS2015 web bootstrapper cannot fetch its legacy prerequisites on
+          # Windows Server 2025. Use the official offline VS2015 Update 3 ISO.
+          # We do NOT install VS2015; we only install the WP8.1 SDK MSIs.
+          $iso = Join-Path $env:RUNNER_TEMP "vs2015.3.com_enu.iso"
+          $url = "https://download.microsoft.com/download/b/e/d/bedddfc4-55f4-4748-90a8-ffe38a40e89f/vs2015.3.com_enu.iso"
+          Write-Host "Downloading official VS2015 Update 3 ISO..."
+          Invoke-WebRequest -Uri $url -OutFile $iso
+          if (-not (Test-Path $iso)) { throw "VS2015 Update 3 ISO was not downloaded." }
+
+          Mount-DiskImage -ImagePath $iso -StorageType ISO -Access ReadOnly
+          $drive = (Get-DiskImage -ImagePath $iso | Get-Volume).DriveLetter
+          if (-not $drive) { throw "Could not determine mounted ISO drive letter." }
+          $root = $drive + ":\"
+          Write-Host "ISO mounted at $root"
+
+          $msis = Get-ChildItem $root -Filter "WindowsPhoneSdk-*.msi" -Recurse -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -in @(
+              "WindowsPhoneSdk-Desktop.msi",
+              "WindowsPhoneSdk-Desktop-x64.msi",
+              "WindowsPhoneSdk-x86.msi",
+              "WindowsPhoneSdk-ARM.msi"
+            ) } |
+            Sort-Object FullName -Unique
+
+          Write-Host "=== WP8.1 MSI payloads found on ISO ==="
+          $msis | ForEach-Object { Write-Host $_.FullName }
+          if (-not $msis) {
+            Get-ChildItem $root -Recurse -ErrorAction SilentlyContinue |
+              Where-Object { $_.Name -match "WindowsPhone|WP.*SDK" } |
+              Select-Object -First 100 FullName
+            Dismount-DiskImage -ImagePath $iso
+            throw "Official VS2015 Update 3 ISO does not contain the expected WP8.1 MSI payloads."
           }
 
-      - name: Install legacy Windows 8.1 SDK and cached WP8.1 MSIs
+          foreach ($msi in $msis) {
+            Write-Host "Installing WP8.1 payload: $($msi.FullName)"
+            $p = Start-Process -FilePath "msiexec.exe" -ArgumentList @("/i",$msi.FullName,"/qn","/norestart","REBOOT=ReallySuppress") -Wait -PassThru
+            Write-Host "$($msi.Name) exit code: $($p.ExitCode)"
+            if ($p.ExitCode -notin @(0,3010)) {
+              Dismount-DiskImage -ImagePath $iso
+              throw "WP8.1 MSI failed: $($msi.Name), exit code $($p.ExitCode)"
+            }
+          }
+
+          Dismount-DiskImage -ImagePath $iso
+          Remove-Item $iso -Force -ErrorAction SilentlyContinue
+          Write-Host "WP8.1 payload installation from ISO completed."
+
+      - name: Install Windows 8.1 SDK
         shell: powershell
-        timeout-minutes: 20
+        timeout-minutes: 15
         run: |
-          # Microsoft documents the Windows 8.1 SDK as the base SDK and the
-          # Windows Phone 8.1 development tools as the companion payload.
           $sdkSetup = Join-Path $env:RUNNER_TEMP "sdksetup-81.exe"
           Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/p/?LinkId=323507" -OutFile $sdkSetup
           $p = Start-Process -FilePath $sdkSetup -ArgumentList @("/quiet","/norestart") -Wait -PassThru
           Write-Host "Windows 8.1 SDK setup exit code: $($p.ExitCode)"
-          if ($p.ExitCode -notin @(0,3010)) { throw "Windows 8.1 SDK setup failed with exit code $($p.ExitCode)" }
-
-          $cache = "C:\ProgramData\Package Cache"
-          $msis = Get-ChildItem $cache -Filter "WindowsPhoneSdk-*.msi" -Recurse -ErrorAction SilentlyContinue |
-            Where-Object { $_.Name -in @("WindowsPhoneSdk-Desktop.msi","WindowsPhoneSdk-Desktop-x64.msi","WindowsPhoneSdk-x86.msi","WindowsPhoneSdk-ARM.msi") } |
-            Sort-Object FullName -Unique
-          if (-not $msis) { throw "VS2015 bootstrapper did not leave Windows Phone 8.1 MSI payloads in Package Cache." }
-
-          foreach ($msi in $msis) {
-            Write-Host "Installing cached WP8.1 payload: $($msi.FullName)"
-            $p = Start-Process -FilePath "msiexec.exe" -ArgumentList @("/i",$msi.FullName,"/qn","/norestart","REBOOT=ReallySuppress") -Wait -PassThru
-            Write-Host "$($msi.Name) exit code: $($p.ExitCode)"
-            if ($p.ExitCode -notin @(0,3010)) { throw "WP8.1 MSI failed: $($msi.Name), exit code $($p.ExitCode)" }
+          if ($p.ExitCode -notin @(0,3010)) {
+            throw "Windows 8.1 SDK setup failed with exit code $($p.ExitCode)"
           }
 
-          Write-Host "=== Post-install SDK paths ==="
-          @(
-            "${env:ProgramFiles(x86)}\Microsoft SDKs\WindowsPhoneApp",
-            "${env:ProgramFiles(x86)}\Microsoft SDKs\Windows Phone",
-            "${env:ProgramFiles(x86)}\Microsoft SDKs\Windows\v8.1",
-            "${env:ProgramFiles(x86)}\Microsoft SDKs\Windows\v8.1A"
-          ) | ForEach-Object { if (Test-Path $_) { Write-Host "FOUND: $_" } else { Write-Host "MISSING: $_" } }
       - name: Check WP8.1 SDK availability
         shell: powershell
         run: |
