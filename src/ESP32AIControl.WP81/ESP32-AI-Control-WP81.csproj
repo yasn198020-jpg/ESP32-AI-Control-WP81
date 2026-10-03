@@ -85,7 +85,7 @@
   <!-- Modern VS18 Appx targets generate a Windows 10 PRI config even for this WP8.1 project.
        Patch the generated config immediately before MakePri runs, so the legacy
        Windows 8.1 MakePri receives the WP8.1 schema value (6.3.0). -->
-  <Target Name="WP81FixGeneratedPriConfig" BeforeTargets="_GenerateProjectPriFileCore">
+  <Target Name="WP81FixGeneratedPriConfig" AfterTargets="_GenerateProjectPriConfigurationFiles" BeforeTargets="_GenerateProjectPriFileCore">
     <PropertyGroup>
       <WP81PriConfigFile>$(IntermediateOutputPath)priconfig.xml</WP81PriConfigFile>
     </PropertyGroup>
