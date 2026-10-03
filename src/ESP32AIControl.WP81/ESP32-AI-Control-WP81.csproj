@@ -88,7 +88,7 @@
        Patch the generated config immediately before MakePri runs, so the legacy
        Windows 8.1 MakePri receives the WP8.1 schema value (6.3.0). -->
   <Target Name="WP81FixGeneratedPriConfig" BeforeTargets="_CalculateInputsForGenerateProjectPriFileCore">
-    <Exec Condition="Exists('$(_PriConfigXmlPath)')" Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;$p='$(_PriConfigXmlPath)'; $s=[IO.File]::ReadAllText($p); $s=$s -replace 'targetOsVersion=&quot;10\.0\.0&quot;','targetOsVersion=&quot;6.3.1&quot;'; $s=$s -replace 'targetOsVersion=''10\.0\.0''','targetOsVersion=''6.3.1'''; [IO.File]::WriteAllText($p,$s,(New-Object Text.UTF8Encoding($false))); Write-Host ('WP81 PRI config patched: ' + $p)&quot;" />
+    <Exec Condition="Exists('$(_PriConfigXmlPath)')" Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\..\..\.ci\Patch-WP81PriConfig.ps1&quot; -Path &quot;$(_PriConfigXmlPath)&quot;" />
   </Target>
 
   <Target Name="WP81StageWin10ContractsForXaml" BeforeTargets="ImplicitlyExpandTargetPlatform;MarkupCompilePass1">
