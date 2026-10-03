@@ -29,7 +29,7 @@ jobs:
           # installation finishes. Start-Process -Wait gives us the real installer exit code.
           $log = Join-Path $env:RUNNER_TEMP "vs2015-wp81.log"
           $p = Start-Process -FilePath $installer -ArgumentList @(
-            "/InstallSelectableItems", "ToolsForWin81_WP80_WP81;NativeLanguageSupport_Group",
+            "/InstallSelectableItems", "Win81SDK;NativeLanguageSupport_Group",
             "/Passive", "/NoRestart", "/Log", $log
           ) -Wait -PassThru
           $exitCode = $p.ExitCode
