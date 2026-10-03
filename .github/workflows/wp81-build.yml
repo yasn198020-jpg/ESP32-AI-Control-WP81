@@ -8,7 +8,30 @@ on:
   workflow_dispatch:
 
 jobs:
+  preflight:
+    name: Actions Preflight
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 5
+    steps:
+      - name: Verify runner
+        shell: powershell
+        run: |
+          Write-Host "=== WP81 Actions preflight ==="
+          Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber
+          Write-Host "Image: $env:ImageOS"
+          Write-Host "ImageVersion: $env:ImageVersion"
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (-not (Test-Path $vswhere)) { throw "vswhere.exe not found" }
+          $vs = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -property installationPath
+          if (-not $vs) { throw "Visual Studio/MSBuild not found" }
+          Write-Host "Visual Studio: $vs"
+          $msbuild = Join-Path $vs "MSBuild\Current\Bin\MSBuild.exe"
+          if (-not (Test-Path $msbuild)) { throw "MSBuild not found: $msbuild" }
+          & $msbuild -version -nologo
+          Write-Host "Preflight OK"
+
   build:
+    needs: preflight
     runs-on: windows-2025-vs2026
     timeout-minutes: 45
 
