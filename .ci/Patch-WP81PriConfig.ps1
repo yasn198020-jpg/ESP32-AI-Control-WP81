@@ -21,18 +21,6 @@ Write-Host "PRI targetOsVersion before patch: " + ($(if ($before) { $before } el
 
 $resources.SetAttribute("targetOsVersion", "6.3.0")
 
-$packagingNodes = $resources.SelectNodes("./*[local-name()='packaging']")
-foreach ($node in $packagingNodes) {
-  Write-Host "Removing modern PRI <packaging> node for WP8.1 MakePri."
-  [void]$resources.RemoveChild($node)
-}
-
-$scaleQualifiers = $xml.SelectNodes("//*[local-name()='qualifier'][@name='Scale']")
-foreach ($q in @($scaleQualifiers)) {
-  Write-Host "Removing PRI Scale qualifier node."
-  [void]$q.ParentNode.RemoveChild($q)
-}
-
 $settings = New-Object System.Xml.XmlWriterSettings
 $settings.Encoding = New-Object System.Text.UTF8Encoding($false)
 $settings.Indent = $false
