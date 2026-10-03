@@ -21,6 +21,13 @@ Write-Host "PRI targetOsVersion before patch: " + ($(if ($before) { $before } el
 
 $resources.SetAttribute("targetOsVersion", "6.3.0")
 
+$indexes = $xml.SelectNodes("//*[local-name()='index']")
+foreach ($index in $indexes) {
+  if ($index.GetAttribute("root") -eq "") {
+    $index.SetAttribute("root", "\")
+  }
+}
+
 # Modern VS XAML/Appx targets emit Windows 10-style default qualifiers.
 # The legacy Windows Phone 8.1 MakePri accepts the phone schema but rejects
 # the Scale qualifier unless the matching phone resource qualification stack
