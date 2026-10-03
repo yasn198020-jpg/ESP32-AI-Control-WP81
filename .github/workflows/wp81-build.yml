@@ -8,30 +8,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  preflight:
-    name: Actions Preflight
-    runs-on: windows-2025-vs2026
-    timeout-minutes: 5
-    steps:
-      - name: Verify runner
-        shell: powershell
-        run: |
-          Write-Host "=== WP81 Actions preflight ==="
-          Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber
-          Write-Host "Image: $env:ImageOS"
-          Write-Host "ImageVersion: $env:ImageVersion"
-          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-          if (-not (Test-Path $vswhere)) { throw "vswhere.exe not found" }
-          $vs = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -property installationPath
-          if (-not $vs) { throw "Visual Studio/MSBuild not found" }
-          Write-Host "Visual Studio: $vs"
-          $msbuild = Join-Path $vs "MSBuild\Current\Bin\MSBuild.exe"
-          if (-not (Test-Path $msbuild)) { throw "MSBuild not found: $msbuild" }
-          & $msbuild -version -nologo
-          Write-Host "Preflight OK"
-
   build:
-    needs: preflight
     runs-on: windows-2025-vs2026
     timeout-minutes: 45
 
@@ -74,17 +51,6 @@ jobs:
           & $msbuild -version -nologo
           "MSBUILD_EXE=$msbuild" | Out-File $env:GITHUB_ENV -Encoding utf8
 
-      - name: Install Windows 8.1 SDK
-        shell: powershell
-        run: |
-          $sdk = Join-Path $env:RUNNER_TEMP "windows-sdk-8.1.exe"
-          Invoke-WebRequest -Uri "https://download.microsoft.com/download/B/0/C/B0C80BA3-8AD6-4958-810B-6882485230B5/standalonesdk/sdksetup.exe" -OutFile $sdk
-          & $sdk /Quiet /NoRestart /Log "$env:RUNNER_TEMP\windows-sdk-8.1.log"
-          if ($LASTEXITCODE -notin @(0,3010)) {
-            Get-Content "$env:RUNNER_TEMP\windows-sdk-8.1.log" -Tail 200 -ErrorAction SilentlyContinue
-            throw "Windows 8.1 SDK installation failed with exit code $LASTEXITCODE"
-          }
-
       - name: Prepare .NET 4.5 reference assemblies
         shell: powershell
         run: |
@@ -107,11 +73,6 @@ jobs:
 
           New-Item -ItemType Directory -Force -Path $target | Out-Null
           Copy-Item (Join-Path $source "*") $target -Recurse -Force
-          $redist = Join-Path $target "RedistList"
-          New-Item -ItemType Directory -Force -Path $redist | Out-Null
-          @'
-<List Name=".NETCore,Version=v4.5" />
-'@ | Set-Content (Join-Path $redist "FrameworkList.xml") -Encoding UTF8
           Write-Host "Using .NET 4.5 reference assemblies: $target"
           Get-ChildItem $target | Select-Object Name
           "TARGET_FRAMEWORK_ROOT=$root" | Out-File $env:GITHUB_ENV -Encoding utf8
@@ -120,7 +81,7 @@ jobs:
       - name: Build WP81 Debug ARM
         shell: powershell
         run: |
-          & "$env:MSBUILD_EXE" "$env:GITHUB_WORKSPACE\ESP32-AI-Control-WP81.sln" /m /nologo /verbosity:minimal /p:Configuration=Debug /p:Platform=ARM /p:VisualStudioVersion=12.0 /p:AppxPackageSigningEnabled=False /p:RestorePackages=false /p:TargetFrameworkRootPath="$env:TARGET_FRAMEWORK_ROOT" /p:FrameworkPathOverride="$env:FRAMEWORK_PATH_OVERRIDE"
+          & "$env:MSBUILD_EXE" "$env:GITHUB_WORKSPACE\ESP32-AI-Control-WP81.sln" /m /nologo /verbosity:minimal /p:Configuration=Debug /p:Platform=ARM /p:AppxPackageSigningEnabled=False /p:RestorePackages=false /p:TargetFrameworkRootPath="$env:TARGET_FRAMEWORK_ROOT" /p:FrameworkPathOverride="$env:FRAMEWORK_PATH_OVERRIDE"
 
       - name: Upload MSBuild binary log
         if: failure()
