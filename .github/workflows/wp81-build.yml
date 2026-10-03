@@ -51,6 +51,59 @@ jobs:
           & $msbuild -version -nologo
           "MSBUILD_EXE=$msbuild" | Out-File $env:GITHUB_ENV -Encoding utf8
 
+      - name: Install Windows 8.1 SDK
+        shell: powershell
+        run: |
+          $sdk = Join-Path $env:RUNNER_TEMP "windows-sdk-8.1.exe"
+          Invoke-WebRequest -Uri "https://download.microsoft.com/download/B/0/C/B0C80BA3-8AD6-4958-810B-6882485230B5/standalonesdk/sdksetup.exe" -OutFile $sdk
+          & $sdk /Quiet /NoRestart /Log "$env:RUNNER_TEMP\windows-sdk-8.1.log"
+          if ($LASTEXITCODE -notin @(0,3010)) {
+            Get-Content "$env:RUNNER_TEMP\windows-sdk-8.1.log" -Tail 200 -ErrorAction SilentlyContinue
+            throw "Windows 8.1 SDK installation failed with exit code $LASTEXITCODE"
+          }
+
+      - name: Install WP8.1 SDK payload
+        shell: powershell
+        run: |
+          $iso = Join-Path $env:RUNNER_TEMP "vs2013.5.iso"
+          $pkg = Join-Path $env:RUNNER_TEMP "wp81sdk"
+          $url = "https://download.microsoft.com/download/A/A/D/AAD1AA11-FF9A-4B3C-8601-054E89260B78/vs2013.5_ce_enu.iso"
+
+          New-Item -ItemType Directory -Force -Path $pkg | Out-Null
+          Invoke-WebRequest -Uri $url -OutFile $iso
+
+          $sevenZip = "$env:ProgramFiles\7-Zip\7z.exe"
+          if (-not (Test-Path $sevenZip)) {
+            $sevenZip = Get-Command 7z.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source
+          }
+          if (-not $sevenZip) { throw "7-Zip was not found on the GitHub runner." }
+
+          & $sevenZip x $iso "packages\WindowsPhone81SDK\*" -o"$pkg" -y
+          if ($LASTEXITCODE -ne 0) { throw "Failed to extract Windows Phone 8.1 SDK payload from VS2013 Update 5 ISO." }
+
+          $wp = Join-Path $pkg "packages\WindowsPhone81SDK"
+          Get-ChildItem $wp | Select-Object Name,Length
+
+          $msis = @(
+            "WindowsPhoneSdk-Desktop.msi",
+            "WindowsPhoneSdk-Desktop-x64.msi",
+            "WindowsPhoneSdk-ARM.msi"
+          )
+
+          foreach ($name in $msis) {
+            $msi = Join-Path $wp $name
+            if (-not (Test-Path $msi)) { throw "Missing WP8.1 SDK package: $name" }
+            Write-Host "Installing $name"
+            $p = Start-Process msiexec.exe -Wait -PassThru -NoNewWindow -ArgumentList "/i `"$msi`" /qn /norestart"
+            if ($p.ExitCode -notin @(0,3010)) { throw "$name installation failed with exit code $($p.ExitCode)" }
+          }
+
+          Write-Host "=== WP8.1 SDK files ==="
+          Get-ChildItem "$env:ProgramFiles(x86)\Windows Phone Kits\8.1" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 80 FullName
+
+          Write-Host "=== XAML targets after SDK install ==="
+          Get-ChildItem "$env:ProgramFiles(x86)\MSBuild" -Recurse -Filter "Microsoft.Windows.UI.Xaml.CSharp.targets" -ErrorAction SilentlyContinue | Select-Object FullName
+
       - name: Prepare .NET 4.5 reference assemblies
         shell: powershell
         run: |
@@ -86,7 +139,7 @@ jobs:
       - name: Build WP81 Debug ARM
         shell: powershell
         run: |
-          & "$env:MSBUILD_EXE" "$env:GITHUB_WORKSPACE\ESP32-AI-Control-WP81.sln" /m /nologo /verbosity:minimal /p:Configuration=Debug /p:Platform=ARM /p:AppxPackageSigningEnabled=False /p:RestorePackages=false /p:TargetFrameworkRootPath="$env:TARGET_FRAMEWORK_ROOT" /p:FrameworkPathOverride="$env:FRAMEWORK_PATH_OVERRIDE"
+          & "$env:MSBUILD_EXE" "$env:GITHUB_WORKSPACE\ESP32-AI-Control-WP81.sln" /m /nologo /verbosity:minimal /p:Configuration=Debug /p:Platform=ARM /p:VisualStudioVersion=12.0 /p:AppxPackageSigningEnabled=False /p:RestorePackages=false /p:TargetFrameworkRootPath="$env:TARGET_FRAMEWORK_ROOT" /p:FrameworkPathOverride="$env:FRAMEWORK_PATH_OVERRIDE"
 
       - name: Upload MSBuild binary log
         if: failure()
