@@ -18,6 +18,9 @@
     <DefaultLanguage>ru-RU</DefaultLanguage>
     <AppxManifest>Package.appxmanifest</AppxManifest>
     <AppxPackageSigningEnabled>False</AppxPackageSigningEnabled>
+    <!-- The modern VS manifest validator does not understand the WP8.1 phone
+         manifest extension schema; packaging itself is still performed below. -->
+    <AppxValidateAppxManifest>false</AppxValidateAppxManifest>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|ARM'">
