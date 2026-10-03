@@ -146,8 +146,12 @@ jobs:
             throw "Windows Phone 8.1 MrmEnvironmentExtDl.dll matching MakePri architecture was not found."
           }
 
+          $phoneBin = Split-Path -Parent $makepriExtension
+          $env:Path = "$phoneBin;$env:Path"
+          "PATH=$env:Path" | Out-File $env:GITHUB_ENV -Encoding utf8
           Write-Host "Using WP8.1 MakePri: $makepri"
           Write-Host "Using WP8.1 MakePri extension: $makepriExtension"
+          Write-Host "Phone MRT runtime directory: $phoneBin"
           & $makepri /? | Select-Object -First 3
           "MAKEPRI_EXE=$makepri" | Out-File $env:GITHUB_ENV -Encoding utf8
           "MAKEPRI_EXTENSION_PATH=$makepriExtension" | Out-File $env:GITHUB_ENV -Encoding utf8
