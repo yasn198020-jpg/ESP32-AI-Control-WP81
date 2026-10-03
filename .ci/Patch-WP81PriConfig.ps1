@@ -21,12 +21,18 @@ Write-Host "PRI targetOsVersion before patch: " + ($(if ($before) { $before } el
 
 $resources.SetAttribute("targetOsVersion", "6.3.0")
 
-$indexes = $xml.SelectNodes("//*[local-name()='index']")
-foreach ($index in $indexes) {
-  $index.SetAttribute("root", "\")
-
+# Keep the PRI configuration deliberately minimal for the legacy WP8.1 MakePri.
+# The application has no scale-/theme-/contrast-qualified resource filenames.
+# Language is the only default qualifier required for this package.
+$qualifiers = $xml.SelectNodes("/*[local-name()='resources']/*[local-name()='index']/*[local-name()='default']/*[local-name()='qualifier']")
+$removed = 0
+foreach ($q in @($qualifiers)) {
+  if ($q.GetAttribute("name") -ne "Language") {
+    $q.ParentNode.RemoveChild($q) | Out-Null
+    $removed++
+  }
 }
-
+Write-Host "Removed non-essential modern PRI default qualifiers: $removed"
 $settings = New-Object System.Xml.XmlWriterSettings
 $settings.Encoding = New-Object System.Text.UTF8Encoding($false)
 $settings.Indent = $false
