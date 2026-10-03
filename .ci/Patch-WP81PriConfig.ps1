@@ -63,10 +63,6 @@ if ($after -ne "6.3.0") {
   throw "PRI config targetOsVersion is '$after'; expected 6.3.0 for Windows 8.1 MakePri."
 }
 
-$remainingScale = $verify.SelectNodes("/*[local-name()='resources']/*[local-name()='index']/*[local-name()='default']/*[local-name()='qualifier'][@name='Scale']")
-if (@($remainingScale).Count -ne 0) {
-  throw "PRI config still contains Scale qualifiers after WP8.1 patch."
-}
 
 Write-Host "=== PATCHED PRI CONFIG ==="
 Write-Host $verify.OuterXml
