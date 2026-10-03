@@ -25,10 +25,17 @@ jobs:
           # development payload required by the XAML compiler.
           $installer = Join-Path $env:RUNNER_TEMP "vs_community_2015.exe"
           Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/p/?LinkId=534599" -OutFile $installer
-          & $installer /InstallSelectableItems "ToolsForWin81_WP80_WP81;NativeLanguageSupport_Group" /Passive /NoRestart /Log "$env:RUNNER_TEMP\vs2015-wp81.log"
-          $exitCode = $LASTEXITCODE
+          # The legacy bootstrapper can spawn a child installer and return before the
+          # installation finishes. Start-Process -Wait gives us the real installer exit code.
+          $log = Join-Path $env:RUNNER_TEMP "vs2015-wp81.log"
+          $p = Start-Process -FilePath $installer -ArgumentList @(
+            "/InstallSelectableItems", "ToolsForWin81_WP80_WP81;NativeLanguageSupport_Group",
+            "/Passive", "/NoRestart", "/Log", $log
+          ) -Wait -PassThru
+          $exitCode = $p.ExitCode
+          Write-Host "VS2015 bootstrapper exit code: $exitCode"
           if ($exitCode -notin @(0,3010)) {
-            Get-Content $env:RUNNER_TEMP\vs2015-wp81.log -Tail 200 -ErrorAction SilentlyContinue
+            Get-Content $log -Tail 300 -ErrorAction SilentlyContinue
             throw "WP8.1 development tools installation failed with exit code $exitCode"
           }
 
