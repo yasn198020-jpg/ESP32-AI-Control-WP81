@@ -263,7 +263,7 @@ jobs:
       - name: Build WP81 Debug ARM
         shell: powershell
         run: |
-          & "$env:MSBUILD_EXE" "$env:GITHUB_WORKSPACE\ESP32-AI-Control-WP81.sln" /m /nologo /verbosity:minimal /p:Configuration=Debug /p:Platform=ARM /p:AppxPackageSigningEnabled=False /p:RestorePackages=false /p:TargetFrameworkRootPath="$env:TARGET_FRAMEWORK_ROOT" /p:FrameworkPathOverride="$env:FRAMEWORK_PATH_OVERRIDE" /p:_TargetFrameworkDirectories="$env:FRAMEWORK_PATH_OVERRIDE" /p:_FullFrameworkReferenceAssemblyPaths="$env:FRAMEWORK_PATH_OVERRIDE" /p:MakePriExeFullPath="$env:MAKEPRI_EXE" /p:MakePriExtensionPath="$env:MAKEPRI_EXTENSION_PATH"
+          & "$env:MSBUILD_EXE" "$env:GITHUB_WORKSPACE\ESP32-AI-Control-WP81.sln" /m /nologo /verbosity:minimal /p:Configuration=Debug /p:Platform=ARM /p:AppxPackageSigningEnabled=False /p:RestorePackages=false /p:TargetFrameworkRootPath="$env:TARGET_FRAMEWORK_ROOT" /p:FrameworkPathOverride="$env:FRAMEWORK_PATH_OVERRIDE" /p:_TargetFrameworkDirectories="$env:FRAMEWORK_PATH_OVERRIDE" /p:_FullFrameworkReferenceAssemblyPaths="$env:FRAMEWORK_PATH_OVERRIDE" /p:MakePriExeFullPath="$env:MAKEPRI_EXE" /p:MakePriExtensionPath="$env:MAKEPRI_EXTENSION_PATH" /p:OutOfProcessMakePriExtensionPath="$env:MAKEPRI_EXTENSION_PATH" /p:InProcessMakePriExtensionPath="$env:MAKEPRI_EXTENSION_PATH"
 
       - name: Upload MSBuild binary log
         if: failure()
