@@ -87,13 +87,18 @@
   <!-- Modern VS18 Appx targets generate a Windows 10 PRI config even for this WP8.1 project.
        Patch the generated config immediately before MakePri runs, so the legacy
        Windows 8.1 MakePri receives the WP8.1 schema value (6.3.0). -->
-  <Target Name="WP81ForcePhonePriExtension" BeforeTargets="_GenerateProjectPriFileCore">
+  <!-- The modern VS Appx targets auto-select the Windows Phone MRT extension
+       from TargetPlatformIdentifier=WindowsPhoneApp. That extension is required
+       by the legacy Windows 8.1 MakePri, but is incompatible with the current
+       Windows SDK MakePri used by CI. Force the extension parameters empty so
+       GenerateProjectPriFile invokes current MakePri without -ExtensionDll. -->
+  <Target Name="WP81DisablePhonePriExtension" BeforeTargets="_GenerateProjectPriFileCore">
     <PropertyGroup>
-      <OutOfProcessMakePriExtensionPath Condition="'$(MAKEPRI_EXTENSION_PATH)' != ''">$(MAKEPRI_EXTENSION_PATH)</OutOfProcessMakePriExtensionPath>
-      <InProcessMakePriExtensionPath Condition="'$(MAKEPRI_EXTENSION_PATH)' != ''">$(MAKEPRI_EXTENSION_PATH)</InProcessMakePriExtensionPath>
-      <MakePriExtensionPath Condition="'$(MAKEPRI_EXTENSION_PATH)' != ''">$(MAKEPRI_EXTENSION_PATH)</MakePriExtensionPath>
+      <MakePriExtensionPath></MakePriExtensionPath>
+      <OutOfProcessMakePriExtensionPath></OutOfProcessMakePriExtensionPath>
+      <InProcessMakePriExtensionPath></InProcessMakePriExtensionPath>
     </PropertyGroup>
-    <Message Text="WP81 PRI task extension: $(OutOfProcessMakePriExtensionPath)" Importance="high" />
+    <Message Text="WP81 PRI task extension disabled for current SDK MakePri." Importance="high" />
   </Target>
 
   <Target Name="WP81FixGeneratedPriConfig" BeforeTargets="_CalculateInputsForGenerateProjectPriFileCore">
