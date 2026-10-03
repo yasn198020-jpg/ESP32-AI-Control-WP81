@@ -28,10 +28,9 @@ foreach ($node in $packagingNodes) {
 }
 
 $scaleQualifiers = $xml.SelectNodes("//*[local-name()='qualifier'][@name='Scale']")
-foreach ($q in $scaleQualifiers) {
-  Write-Host "PRI Scale before patch: $($q.GetAttribute("value"))"
-  $q.SetAttribute("value", "240")
-  Write-Host "PRI Scale after patch: $($q.GetAttribute("value"))"
+foreach ($q in @($scaleQualifiers)) {
+  Write-Host "Removing PRI Scale qualifier node."
+  [void]$q.ParentNode.RemoveChild($q)
 }
 
 $settings = New-Object System.Xml.XmlWriterSettings
