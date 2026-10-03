@@ -87,6 +87,15 @@
   <!-- Modern VS18 Appx targets generate a Windows 10 PRI config even for this WP8.1 project.
        Patch the generated config immediately before MakePri runs, so the legacy
        Windows 8.1 MakePri receives the WP8.1 schema value (6.3.0). -->
+  <Target Name="WP81ForcePhonePriExtension" BeforeTargets="_GenerateProjectPriFileCore">
+    <PropertyGroup>
+      <OutOfProcessMakePriExtensionPath Condition="'$(MAKEPRI_EXTENSION_PATH)' != ''">$(MAKEPRI_EXTENSION_PATH)</OutOfProcessMakePriExtensionPath>
+      <InProcessMakePriExtensionPath Condition="'$(MAKEPRI_EXTENSION_PATH)' != ''">$(MAKEPRI_EXTENSION_PATH)</InProcessMakePriExtensionPath>
+      <MakePriExtensionPath Condition="'$(MAKEPRI_EXTENSION_PATH)' != ''">$(MAKEPRI_EXTENSION_PATH)</MakePriExtensionPath>
+    </PropertyGroup>
+    <Message Text="WP81 PRI task extension: $(OutOfProcessMakePriExtensionPath)" Importance="high" />
+  </Target>
+
   <Target Name="WP81FixGeneratedPriConfig" BeforeTargets="_CalculateInputsForGenerateProjectPriFileCore">
     <Exec Condition="Exists('$(_PriConfigXmlPath)')" Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\..\..\.ci\Patch-WP81PriConfig.ps1&quot; -Path &quot;$(_PriConfigXmlPath)&quot;" />
   </Target>
