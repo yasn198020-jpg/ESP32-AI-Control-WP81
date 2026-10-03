@@ -7,43 +7,39 @@ if (-not (Test-Path $Path)) {
   throw "PRI config not found: $Path"
 }
 
-$encoding = New-Object System.Text.UTF8Encoding($false)
-$text = [IO.File]::ReadAllText($Path)
+$xml = New-Object System.Xml.XmlDocument
+$xml.PreserveWhitespace = $true
+$xml.Load($Path)
 
-$match = [regex]::Match($text, '<resources(?:\s+targetOsVersion\s*=\s*["'']([^"'']+)["''])?')
-if (-not $match.Success) {
+$resources = $xml.SelectSingleNode("/*[local-name()='resources']")
+if (-not $resources) {
   throw "PRI config root <resources> element was not found: $Path"
 }
 
-$before = $match.Groups[1].Value
+$before = $resources.GetAttribute("targetOsVersion")
 Write-Host "PRI targetOsVersion before patch: " + ($(if ($before) { $before } else { "<missing>" }))
 
-if ($before -eq '10.0.0') {
-  $text = [regex]::Replace(
-    $text,
-    '(<resources\s+targetOsVersion\s*=\s*["''])10\.0\.0(["''])',
-    '16.3.02',
-    1
-  )
-} elseif (-not $before) {
-  $text = [regex]::Replace(
-    $text,
-    '<resources(\s|>)',
-    '<resources targetOsVersion="6.3.0"1',
-    1
-  )
+$resources.SetAttribute("targetOsVersion", "6.3.0")
+
+$settings = New-Object System.Xml.XmlWriterSettings
+$settings.Encoding = New-Object System.Text.UTF8Encoding($false)
+$settings.Indent = $false
+$settings.OmitXmlDeclaration = $false
+
+$writer = [System.Xml.XmlWriter]::Create($Path, $settings)
+try {
+  $xml.Save($writer)
+}
+finally {
+  $writer.Close()
 }
 
-[IO.File]::WriteAllText($Path, $text, $encoding)
-
-$afterMatch = [regex]::Match($text, '<resources\s+targetOsVersion\s*=\s*["'']([^"'']+)["'']')
-if (-not $afterMatch.Success) {
-  throw "PRI config still has no targetOsVersion after patch."
-}
-
-$after = $afterMatch.Groups[1].Value
+$verify = New-Object System.Xml.XmlDocument
+$verify.Load($Path)
+$root = $verify.SelectSingleNode("/*[local-name()='resources']")
+$after = $root.GetAttribute("targetOsVersion")
 Write-Host "PRI targetOsVersion after patch: $after"
 
-if ($after -ne '6.3.0') {
+if ($after -ne "6.3.0") {
   throw "PRI config targetOsVersion is '$after'; expected 6.3.0 for Windows 8.1 MakePri."
 }
