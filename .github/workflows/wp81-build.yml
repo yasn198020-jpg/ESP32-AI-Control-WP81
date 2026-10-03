@@ -16,28 +16,42 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Prepare WP8.1 SDK package sources
+      - name: Install WP8.1 SDK payload
         shell: powershell
         run: |
-          Write-Host "=== WP8.1 SDK source check ==="
-          Write-Host "Microsoft's SDK archive documents WP8.1 development tools as part of VS2013/VS2015; there is no standalone current installer listed."
-          Write-Host "We will NOT download the 4.7 GB VS2013 ISO automatically."
-          $candidates = @(
-            "$env:RUNNER_TEMP\WindowsPhone81SDK",
-            "$env:RUNNER_TOOL_CACHE\WindowsPhone81SDK",
-            "$env:GITHUB_WORKSPACE\.ci\WindowsPhone81SDK"
+          Write-Host "=== Installing WP8.1 SDK payload ==="
+          $dir = Join-Path $env:RUNNER_TEMP "WindowsPhone81SDK"
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+
+          # Microsoft legacy WP8.1 payload links; no VS2013 ISO.
+          $packages = @(
+            @{ Name = "WindowsPhoneSdk-Desktop.msi"; Url = "https://go.microsoft.com/fwlink/?LinkId=351282&clcid=0x409" },
+            @{ Name = "WindowsPhoneSdk-Desktop-x64.msi"; Url = "https://go.microsoft.com/fwlink/?LinkId=351283&clcid=0x409" },
+            @{ Name = "WindowsPhoneSdk-x86.msi"; Url = "https://go.microsoft.com/fwlink/?LinkId=351284&clcid=0x409" },
+            @{ Name = "WindowsPhoneSdk-ARM.msi"; Url = "https://go.microsoft.com/fwlink/?LinkId=351286&clcid=0x409" }
           )
-          foreach ($p in $candidates) {
-            if (Test-Path $p) {
-              Write-Host "Candidate payload directory: $p"
-              Get-ChildItem $p -Recurse -File -ErrorAction SilentlyContinue |
-                Where-Object { $_.Name -like "WindowsPhoneSdk*.msi" -or $_.Name -eq "Microsoft.Windows.UI.Xaml.CSharp.Targets" } |
-                Select-Object FullName
-            }
+
+          foreach ($pkg in $packages) {
+            $out = Join-Path $dir $pkg.Name
+            Write-Host "Downloading $($pkg.Name)"
+            Invoke-WebRequest -Uri $pkg.Url -OutFile $out -UseBasicParsing
+            if (-not (Test-Path $out) -or (Get-Item $out).Length -lt 100KB) { throw "WP8.1 package download failed: $($pkg.Name)" }
+            Write-Host "$($pkg.Name): $((Get-Item $out).Length) bytes"
           }
-          Write-Host "=== Existing modern XAML targets ==="
-          Get-ChildItem "$env:ProgramFiles\Microsoft Visual Studio" -Filter Microsoft.Windows.UI.Xaml.CSharp.Targets -Recurse -ErrorAction SilentlyContinue |
-            Select-Object -ExpandProperty FullName
+
+          $install = @("WindowsPhoneSdk-Desktop.msi","WindowsPhoneSdk-Desktop-x64.msi","WindowsPhoneSdk-ARM.msi")
+          foreach ($name in $install) {
+            $msi = Join-Path $dir $name
+            Write-Host "Installing $name"
+            $p = Start-Process msiexec.exe -ArgumentList @("/i",$msi,"/qn","/norestart") -Wait -PassThru
+            if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { throw "MSI installation failed: $name, exit code $($p.ExitCode)" }
+          }
+
+          Write-Host "=== WP8.1 SDK after installation ==="
+          @("${env:ProgramFiles(x86)}\Microsoft SDKs\Windows Phone","${env:ProgramFiles(x86)}\Microsoft SDKs\WindowsPhoneApp") | ForEach-Object {
+            if (Test-Path $_) { Get-ChildItem $_ -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 30 FullName }
+            else { Write-Host "MISSING: $_" }
+          }
 
       - name: Inspect local toolchain
         shell: powershell
