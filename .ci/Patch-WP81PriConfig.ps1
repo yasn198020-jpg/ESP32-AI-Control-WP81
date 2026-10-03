@@ -23,7 +23,7 @@ $resources.SetAttribute("targetOsVersion", "6.3.0")
 
 $indexes = $xml.SelectNodes("//*[local-name()='index']")
 foreach ($index in $indexes) {
-  $index.SetAttribute("root", "")
+  $index.SetAttribute("root", "\")
 
 }
 
@@ -46,11 +46,11 @@ $root = $verify.SelectSingleNode("/*[local-name()='resources']")
 $after = $root.GetAttribute("targetOsVersion")
 Write-Host "PRI targetOsVersion after patch: $after"
 
-$badRoots = @($verify.SelectNodes("//*[local-name()='index']") | Where-Object { $_.GetAttribute("root") -ne "" })
+$badRoots = @($verify.SelectNodes("//*[local-name()='index']") | Where-Object { $_.GetAttribute("root") -ne "\" })
 if ($badRoots.Count -ne 0) {
-  throw "PRI config still contains an index with root different from \": $Path"
+  throw "PRI config still contains an index with root different from backslash: $Path"
 }
-Write-Host "PRI index roots verified: \" 
+Write-Host "PRI index roots verified: backslash" 
 
 if ($after -ne "6.3.0") {
   throw "PRI config targetOsVersion is '$after'; expected 6.3.0 for Windows 8.1 MakePri."
