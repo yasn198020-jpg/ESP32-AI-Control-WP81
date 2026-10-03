@@ -25,7 +25,7 @@ jobs:
           # development payload required by the XAML compiler.
           $installer = Join-Path $env:RUNNER_TEMP "vs_community_2015.exe"
           Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/p/?LinkId=534599" -OutFile $installer
-          & $installer /InstallSelectableItems ToolsForWin81_WP80_WP81;NativeLanguageSupport_Group /Passive /NoRestart /Log $env:RUNNER_TEMP\vs2015-wp81.log
+          & $installer /InstallSelectableItems "ToolsForWin81_WP80_WP81;NativeLanguageSupport_Group" /Passive /NoRestart /Log "$env:RUNNER_TEMP\vs2015-wp81.log"
           $exitCode = $LASTEXITCODE
           if ($exitCode -notin @(0,3010)) {
             Get-Content $env:RUNNER_TEMP\vs2015-wp81.log -Tail 200 -ErrorAction SilentlyContinue
