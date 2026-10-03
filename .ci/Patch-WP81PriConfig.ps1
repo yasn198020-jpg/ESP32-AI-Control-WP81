@@ -9,33 +9,41 @@ if (-not (Test-Path $Path)) {
 
 $encoding = New-Object System.Text.UTF8Encoding($false)
 $text = [IO.File]::ReadAllText($Path)
-$matches = [regex]::Matches($text, 'targetOsVersion\s*=\s*["'']([^"'']+)["'']')
 
-if ($matches.Count -eq 0) {
-  throw "No targetOsVersion attribute found in PRI config: $Path"
+$match = [regex]::Match($text, '<resources(?:\s+targetOsVersion\s*=\s*["'']([^"'']+)["''])?')
+if (-not $match.Success) {
+  throw "PRI config root <resources> element was not found: $Path"
 }
 
-Write-Host "PRI targetOsVersion before patch:"
-$matches | ForEach-Object { Write-Host ("  " + $_.Groups[1].Value) }
+$before = $match.Groups[1].Value
+Write-Host "PRI targetOsVersion before patch: " + ($(if ($before) { $before } else { "<missing>" }))
 
-$text = [regex]::Replace(
-  $text,
-  '(targetOsVersion\s*=\s*["''])10\.0\.0(["''])',
-  '16.3.12'
-)
+if ($before -eq '10.0.0') {
+  $text = [regex]::Replace(
+    $text,
+    '(<resources\s+targetOsVersion\s*=\s*["''])10\.0\.0(["''])',
+    '16.3.02',
+    1
+  )
+} elseif (-not $before) {
+  $text = [regex]::Replace(
+    $text,
+    '<resources(\s|>)',
+    '<resources targetOsVersion="6.3.0"1',
+    1
+  )
+}
 
 [IO.File]::WriteAllText($Path, $text, $encoding)
 
-$after = [regex]::Matches($text, 'targetOsVersion\s*=\s*["'']([^"'']+)["'']')
-Write-Host "PRI targetOsVersion after patch:"
-$after | ForEach-Object { Write-Host ("  " + $_.Groups[1].Value) }
-
-$bad = @($after | Where-Object { $_.Groups[1].Value -eq '10.0.0' })
-if ($bad.Count -gt 0) {
-  throw "PRI config still contains targetOsVersion=10.0.0 after patch."
+$afterMatch = [regex]::Match($text, '<resources\s+targetOsVersion\s*=\s*["'']([^"'']+)["'']')
+if (-not $afterMatch.Success) {
+  throw "PRI config still has no targetOsVersion after patch."
 }
 
-$good = @($after | Where-Object { $_.Groups[1].Value -eq '6.3.1' })
-if ($good.Count -eq 0) {
-  throw "PRI config does not contain targetOsVersion=6.3.1 after patch."
+$after = $afterMatch.Groups[1].Value
+Write-Host "PRI targetOsVersion after patch: $after"
+
+if ($after -ne '6.3.0') {
+  throw "PRI config targetOsVersion is '$after'; expected 6.3.0 for Windows 8.1 MakePri."
 }
