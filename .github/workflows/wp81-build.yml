@@ -91,7 +91,7 @@ jobs:
           # MSBuild resolves TargetFrameworkIdentifier=.NETCore through framework-list metadata.
           $redist = Join-Path $target "RedistList"
           New-Item -ItemType Directory -Force -Path $redist | Out-Null
-          Set-Content -Path (Join-Path $redist "FrameworkList.xml") -Value '<List Name=".NETCore,Version=v4.5" />' -Encoding UTF8
+          Set-Content -Path (Join-Path $redist "FrameworkList.xml") -Value '<FileList Redist="Net45" Name=".NETCore,Version=v4.5"></FileList>' -Encoding UTF8
 
           Write-Host "Using .NET 4.5 reference assemblies: $target"
           Write-Host "FrameworkList: $(Join-Path $redist "FrameworkList.xml")"
