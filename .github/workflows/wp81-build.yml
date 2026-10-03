@@ -9,80 +9,78 @@ on:
 
 jobs:
   build:
-    runs-on: windows-2019
+    runs-on: windows-2025-vs2026
     timeout-minutes: 45
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Show runner
+      - name: Inspect local toolchain
         shell: powershell
         run: |
-          Write-Host "OS:"
+          Write-Host "=== OS ==="
           Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber
-          Write-Host "PowerShell: $($PSVersionTable.PSVersion)"
-          Write-Host "Git: $(git --version)"
-
-      - name: Install legacy WP81 build toolchain
-        shell: powershell
-        run: |
-          choco install visualstudio2015community --version=2015.03.03 -y --no-progress
-          choco install windows-sdk-8.1 --version=8.100.26654.0 -y --no-progress
-
-      - name: Locate MSBuild and WP81 SDK
-        shell: powershell
-        run: |
-          $msbuild = @(
-            "$env:ProgramFiles(x86)\MSBuild\14.0\Bin\MSBuild.exe",
-            "$env:ProgramFiles(x86)\Microsoft Visual Studio 14.0\MSBuild\14.0\Bin\MSBuild.exe"
-          ) | Where-Object { Test-Path $_ } | Select-Object -First 1
-
-          if (-not $msbuild) {
-            $msbuild = Get-ChildItem "$env:ProgramFiles(x86)\Microsoft Visual Studio" -Filter MSBuild.exe -Recurse -ErrorAction SilentlyContinue |
-              Where-Object { $_.FullName -match "\\14\.0\\.*\\MSBuild\.exe$" } |
-              Select-Object -First 1 -ExpandProperty FullName
-          }
-
-          if (-not $msbuild) {
-            throw "MSBuild 14.0 was not installed/found."
-          }
-
-          $version = & $msbuild -version -nologo
-          Write-Host "MSBuild: $msbuild"
-          Write-Host "MSBuild version: $version"
-          "MSBUILD_EXE=$msbuild" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8
-
-          $phoneRoots = @(
+          Write-Host "=== Visual Studio ==="
+          & "$env:ProgramFiles(x86)\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -format json
+          Write-Host "=== MSBuild candidates ==="
+          Get-ChildItem "$env:ProgramFiles\Microsoft Visual Studio","$env:ProgramFiles(x86)\Microsoft Visual Studio","$env:ProgramFiles(x86)\MSBuild" -Filter MSBuild.exe -Recurse -ErrorAction SilentlyContinue |
+            Select-Object FullName
+          Write-Host "=== SDKs ==="
+          Get-ChildItem "$env:ProgramFiles(x86)\Microsoft SDKs\Windows" -Directory -ErrorAction SilentlyContinue |
+            Select-Object FullName
+          Write-Host "=== Windows Phone / WP8.1 ==="
+          @(
             "$env:ProgramFiles(x86)\Microsoft SDKs\Windows Phone",
             "$env:ProgramFiles(x86)\Microsoft SDKs\WindowsPhoneApp",
-            "$env:ProgramFiles(x86)\Microsoft SDKs\Windows\v8.1"
-          )
-          foreach ($root in $phoneRoots) {
-            if (Test-Path $root) {
-              Write-Host "SDK root: $root"
-              Get-ChildItem $root -Directory -ErrorAction SilentlyContinue | Select-Object FullName
+            "$env:ProgramFiles(x86)\Microsoft SDKs\Windows\v8.1",
+            "$env:ProgramFiles(x86)\Microsoft SDKs\Windows\v8.1A"
+          ) | ForEach-Object {
+            if (Test-Path $_) {
+              Write-Host "FOUND: $_"
+              Get-ChildItem $_ -Directory -ErrorAction SilentlyContinue | Select-Object FullName
+            } else {
+              Write-Host "MISSING: $_"
             }
           }
+          Write-Host "=== XAML targets ==="
+          Get-ChildItem "$env:ProgramFiles\Microsoft Visual Studio","$env:ProgramFiles(x86)\Microsoft Visual Studio" -Filter Microsoft.Windows.UI.Xaml.CSharp.Targets -Recurse -ErrorAction SilentlyContinue |
+            Select-Object FullName
 
-          $xamlTargets = Get-ChildItem "$env:ProgramFiles(x86)\Microsoft Visual Studio" -Filter Microsoft.Windows.UI.Xaml.CSharp.Targets -Recurse -ErrorAction SilentlyContinue
-          if ($xamlTargets) {
-            $xamlTargets | Select-Object -First 20 -ExpandProperty FullName
-          } else {
-            Write-Warning "WP8.1 XAML targets were not found."
+      - name: Select latest MSBuild
+        shell: powershell
+        run: |
+          $vswhere = "$env:ProgramFiles(x86)\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -property installationPath
+          if (-not $vs) {
+            throw "Visual Studio with MSBuild was not found."
           }
+
+          $msbuild = Join-Path $vs "MSBuild\Current\Bin\MSBuild.exe"
+          if (-not (Test-Path $msbuild)) {
+            $msbuild = Get-ChildItem $vs -Filter MSBuild.exe -Recurse -ErrorAction SilentlyContinue |
+              Select-Object -First 1 -ExpandProperty FullName
+          }
+          if (-not $msbuild) {
+            throw "MSBuild executable was not found under $vs"
+          }
+
+          Write-Host "Using Visual Studio: $vs"
+          Write-Host "Using MSBuild: $msbuild"
+          & $msbuild -version -nologo
+          "MSBUILD_EXE=$msbuild" | Out-File $env:GITHUB_ENV -Encoding utf8
 
       - name: Build WP81 Debug ARM
         shell: powershell
         run: |
           & "$env:MSBUILD_EXE" "$env:GITHUB_WORKSPACE\ESP32-AI-Control-WP81.sln" /m /nologo /verbosity:minimal /p:Configuration=Debug /p:Platform=ARM /p:AppxPackageSigningEnabled=False /p:RestorePackages=false
 
-      - name: Upload build logs
+      - name: Upload MSBuild binary log
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: wp81-build-logs
+          name: wp81-build-diagnostics
           path: |
+            **/*.binlog
             **/msbuild*.log
-            **/bin/**/*.log
           if-no-files-found: ignore
