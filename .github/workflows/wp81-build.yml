@@ -39,6 +39,38 @@ jobs:
             throw "WP8.1 development tools installation failed with exit code $exitCode"
           }
 
+      - name: Install legacy Windows 8.1 SDK and cached WP8.1 MSIs
+        shell: powershell
+        timeout-minutes: 20
+        run: |
+          # Microsoft documents the Windows 8.1 SDK as the base SDK and the
+          # Windows Phone 8.1 development tools as the companion payload.
+          $sdkSetup = Join-Path $env:RUNNER_TEMP "sdksetup-81.exe"
+          Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/p/?LinkId=323507" -OutFile $sdkSetup
+          $p = Start-Process -FilePath $sdkSetup -ArgumentList @("/quiet","/norestart") -Wait -PassThru
+          Write-Host "Windows 8.1 SDK setup exit code: $($p.ExitCode)"
+          if ($p.ExitCode -notin @(0,3010)) { throw "Windows 8.1 SDK setup failed with exit code $($p.ExitCode)" }
+
+          $cache = "C:\ProgramData\Package Cache"
+          $msis = Get-ChildItem $cache -Filter "WindowsPhoneSdk-*.msi" -Recurse -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -in @("WindowsPhoneSdk-Desktop.msi","WindowsPhoneSdk-Desktop-x64.msi","WindowsPhoneSdk-x86.msi","WindowsPhoneSdk-ARM.msi") } |
+            Sort-Object FullName -Unique
+          if (-not $msis) { throw "VS2015 bootstrapper did not leave Windows Phone 8.1 MSI payloads in Package Cache." }
+
+          foreach ($msi in $msis) {
+            Write-Host "Installing cached WP8.1 payload: $($msi.FullName)"
+            $p = Start-Process -FilePath "msiexec.exe" -ArgumentList @("/i",$msi.FullName,"/qn","/norestart","REBOOT=ReallySuppress") -Wait -PassThru
+            Write-Host "$($msi.Name) exit code: $($p.ExitCode)"
+            if ($p.ExitCode -notin @(0,3010)) { throw "WP8.1 MSI failed: $($msi.Name), exit code $($p.ExitCode)" }
+          }
+
+          Write-Host "=== Post-install SDK paths ==="
+          @(
+            "${env:ProgramFiles(x86)}\Microsoft SDKs\WindowsPhoneApp",
+            "${env:ProgramFiles(x86)}\Microsoft SDKs\Windows Phone",
+            "${env:ProgramFiles(x86)}\Microsoft SDKs\Windows\v8.1",
+            "${env:ProgramFiles(x86)}\Microsoft SDKs\Windows\v8.1A"
+          ) | ForEach-Object { if (Test-Path $_) { Write-Host "FOUND: $_" } else { Write-Host "MISSING: $_" } }
       - name: Check WP8.1 SDK availability
         shell: powershell
         run: |
