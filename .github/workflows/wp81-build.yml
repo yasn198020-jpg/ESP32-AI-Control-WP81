@@ -70,10 +70,37 @@ jobs:
           & $msbuild -version -nologo
           "MSBUILD_EXE=$msbuild" | Out-File $env:GITHUB_ENV -Encoding utf8
 
+      - name: Prepare .NET 4.5 reference assemblies
+        shell: powershell
+        run: |
+          $root = Join-Path $env:GITHUB_WORKSPACE ".ci\reference-assemblies"
+          $zip = Join-Path $env:RUNNER_TEMP "net45-ref.nupkg"
+          $extract = Join-Path $env:RUNNER_TEMP "net45-ref"
+
+          New-Item -ItemType Directory -Force -Path $root | Out-Null
+          Invoke-WebRequest -Uri "https://www.nuget.org/api/v2/package/Microsoft.NETFramework.ReferenceAssemblies.net45/1.0.3" -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath $extract -Force
+
+          $source = Join-Path $extract "build\.NETFramework\v4.5"
+          $target = Join-Path $root ".NETCore\v4.5"
+
+          if (-not (Test-Path (Join-Path $source "mscorlib.dll"))) {
+            throw "The .NET 4.5 reference assembly package was not extracted as expected: $source"
+          }
+
+          New-Item -ItemType Directory -Force -Path $target | Out-Null
+          Copy-Item (Join-Path $source "*") $target -Recurse -Force
+
+          Write-Host "Using .NET 4.5 reference assemblies: $target"
+          Get-ChildItem $target | Select-Object Name
+
+          "TARGET_FRAMEWORK_ROOT=$root" | Out-File $env:GITHUB_ENV -Encoding utf8
+          "FRAMEWORK_PATH_OVERRIDE=$target" | Out-File $env:GITHUB_ENV -Encoding utf8
+
       - name: Build WP81 Debug ARM
         shell: powershell
         run: |
-          & "$env:MSBUILD_EXE" "$env:GITHUB_WORKSPACE\ESP32-AI-Control-WP81.sln" /m /nologo /verbosity:minimal /p:Configuration=Debug /p:Platform=ARM /p:AppxPackageSigningEnabled=False /p:RestorePackages=false
+          & "$env:MSBUILD_EXE" "$env:GITHUB_WORKSPACE\ESP32-AI-Control-WP81.sln" /m /nologo /verbosity:minimal /p:Configuration=Debug /p:Platform=ARM /p:AppxPackageSigningEnabled=False /p:RestorePackages=false /p:TargetFrameworkRootPath="$env:TARGET_FRAMEWORK_ROOT" /p:FrameworkPathOverride="$env:FRAMEWORK_PATH_OVERRIDE"
 
       - name: Upload MSBuild binary log
         if: failure()
