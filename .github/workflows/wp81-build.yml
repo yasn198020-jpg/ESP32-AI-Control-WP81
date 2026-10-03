@@ -100,28 +100,43 @@ jobs:
             if (Test-Path $_) { Write-Host "FOUND: $_" } else { Write-Host "MISSING: $_" }
           }
 
-      - name: Select MakePri compatible with WP8.1 target schema
+      - name: Select Windows 8.1 MakePri
         shell: powershell
         run: |
           $pf86 = [Environment]::GetEnvironmentVariable("ProgramFiles(x86)")
-          # Use the current Windows SDK MakePri. It supports the legacy
-          # WP8.1 targetOsVersion=6.3.0 while understanding the qualifier
-          # set emitted by the modern Visual Studio Appx targets.
-          $makepriCandidates = Get-ChildItem "$pf86\Windows Kits\10\bin" -Directory -ErrorAction SilentlyContinue |
-            Sort-Object FullName -Descending |
-            ForEach-Object {
-              $p = Join-Path $_.FullName "x86\MakePri.exe"
-              if (Test-Path $p) { Get-Item $p }
-            }
-
-          $makepri = $makepriCandidates | Select-Object -First 1 -ExpandProperty FullName
+          $makepriCandidates = @(
+            "$pf86\Windows Kits\8.1\bin\x86\MakePri.exe",
+            "$pf86\Windows Kits\8.1A\bin\x86\MakePri.exe",
+            "$pf86\Windows Kits\8.1\bin\x64\MakePri.exe",
+            "$pf86\Windows Kits\8.1A\bin\x64\MakePri.exe"
+          )
+          $makepri = $makepriCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
           if (-not $makepri) {
-            throw "Windows 10/11 SDK x86 MakePri.exe was not found."
+            throw "Windows 8.1 MakePri.exe was not found."
           }
 
-          Write-Host "Using current SDK MakePri: $makepri"
+          $isX86MakePri = $makepri -match "\\bin\\x86\\MakePri\.exe$"
+          $extensionCandidates = if ($isX86MakePri) {
+            @(
+              "$pf86\Windows Phone Kits\8.1\bin\x86\MrmEnvironmentExtDl.dll",
+              "$pf86\Microsoft SDKs\WindowsPhoneApp\v8.1\bin\x86\MrmEnvironmentExtDl.dll"
+            )
+          } else {
+            @(
+              "$pf86\Windows Phone Kits\8.1\bin\x64\MrmEnvironmentExtDl.dll",
+              "$pf86\Microsoft SDKs\WindowsPhoneApp\v8.1\bin\x64\MrmEnvironmentExtDl.dll"
+            )
+          }
+          $makepriExtension = $extensionCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $makepriExtension) {
+            throw "Windows Phone 8.1 MrmEnvironmentExtDl.dll was not found."
+          }
+
+          Write-Host "Using WP8.1 MakePri: $makepri"
+          Write-Host "Using WP8.1 MakePri extension: $makepriExtension"
           & $makepri /? | Select-Object -First 3
           "MAKEPRI_EXE=$makepri" | Out-File $env:GITHUB_ENV -Encoding utf8
+          "MAKEPRI_EXTENSION_PATH=$makepriExtension" | Out-File $env:GITHUB_ENV -Encoding utf8
       - name: Inspect local toolchain
         shell: powershell
         run: |
@@ -233,7 +248,7 @@ jobs:
       - name: Build WP81 Debug ARM
         shell: powershell
         run: |
-          & "$env:MSBUILD_EXE" "$env:GITHUB_WORKSPACE\ESP32-AI-Control-WP81.sln" /m /nologo /verbosity:detailed /p:Configuration=Debug /p:Platform=ARM /p:AppxPackageSigningEnabled=False /p:RestorePackages=false /p:TargetFrameworkRootPath="$env:TARGET_FRAMEWORK_ROOT" /p:FrameworkPathOverride="$env:FRAMEWORK_PATH_OVERRIDE" /p:_TargetFrameworkDirectories="$env:FRAMEWORK_PATH_OVERRIDE" /p:_FullFrameworkReferenceAssemblyPaths="$env:FRAMEWORK_PATH_OVERRIDE" /p:MakePriExeFullPath="$env:MAKEPRI_EXE" /p:MakePriExtensionPath="" /p:OutOfProcessMakePriExtensionPath="" /p:InProcessMakePriExtensionPath=""
+          & "$env:MSBUILD_EXE" "$env:GITHUB_WORKSPACE\ESP32-AI-Control-WP81.sln" /m /nologo /verbosity:detailed /p:Configuration=Debug /p:Platform=ARM /p:AppxPackageSigningEnabled=False /p:RestorePackages=false /p:TargetFrameworkRootPath="$env:TARGET_FRAMEWORK_ROOT" /p:FrameworkPathOverride="$env:FRAMEWORK_PATH_OVERRIDE" /p:_TargetFrameworkDirectories="$env:FRAMEWORK_PATH_OVERRIDE" /p:_FullFrameworkReferenceAssemblyPaths="$env:FRAMEWORK_PATH_OVERRIDE" /p:MakePriExeFullPath="$env:MAKEPRI_EXE" /p:MakePriExtensionPath="$env:MAKEPRI_EXTENSION_PATH" /p:OutOfProcessMakePriExtensionPath="$env:MAKEPRI_EXTENSION_PATH" /p:InProcessMakePriExtensionPath="$env:MAKEPRI_EXTENSION_PATH"
 
       - name: Upload MSBuild binary log
         if: failure()
