@@ -87,7 +87,14 @@ jobs:
 
           New-Item -ItemType Directory -Force -Path $target | Out-Null
           Copy-Item (Join-Path $source "*") $target -Recurse -Force
+
+          # MSBuild resolves TargetFrameworkIdentifier=.NETCore through framework-list metadata.
+          $redist = Join-Path $target "RedistList"
+          New-Item -ItemType Directory -Force -Path $redist | Out-Null
+          Set-Content -Path (Join-Path $redist "FrameworkList.xml") -Value '<List Name=".NETCore,Version=v4.5" />' -Encoding UTF8
+
           Write-Host "Using .NET 4.5 reference assemblies: $target"
+          Write-Host "FrameworkList: $(Join-Path $redist "FrameworkList.xml")"
           Get-ChildItem $target | Select-Object Name
           "TARGET_FRAMEWORK_ROOT=$root" | Out-File $env:GITHUB_ENV -Encoding utf8
           "FRAMEWORK_PATH_OVERRIDE=$target" | Out-File $env:GITHUB_ENV -Encoding utf8
