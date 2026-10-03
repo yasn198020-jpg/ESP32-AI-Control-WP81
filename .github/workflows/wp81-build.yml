@@ -117,9 +117,30 @@ jobs:
           if (-not $makepri) {
             throw "Windows 8.1 MakePri.exe was not found."
           }
+
+          # Windows Phone 8.1 MakePri uses the phone-specific MRT extension DLL.
+          # Without it, the generic 8.1 MakePri rejects phone qualifiers such as Scale.
+          $phoneKitRoots = @(
+            "$pf86\Windows Phone Kits\8.1",
+            "$pf86\Microsoft SDKs\WindowsPhoneApp\v8.1",
+            "$pf86\Microsoft SDKs\Windows Phone\v8.1"
+          ) | Where-Object { Test-Path $_ }
+
+          $makepriExtension = $phoneKitRoots |
+            ForEach-Object {
+              Get-ChildItem $_ -Filter "MrmEnvironmentExtDl.dll" -Recurse -ErrorAction SilentlyContinue
+            } |
+            Select-Object -First 1 -ExpandProperty FullName
+
+          if (-not $makepriExtension) {
+            throw "Windows Phone 8.1 MrmEnvironmentExtDl.dll was not found."
+          }
+
           Write-Host "Using WP8.1 MakePri: $makepri"
+          Write-Host "Using WP8.1 MakePri extension: $makepriExtension"
           & $makepri /? | Select-Object -First 3
           "MAKEPRI_EXE=$makepri" | Out-File $env:GITHUB_ENV -Encoding utf8
+          "MAKEPRI_EXTENSION_PATH=$makepriExtension" | Out-File $env:GITHUB_ENV -Encoding utf8
 
       - name: Inspect local toolchain
         shell: powershell
@@ -232,7 +253,7 @@ jobs:
       - name: Build WP81 Debug ARM
         shell: powershell
         run: |
-          & "$env:MSBUILD_EXE" "$env:GITHUB_WORKSPACE\ESP32-AI-Control-WP81.sln" /m /nologo /verbosity:minimal /p:Configuration=Debug /p:Platform=ARM /p:AppxPackageSigningEnabled=False /p:RestorePackages=false /p:TargetFrameworkRootPath="$env:TARGET_FRAMEWORK_ROOT" /p:FrameworkPathOverride="$env:FRAMEWORK_PATH_OVERRIDE" /p:_TargetFrameworkDirectories="$env:FRAMEWORK_PATH_OVERRIDE" /p:_FullFrameworkReferenceAssemblyPaths="$env:FRAMEWORK_PATH_OVERRIDE" /p:MakePriExeFullPath="$env:MAKEPRI_EXE"
+          & "$env:MSBUILD_EXE" "$env:GITHUB_WORKSPACE\ESP32-AI-Control-WP81.sln" /m /nologo /verbosity:minimal /p:Configuration=Debug /p:Platform=ARM /p:AppxPackageSigningEnabled=False /p:RestorePackages=false /p:TargetFrameworkRootPath="$env:TARGET_FRAMEWORK_ROOT" /p:FrameworkPathOverride="$env:FRAMEWORK_PATH_OVERRIDE" /p:_TargetFrameworkDirectories="$env:FRAMEWORK_PATH_OVERRIDE" /p:_FullFrameworkReferenceAssemblyPaths="$env:FRAMEWORK_PATH_OVERRIDE" /p:MakePriExeFullPath="$env:MAKEPRI_EXE" /p:MakePriExtensionPath="$env:MAKEPRI_EXTENSION_PATH"
 
       - name: Upload MSBuild binary log
         if: failure()
