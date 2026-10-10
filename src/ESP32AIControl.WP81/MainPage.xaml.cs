@@ -128,6 +128,11 @@ namespace ESP32AIControl.WP81
                 _autoExportTimer.Stop();
         }
 
+        private void NavigateHome_Click(object sender, RoutedEventArgs e) { MainPivot.SelectedIndex = 0; }
+        private void NavigateGraphs_Click(object sender, RoutedEventArgs e) { MainPivot.SelectedIndex = 1; }
+        private void NavigateTasks_Click(object sender, RoutedEventArgs e) { MainPivot.SelectedIndex = 2; }
+        private void NavigateSettings_Click(object sender, RoutedEventArgs e) { MainPivot.SelectedIndex = 3; }
+
         private async void ConnectButton_Click(object sender, RoutedEventArgs e)
         {
             try
