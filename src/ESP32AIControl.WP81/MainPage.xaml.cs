@@ -445,7 +445,6 @@ namespace ESP32AIControl.WP81
                 TextAlignment = TextAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
-                Padding = new Thickness(5, 5, 5, 5)
             };
 
             if (isSwitch)
@@ -471,6 +470,7 @@ namespace ESP32AIControl.WP81
                 {
                     Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 25, 118, 210)),
                     Child = visual.ValueText,
+                    Padding = new Thickness(5, 5, 5, 5),
                     MinWidth = 76,
                     HorizontalAlignment = HorizontalAlignment.Right,
                     VerticalAlignment = VerticalAlignment.Center
