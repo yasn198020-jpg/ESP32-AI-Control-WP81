@@ -128,18 +128,15 @@ namespace ESP32AIControl.WP81
                 _autoExportTimer.Stop();
         }
 
-        private void ShowSection(FrameworkElement section)
+        private void ShowSection(int index)
         {
-            HomeSection.Visibility = section == HomeSection ? Visibility.Visible : Visibility.Collapsed;
-            GraphsSection.Visibility = section == GraphsSection ? Visibility.Visible : Visibility.Collapsed;
-            TasksSection.Visibility = section == TasksSection ? Visibility.Visible : Visibility.Collapsed;
-            SettingsSection.Visibility = section == SettingsSection ? Visibility.Visible : Visibility.Collapsed;
+            MainPivot.SelectedIndex = index;
         }
 
-        private void NavigateHome_Click(object sender, RoutedEventArgs e) { ShowSection(HomeSection); }
-        private void NavigateGraphs_Click(object sender, RoutedEventArgs e) { ShowSection(GraphsSection); }
-        private void NavigateTasks_Click(object sender, RoutedEventArgs e) { ShowSection(TasksSection); }
-        private void NavigateSettings_Click(object sender, RoutedEventArgs e) { ShowSection(SettingsSection); }
+        private void NavigateHome_Click(object sender, RoutedEventArgs e) { ShowSection(0); }
+        private void NavigateGraphs_Click(object sender, RoutedEventArgs e) { ShowSection(1); }
+        private void NavigateTasks_Click(object sender, RoutedEventArgs e) { ShowSection(2); }
+        private void NavigateSettings_Click(object sender, RoutedEventArgs e) { ShowSection(3); }
 
         private async void ConnectButton_Click(object sender, RoutedEventArgs e)
         {
