@@ -37,8 +37,8 @@
         </Grid></Border>
 
         <!-- Main sections; widget pages inside Dashboard remain horizontally swipeable. -->
-        <Pivot x:Name="MainPivot" Grid.Row="1" Margin="0" Background="{StaticResource DashboardBackground}">
-            <PivotItem Header="">
+        <Grid Grid.Row="1" Background="{StaticResource DashboardBackground}">
+            <Grid x:Name="HomeSection" Visibility="Visible">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="14,4,14,8">
                     <StackPanel>
                         <Grid Margin="0,4,0,10">
@@ -80,9 +80,9 @@
                         </Border>
                     </StackPanel>
                 </ScrollViewer>
-            </PivotItem>
+            </Grid>
 
-            <PivotItem Header="">
+            <Grid x:Name="GraphsSection" Visibility="Collapsed">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="14,8,14,12">
                     <StackPanel>
                         <TextBlock Text="История измерений" FontSize="25" Foreground="{StaticResource DashboardText}"/>
@@ -103,9 +103,9 @@
                         </Border>
                     </StackPanel>
                 </ScrollViewer>
-            </PivotItem>
+            </Grid>
 
-            <PivotItem Header="">
+            <Grid x:Name="TasksSection" Visibility="Collapsed">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="14,8,14,12">
                     <StackPanel>
                         <TextBlock Text="Запланированные команды" FontSize="25" Foreground="{StaticResource DashboardText}"/>
@@ -124,9 +124,9 @@
                         <ListView x:Name="ScheduleList" Height="420" SelectionChanged="ScheduleList_SelectionChanged"/>
                     </StackPanel>
                 </ScrollViewer>
-            </PivotItem>
+            </Grid>
 
-            <PivotItem Header="">
+            <Grid x:Name="SettingsSection" Visibility="Collapsed">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="14,8,14,12">
                     <StackPanel>
                         <TextBlock Text="Подключение" FontSize="25" Foreground="{StaticResource DashboardText}"/>
@@ -168,8 +168,8 @@
                                    Foreground="{StaticResource DashboardMuted}" TextWrapping="Wrap" Margin="0,6,0,0"/>
                     </StackPanel>
                 </ScrollViewer>
-            </PivotItem>
-        </Pivot>
+            </Grid>
+        </Grid>
 
         <!-- Custom bottom navigation, above the Windows Phone system navigation keys -->
         <Border Grid.Row="2" Background="#FF171920" Padding="4,4,4,2"><Grid>
