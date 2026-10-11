@@ -159,7 +159,6 @@
                                    Foreground="#FF9CA3AF" TextWrapping="Wrap" Margin="0,6,0,0"/>
                     </StackPanel>
                 </ScrollViewer>
-            </Grid>
             </Grid></PivotItem>
         </Pivot>
 
