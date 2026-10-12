@@ -2,14 +2,32 @@
     x:Class="ESP32AIControl.WP81.MainPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Page.Resources>
+        <SolidColorBrush x:Key="AccentBrush" Color="#FF00A4EF"/>
+        <SolidColorBrush x:Key="PanelBrush" Color="#FF1B1D24"/>
+        <SolidColorBrush x:Key="MutedBrush" Color="#FF9CA3AF"/>
+        <Style TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#FFF3F4F6"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+        <Style TargetType="Button">
+            <Setter Property="Background" Value="#FF252832"/>
+            <Setter Property="Foreground" Value="#FFFFFFFF"/>
+            <Setter Property="BorderBrush" Value="#FF343844"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="12,8"/>
+        </Style>
+    </Page.Resources>
     <Grid Background="#FF101116">
-        <Pivot x:Name="MainPivot">
+        <Pivot x:Name="MainPivot" Foreground="#FFF3F4F6">
             <PivotItem Header="Управление">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="16,8,16,12">
                     <StackPanel>
-                        <TextBlock Text="ESP32 AI Control" FontSize="30"/>
-                        <TextBlock Text="Windows Phone 8.1 • Lumia 830" FontSize="16" Opacity="0.7"/>
-                        <TextBlock x:Name="ConnectionText" Text="MQTT: отключено" FontSize="20" Margin="0,8,0,8"/>
+                        <TextBlock Text="ESP32 AI Control" FontSize="30" FontWeight="Light" Foreground="#FF00A4EF" Margin="0,4,0,0"/>
+                        <TextBlock Text="SMART HOME  /  WP8.1" FontSize="12" Foreground="#FF9CA3AF" Margin="0,2,0,12"/>
+                        <Border Background="#FF1B1D24" BorderBrush="#FF343844" BorderThickness="1" Padding="12" Margin="0,0,0,12">
+                            <TextBlock x:Name="ConnectionText" Text="MQTT: отключено" FontSize="18" Foreground="#FFFFB454"/>
+                        </Border>
 
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                             <Button Content="Подключить" Click="ConnectButton_Click" Margin="0,0,8,0"/>
@@ -23,11 +41,11 @@
                                        VerticalAlignment="Center" TextWrapping="Wrap" Width="420"/>
                         </StackPanel>
 
-                        <TextBlock Text="Виджеты ESP32" FontSize="22" Margin="0,4,0,8"/>
+                        <TextBlock Text="ТЕПЛИЦЫ И УСТРОЙСТВА" FontSize="14" FontWeight="SemiBold" Foreground="#FF00A4EF" Margin="0,14,0,8"/>
                         <Pivot x:Name="WidgetPages" Height="430"/>
 
-                        <TextBlock Text="Диагностика MQTT" FontSize="19" Margin="0,14,0,6"/>
-                        <Border BorderThickness="1" Padding="6" MinHeight="100">
+                        <TextBlock Text="ЖУРНАЛ СОЕДИНЕНИЯ" FontSize="14" FontWeight="SemiBold" Foreground="#FF00A4EF" Margin="0,18,0,8"/>
+                        <Border Background="#FF17191F" BorderBrush="#FF343844" BorderThickness="1" Padding="8" MinHeight="100">
                             <ScrollViewer Height="150">
                                 <TextBlock x:Name="LogText" TextWrapping="Wrap" FontSize="13"/>
                             </ScrollViewer>
@@ -39,7 +57,7 @@
             <PivotItem Header="Графики">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="16,8,16,12">
                     <StackPanel>
-                        <TextBlock Text="История измерений" FontSize="28"/>
+                        <TextBlock Text="ГРАФИКИ" FontSize="28" FontWeight="Light" Foreground="#FF00A4EF"/>
                         <TextBlock Text="Запись производится с заданным интервалом, а не по каждому MQTT-пакету."
                                    TextWrapping="Wrap" Opacity="0.7" Margin="0,4,0,10"/>
                         <ComboBox x:Name="GraphWidgetBox" Header="Датчик / виджет" Margin="0,4"/>
@@ -62,7 +80,7 @@
             <PivotItem Header="Задачи">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="16,8,16,12">
                     <StackPanel>
-                        <TextBlock Text="Запланированные команды" FontSize="28"/>
+                        <TextBlock Text="ЗАПЛАНИРОВАННЫЕ КОМАНДЫ" FontSize="26" FontWeight="Light" Foreground="#FF00A4EF"/>
                         <TextBlock Text="Команда: device/widget=value" Opacity="0.7" Margin="0,4,0,8"/>
                         <TextBox x:Name="ScheduleCommandBox" Header="Команда"/>
                         <StackPanel Orientation="Horizontal">
@@ -83,14 +101,14 @@
             <PivotItem Header="Настройки">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="16,8,16,12">
                     <StackPanel>
-                        <TextBlock Text="Подключение" FontSize="26"/>
+                        <TextBlock Text="ПОДКЛЮЧЕНИЕ" FontSize="22" FontWeight="Light" Foreground="#FF00A4EF"/>
                         <TextBox x:Name="HostBox" Header="MQTT host" Text="m4.wqtt.ru"/>
                         <TextBox x:Name="PortBox" Header="TCP port" Text="2815"/>
                         <TextBox x:Name="PrefixBox" Header="MQTT prefix" Text="dghjko"/>
                         <TextBox x:Name="UserNameBox" Header="MQTT username"/>
                         <PasswordBox x:Name="PasswordBox" Header="MQTT password"/>
 
-                        <TextBlock Text="Графики и хранение" FontSize="24" Margin="0,16,0,4"/>
+                        <TextBlock Text="ГРАФИКИ И ХРАНЕНИЕ" FontSize="18" FontWeight="SemiBold" Foreground="#FF00A4EF" Margin="0,20,0,4"/>
                         <TextBox x:Name="MeasurementIntervalBox" Header="Интервал записи, секунд" Text="60"/>
                         <TextBox x:Name="RetentionDaysBox" Header="Период хранения, дней" Text="30"/>
                         <ComboBox x:Name="AutoExportBox" Header="Автоэкспорт Word">
@@ -100,11 +118,11 @@
                             <ComboBoxItem Content="Месяц" Tag="Month"/>
                         </ComboBox>
 
-                        <TextBlock Text="Голосовое управление" FontSize="24" Margin="0,16,0,4"/>
+                        <TextBlock Text="ГОЛОСОВОЕ УПРАВЛЕНИЕ" FontSize="18" FontWeight="SemiBold" Foreground="#FF00A4EF" Margin="0,20,0,4"/>
                         <TextBox x:Name="VoiceOpenCommandBox" Header="Команда «открой теплицу»" PlaceholderText="device/widget=1"/>
                         <TextBox x:Name="VoiceCloseCommandBox" Header="Команда «закрой теплицу»" PlaceholderText="device/widget=0"/>
 
-                        <TextBlock Text="Сценарий IoTManager" FontSize="24" Margin="0,16,0,4"/>
+                        <TextBlock Text="СЦЕНАРИЙ IOTMANAGER" FontSize="18" FontWeight="SemiBold" Foreground="#FF00A4EF" Margin="0,20,0,4"/>
                         <TextBlock Text="Вставьте сюда блок scenario=> из export.json. Марфа ищет зависимости от реле вверх по условиям сценария."
                                    TextWrapping="Wrap" Opacity="0.7"/>
                         <TextBox x:Name="ScenarioTextBox"
@@ -121,7 +139,7 @@
                         <Button Content="Сохранить настройки" Click="SaveSettingsButton_Click" Margin="0,12,0,8"/>
                         <TextBlock x:Name="SettingsStatus" Text="" TextWrapping="Wrap"/>
 
-                        <TextBlock Text="Word-экспорт" FontSize="24" Margin="0,18,0,4"/>
+                        <TextBlock Text="ЭКСПОРТ ДАННЫХ" FontSize="18" FontWeight="SemiBold" Foreground="#FF00A4EF" Margin="0,20,0,4"/>
                         <Button Content="Экспорт всей истории за сегодня" Click="ExportTodayButton_Click"/>
                         <TextBlock Text="Документы сохраняются в локальной папке приложения. Формат .doc совместим с Word."
                                    Opacity="0.7" TextWrapping="Wrap" Margin="0,6,0,0"/>
