@@ -19,12 +19,43 @@
         </Style>
     </Page.Resources>
     <Grid Background="#FF101116">
-        <Pivot x:Name="MainPivot" Foreground="#FFF3F4F6" Background="#FF101116">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="68"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="60"/>
+        </Grid.RowDefinitions>
+
+        <!-- Persistent app header, mirroring the Android top bar. -->
+        <Border Grid.Row="0" Background="#FF15171D" BorderBrush="#FF343844"
+                BorderThickness="0,0,0,1" Padding="14,5,14,5">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="ESP32 AI Control" FontSize="23" FontWeight="SemiBold"
+                               Foreground="#FF00A4EF" TextWrapping="NoWrap"/>
+                    <TextBlock x:Name="PageSubtitle" Text="УПРАВЛЕНИЕ УСТРОЙСТВАМИ"
+                               FontSize="10" Foreground="#FF9CA3AF" Margin="1,0,0,0"
+                               TextWrapping="NoWrap"/>
+                </StackPanel>
+                <TextBlock x:Name="TopConnectionDot" Grid.Column="1" Text="●"
+                           FontSize="21" Foreground="#FFFFB454"
+                           VerticalAlignment="Center" Margin="8,0,2,0"/>
+            </Grid>
+        </Border>
+
+        <Pivot x:Name="MainPivot" Grid.Row="1" Foreground="#FFF3F4F6"
+               Background="#FF101116" SelectionChanged="MainPivot_SelectionChanged">
+            <Pivot.HeaderTemplate>
+                <DataTemplate>
+                    <TextBlock Visibility="Collapsed" Height="0" Width="0"/>
+                </DataTemplate>
+            </Pivot.HeaderTemplate>
             <PivotItem Header="Управление">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="12,6,12,8">
                     <StackPanel>
-                        <TextBlock Text="ESP32 AI Control" FontSize="30" FontWeight="Light" Foreground="#FF00A4EF" Margin="0,4,0,0"/>
-                        <TextBlock Text="SMART HOME  /  WP8.1" FontSize="12" Foreground="#FF9CA3AF" Margin="0,2,0,12"/>
                         <Border Background="#FF1B1D24" BorderBrush="#FF343844" BorderThickness="1" Padding="12" Margin="0,0,0,12">
                             <TextBlock x:Name="ConnectionText" Text="MQTT: отключено" FontSize="18" Foreground="#FFFFB454"/>
                         </Border>
@@ -155,5 +186,52 @@
                 </ScrollViewer>
             </PivotItem>
         </Pivot>
+
+        <!-- Fixed bottom navigation inspired by the Android app. -->
+        <Grid Grid.Row="2" Background="#FF1B1D24" Padding="3,3,3,3">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <Button x:Name="NavHomeButton" Grid.Column="0" Click="NavigateHome_Click"
+                    Height="54" Padding="0" BorderThickness="0" FontSize="11">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock Text="⌂" FontSize="19" HorizontalAlignment="Center"/>
+                    <TextBlock Text="Домой" FontSize="10" HorizontalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+            <Button x:Name="NavMarfaButton" Grid.Column="1" Click="NavigateMarfa_Click"
+                    Height="54" Padding="0" BorderThickness="0" FontSize="11">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock Text="◉" FontSize="19" HorizontalAlignment="Center"/>
+                    <TextBlock Text="Марфа" FontSize="10" HorizontalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+            <Button x:Name="NavGraphsButton" Grid.Column="2" Click="NavigateGraphs_Click"
+                    Height="54" Padding="0" BorderThickness="0" FontSize="11">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock Text="▥" FontSize="19" HorizontalAlignment="Center"/>
+                    <TextBlock Text="Графики" FontSize="10" HorizontalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+            <Button x:Name="NavTasksButton" Grid.Column="3" Click="NavigateTasks_Click"
+                    Height="54" Padding="0" BorderThickness="0" FontSize="11">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock Text="◷" FontSize="19" HorizontalAlignment="Center"/>
+                    <TextBlock Text="Задачи" FontSize="10" HorizontalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+            <Button x:Name="NavSettingsButton" Grid.Column="4" Click="NavigateSettings_Click"
+                    Height="54" Padding="0" BorderThickness="0" FontSize="11">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock Text="⚙" FontSize="19" HorizontalAlignment="Center"/>
+                    <TextBlock Text="Настройки" FontSize="9" HorizontalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+        </Grid>
     </Grid>
 </Page>
