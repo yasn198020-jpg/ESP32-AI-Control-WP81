@@ -485,10 +485,10 @@ namespace ESP32AIControl.WP81
 
             var shell = new Border
             {
-                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 27, 29, 36)),
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 32, 32, 32)),
                 Padding = new Thickness(10, 9, 10, 9),
                 BorderThickness = new Thickness(0, 0, 0, 1),
-                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 47, 49, 59))
+                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 55, 55, 55))
             };
 
             var row = new Grid();
@@ -500,7 +500,7 @@ namespace ESP32AIControl.WP81
             {
                 Text = isSwitch ? "◉" : (isAction ? "●" : "◆"),
                 FontSize = 21,
-                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 177, 92, 255)),
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 128, 101, 232)),
                 VerticalAlignment = VerticalAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Left
             };
@@ -532,53 +532,48 @@ namespace ESP32AIControl.WP81
 
             if (isSwitch)
             {
-                var check = new CheckBox
+                var toggle = new ToggleSwitch
                 {
-                    Content = "Вкл.",
+                    OnContent = "Вкл.",
+                    OffContent = "Выкл.",
                     Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 209, 213, 219)),
                     VerticalAlignment = VerticalAlignment.Center,
                     HorizontalAlignment = HorizontalAlignment.Right,
                     MinWidth = 82
                 };
-                check.Checked += delegate { PublishSwitchValue(visual, true); };
-                check.Unchecked += delegate { PublishSwitchValue(visual, false); };
-                visual.Control = check;
-                Grid.SetColumn(check, 2);
-                row.Children.Add(check);
+                toggle.Toggled += delegate { PublishSwitchValue(visual, toggle.IsOn); };
+                visual.Control = toggle;
+                Grid.SetColumn(toggle, 2);
+                row.Children.Add(toggle);
+                visual.ValueText.Visibility = Visibility.Collapsed;
+            }
+            else if (isAction)
+            {
+                var button = new Button
+                {
+                    Content = "Нажать",
+                    MinWidth = 76,
+                    Padding = new Thickness(8, 5, 8, 5),
+                    HorizontalAlignment = HorizontalAlignment.Right,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(0)
+                };
+                button.Click += async delegate { await PublishControl(visual, "1"); };
+                visual.Control = button;
+                Grid.SetColumn(button, 2);
+                row.Children.Add(button);
                 visual.ValueText.Visibility = Visibility.Collapsed;
             }
             else
             {
-                var valueBadge = new Border
-                {
-                    Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 25, 118, 210)),
-                    Child = visual.ValueText,
-                    Padding = new Thickness(5, 5, 5, 5),
-                    MinWidth = 76,
-                    HorizontalAlignment = HorizontalAlignment.Right,
-                    VerticalAlignment = VerticalAlignment.Center
-                };
-                Grid.SetColumn(valueBadge, 2);
-                row.Children.Add(valueBadge);
+                Grid.SetColumn(visual.ValueText, 2);
+                row.Children.Add(visual.ValueText);
             }
 
             shell.Child = row;
             visual.Container.Children.Add(shell);
 
-            if (isAction)
-            {
-                var button = new Button
-                {
-                    Content = "Выполнить",
-                    MinWidth = 130,
-                    HorizontalAlignment = HorizontalAlignment.Right,
-                    Margin = new Thickness(0, 5, 0, 0)
-                };
-                button.Click += async delegate { await PublishControl(visual, "1"); };
-                visual.Control = button;
-                visual.Container.Children.Add(button);
-            }
-            else if (isSlider)
+            if (isSlider)
             {
                 var slider = new Slider
                 {
@@ -596,18 +591,6 @@ namespace ESP32AIControl.WP81
                 };
                 visual.Control = slider;
                 visual.Container.Children.Add(slider);
-            }
-            else if (!isSwitch)
-            {
-                var info = new TextBlock
-                {
-                    Text = "Только отображение",
-                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 156, 163, 175)),
-                    FontSize = 11,
-                    Margin = new Thickness(34, 2, 0, 0)
-                };
-                visual.Container.Children.Add(info);
-                if (!isAction) visual.Control = info;
             }
 
             return visual;
@@ -748,10 +731,10 @@ namespace ESP32AIControl.WP81
             if (visual.ValueText != null)
                 visual.ValueText.Text = string.IsNullOrEmpty(value) ? "—" : value;
 
-            var check = visual.Control as CheckBox;
-            if (check != null)
+            var toggle = visual.Control as ToggleSwitch;
+            if (toggle != null)
             {
-                check.IsChecked = ParseBoolean(value);
+                toggle.IsOn = ParseBoolean(value);
                 return;
             }
 
