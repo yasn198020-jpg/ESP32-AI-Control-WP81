@@ -140,18 +140,51 @@ namespace ESP32AIControl.WP81
             UpdateNavigationState();
         }
 
+        private void MenuButton_Click(object sender, RoutedEventArgs e)
+        {
+            var menu = new MenuFlyout();
+
+            var home = new MenuFlyoutItem { Text = "Главная" };
+            home.Click += delegate { ShowSection(0); };
+            menu.Items.Add(home);
+
+            var graphs = new MenuFlyoutItem { Text = "Графики и история" };
+            graphs.Click += delegate { ShowSection(1); };
+            menu.Items.Add(graphs);
+
+            var tasks = new MenuFlyoutItem { Text = "Запланированные команды" };
+            tasks.Click += delegate { ShowSection(2); };
+            menu.Items.Add(tasks);
+
+            var settings = new MenuFlyoutItem { Text = "Настройки MQTT и приложения" };
+            settings.Click += delegate { ShowSection(3); };
+            menu.Items.Add(settings);
+
+            menu.ShowAt(MenuButton);
+        }
+
+        private async void TopInfoButton_Click(object sender, RoutedEventArgs e)
+        {
+            var state = ConnectionText == null ? "Состояние MQTT неизвестно." : ConnectionText.Text;
+            var dialog = new Windows.UI.Popups.MessageDialog(
+                state + Environment.NewLine +
+                "Параметры MQTT, сценарий IoTManager и журнал доступны в разделе «Настройки».",
+                "ESP32 AI Control");
+            await dialog.ShowAsync();
+        }
+
         private void UpdateNavigationState()
         {
             if (PageSubtitle == null || MainPivot == null) return;
 
             if (MainPivot.SelectedIndex == 0)
-                PageSubtitle.Text = "УПРАВЛЕНИЕ УСТРОЙСТВАМИ";
+                PageSubtitle.Text = "Dashboard";
             else if (MainPivot.SelectedIndex == 1)
-                PageSubtitle.Text = "ГРАФИКИ И ИСТОРИЯ";
+                PageSubtitle.Text = "Графики";
             else if (MainPivot.SelectedIndex == 2)
-                PageSubtitle.Text = "ЗАПЛАНИРОВАННЫЕ КОМАНДЫ";
+                PageSubtitle.Text = "Задачи";
             else
-                PageSubtitle.Text = "НАСТРОЙКИ ПРИЛОЖЕНИЯ";
+                PageSubtitle.Text = "Настройки";
 
             SetNavigationButton(NavHomeButton, MainPivot.SelectedIndex == 0);
             SetNavigationButton(NavMarfaButton, false);
@@ -425,7 +458,7 @@ namespace ESP32AIControl.WP81
                     TopConnectionDot.Foreground = new SolidColorBrush(
                         e.State == MqttConnectionState.Connected
                             ? Windows.UI.Color.FromArgb(255, 76, 175, 80)
-                            : Windows.UI.Color.FromArgb(255, 255, 180, 84));
+                            : Windows.UI.Color.FromArgb(255, 244, 67, 54));
             });
         }
 
