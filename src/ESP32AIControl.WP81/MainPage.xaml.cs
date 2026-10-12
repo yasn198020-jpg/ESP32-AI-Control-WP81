@@ -421,6 +421,11 @@ namespace ESP32AIControl.WP81
             await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, delegate
             {
                 ConnectionText.Text = "MQTT: " + e.State;
+                if (TopConnectionDot != null)
+                    TopConnectionDot.Foreground = new SolidColorBrush(
+                        e.State == MqttConnectionState.Connected
+                            ? Windows.UI.Color.FromArgb(255, 76, 175, 80)
+                            : Windows.UI.Color.FromArgb(255, 255, 180, 84));
             });
         }
 
@@ -661,7 +666,11 @@ namespace ESP32AIControl.WP81
             var item = new PivotItem
             {
                 Header = pageName,
-                Content = page.Content,
+                Content = new ScrollViewer
+                {
+                    Content = page.Content,
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+                },
                 Tag = pageName
             };
             page.Item = item;
@@ -1096,7 +1105,7 @@ namespace ESP32AIControl.WP81
         {
             try
             {
-                VoiceButton.IsEnabled = false;
+                NavMarfaButton.IsEnabled = false;
                 VoiceResultText.Text = "Слушаю…";
                 await _voice.StartListeningAsync();
             }
@@ -1107,7 +1116,7 @@ namespace ESP32AIControl.WP81
             }
             finally
             {
-                VoiceButton.IsEnabled = true;
+                NavMarfaButton.IsEnabled = true;
                 await _voice.StopListeningAsync();
             }
         }
