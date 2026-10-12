@@ -7,8 +7,10 @@
         <SolidColorBrush x:Key="PanelBrush" Color="#FF1B1D24"/>
         <SolidColorBrush x:Key="MutedBrush" Color="#FF9CA3AF"/>
         <DataTemplate x:Key="WidgetPageHeaderTemplate">
-            <TextBlock Text="{Binding}" FontSize="14" FontWeight="SemiBold"
-                       Foreground="#FFF3F4F6" TextWrapping="NoWrap"/>
+            <Border Background="#FF30313A" CornerRadius="9" Padding="14,9" Margin="0,0,6,0">
+                <TextBlock Text="{Binding}" FontSize="14" FontWeight="SemiBold"
+                           Foreground="#FFF3F4F6" TextWrapping="NoWrap"/>
+            </Border>
         </DataTemplate>
         <Style TargetType="TextBlock">
             <Setter Property="Foreground" Value="#FFF3F4F6"/>
@@ -57,7 +59,7 @@
         </Border>
 
         <Pivot x:Name="MainPivot" Grid.Row="1" Foreground="#FFF3F4F6"
-               Background="#FF202020" SelectionChanged="MainPivot_SelectionChanged">
+               Background="#FF121318" SelectionChanged="MainPivot_SelectionChanged">
             <Pivot.HeaderTemplate>
                 <DataTemplate>
                     <TextBlock Visibility="Collapsed" Height="0" Width="0"/>
@@ -85,7 +87,7 @@
             <PivotItem Header="Графики">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="16,8,16,12">
                     <StackPanel>
-                        <TextBlock Text="ГРАФИКИ" FontSize="28" FontWeight="Light" Foreground="#FF00A4EF"/>
+                        <TextBlock Text="ГРАФИКИ" FontSize="28" FontWeight="Light" Foreground="#FF8065E8"/>
                         <TextBlock Text="Запись производится с заданным интервалом, а не по каждому MQTT-пакету."
                                    TextWrapping="Wrap" Opacity="0.7" Margin="0,4,0,10"/>
                         <ComboBox x:Name="GraphWidgetBox" Header="Датчик / виджет" Margin="0,4"/>
@@ -108,7 +110,7 @@
             <PivotItem Header="Задачи">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="16,8,16,12">
                     <StackPanel>
-                        <TextBlock Text="ЗАПЛАНИРОВАННЫЕ КОМАНДЫ" FontSize="26" FontWeight="Light" Foreground="#FF00A4EF"/>
+                        <TextBlock Text="ЗАПЛАНИРОВАННЫЕ КОМАНДЫ" FontSize="26" FontWeight="Light" Foreground="#FF8065E8"/>
                         <TextBlock Text="Команда: device/widget=value" Opacity="0.7" Margin="0,4,0,8"/>
                         <TextBox x:Name="ScheduleCommandBox" Header="Команда"/>
                         <StackPanel Orientation="Horizontal">
@@ -131,7 +133,7 @@
             <PivotItem Header="Настройки">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="16,8,16,12">
                     <StackPanel>
-                        <TextBlock Text="ПОДКЛЮЧЕНИЕ" FontSize="22" FontWeight="Light" Foreground="#FF00A4EF"/>
+                        <TextBlock Text="ПОДКЛЮЧЕНИЕ" FontSize="22" FontWeight="Light" Foreground="#FF8065E8"/>
                         <TextBox x:Name="HostBox" Header="MQTT host" Text="m4.wqtt.ru"/>
                         <TextBox x:Name="PortBox" Header="TCP port" Text="2815"/>
                         <TextBox x:Name="PrefixBox" Header="MQTT prefix" Text="dghjko"/>
@@ -158,7 +160,7 @@
                             </StackPanel>
                         </Border>
 
-                        <TextBlock Text="ГРАФИКИ И ХРАНЕНИЕ" FontSize="18" FontWeight="SemiBold" Foreground="#FF00A4EF" Margin="0,20,0,4"/>
+                        <TextBlock Text="ГРАФИКИ И ХРАНЕНИЕ" FontSize="18" FontWeight="SemiBold" Foreground="#FF8065E8" Margin="0,20,0,4"/>
                         <TextBox x:Name="MeasurementIntervalBox" Header="Интервал записи, секунд" Text="60"/>
                         <TextBox x:Name="RetentionDaysBox" Header="Период хранения, дней" Text="30"/>
                         <ComboBox x:Name="AutoExportBox" Header="Автоэкспорт Word">
@@ -168,11 +170,11 @@
                             <ComboBoxItem Content="Месяц" Tag="Month"/>
                         </ComboBox>
 
-                        <TextBlock Text="ГОЛОСОВОЕ УПРАВЛЕНИЕ" FontSize="18" FontWeight="SemiBold" Foreground="#FF00A4EF" Margin="0,20,0,4"/>
+                        <TextBlock Text="ГОЛОСОВОЕ УПРАВЛЕНИЕ" FontSize="18" FontWeight="SemiBold" Foreground="#FF8065E8" Margin="0,20,0,4"/>
                         <TextBox x:Name="VoiceOpenCommandBox" Header="Команда «открой теплицу»" PlaceholderText="device/widget=1"/>
                         <TextBox x:Name="VoiceCloseCommandBox" Header="Команда «закрой теплицу»" PlaceholderText="device/widget=0"/>
 
-                        <TextBlock Text="СЦЕНАРИЙ IOTMANAGER" FontSize="18" FontWeight="SemiBold" Foreground="#FF00A4EF" Margin="0,20,0,4"/>
+                        <TextBlock Text="СЦЕНАРИЙ IOTMANAGER" FontSize="18" FontWeight="SemiBold" Foreground="#FF8065E8" Margin="0,20,0,4"/>
                         <TextBlock Text="Вставьте сюда блок scenario=> из export.json. Марфа ищет зависимости от реле вверх по условиям сценария."
                                    TextWrapping="Wrap" Opacity="0.7"/>
                         <TextBox x:Name="ScenarioTextBox"
@@ -190,7 +192,7 @@
                         <TextBlock x:Name="SettingsStatus" Text="" TextWrapping="Wrap"/>
 
                         <TextBlock Text="ЖУРНАЛ СОЕДИНЕНИЯ" FontSize="18" FontWeight="SemiBold"
-                                   Foreground="#FF00A4EF" Margin="0,20,0,4"/>
+                                   Foreground="#FF8065E8" Margin="0,20,0,4"/>
                         <Border Background="#FF17191F" BorderBrush="#FF343844"
                                 BorderThickness="1" Padding="8" MinHeight="100">
                             <ScrollViewer Height="150" VerticalScrollBarVisibility="Auto">
@@ -198,7 +200,7 @@
                             </ScrollViewer>
                         </Border>
 
-                        <TextBlock Text="ЭКСПОРТ ДАННЫХ" FontSize="18" FontWeight="SemiBold" Foreground="#FF00A4EF" Margin="0,20,0,4"/>
+                        <TextBlock Text="ЭКСПОРТ ДАННЫХ" FontSize="18" FontWeight="SemiBold" Foreground="#FF8065E8" Margin="0,20,0,4"/>
                         <Button Content="Экспорт всей истории за сегодня" Click="ExportTodayButton_Click"/>
                         <TextBlock Text="Документы сохраняются в локальной папке приложения. Формат .doc совместим с Word."
                                    Opacity="0.7" TextWrapping="Wrap" Margin="0,6,0,0"/>
