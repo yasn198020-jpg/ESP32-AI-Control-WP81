@@ -236,7 +236,8 @@
         </Pivot>
 
         <!-- Fixed bottom navigation inspired by the Android app. -->
-        <Grid Grid.Row="2" Background="#FF191A20">
+        <Grid Grid.Row="2" Background="#FF191A20"
+              BorderBrush="#FF30313A" BorderThickness="0,1,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="*"/>
@@ -246,35 +247,35 @@
             </Grid.ColumnDefinitions>
 
             <Button x:Name="NavHomeButton" Grid.Column="0" Click="NavigateHome_Click"
-                    Height="54" Padding="0" BorderThickness="0" FontSize="11">
+                    Height="64" Padding="0" BorderThickness="0" FontSize="11">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                     <TextBlock Text="⌂" FontSize="19" HorizontalAlignment="Center"/>
                     <TextBlock Text="Домой" FontSize="10" HorizontalAlignment="Center"/>
                 </StackPanel>
             </Button>
             <Button x:Name="NavMarfaButton" Grid.Column="1" Click="NavigateMarfa_Click"
-                    Height="54" Padding="0" BorderThickness="0" FontSize="11">
+                    Height="64" Padding="0" BorderThickness="0" FontSize="11">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                     <TextBlock Text="◉" FontSize="19" HorizontalAlignment="Center"/>
                     <TextBlock Text="Марфа" FontSize="10" HorizontalAlignment="Center"/>
                 </StackPanel>
             </Button>
             <Button x:Name="NavGraphsButton" Grid.Column="2" Click="NavigateGraphs_Click"
-                    Height="54" Padding="0" BorderThickness="0" FontSize="11">
+                    Height="64" Padding="0" BorderThickness="0" FontSize="11">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                     <TextBlock Text="▥" FontSize="19" HorizontalAlignment="Center"/>
                     <TextBlock Text="Графики" FontSize="10" HorizontalAlignment="Center"/>
                 </StackPanel>
             </Button>
             <Button x:Name="NavTasksButton" Grid.Column="3" Click="NavigateTasks_Click"
-                    Height="54" Padding="0" BorderThickness="0" FontSize="11">
+                    Height="64" Padding="0" BorderThickness="0" FontSize="11">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                     <TextBlock Text="◷" FontSize="19" HorizontalAlignment="Center"/>
                     <TextBlock Text="Задачи" FontSize="10" HorizontalAlignment="Center"/>
                 </StackPanel>
             </Button>
             <Button x:Name="NavSettingsButton" Grid.Column="4" Click="NavigateSettings_Click"
-                    Height="54" Padding="0" BorderThickness="0" FontSize="11">
+                    Height="64" Padding="0" BorderThickness="0" FontSize="11">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                     <TextBlock Text="⚙" FontSize="19" HorizontalAlignment="Center"/>
                     <TextBlock Text="Настройки" FontSize="9" HorizontalAlignment="Center"/>
