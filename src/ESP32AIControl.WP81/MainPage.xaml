@@ -208,7 +208,7 @@
         </Pivot>
 
         <!-- Fixed bottom navigation inspired by the Android app. -->
-        <Grid Grid.Row="2" Background="#FF1B1D24" Padding="3,3,3,3">
+        <Grid Grid.Row="2" Background="#FF1B1D24">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="*"/>
