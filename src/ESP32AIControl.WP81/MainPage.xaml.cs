@@ -471,9 +471,11 @@ namespace ESP32AIControl.WP81
                 PageName = pageName
             };
 
+            // Match Android's compact dashboard rows: 16dp horizontal spacing,
+            // small vertical rhythm, and no oversized fixed-width controls.
             visual.Container = new StackPanel
             {
-                Margin = new Thickness(0, 0, 0, 8),
+                Margin = new Thickness(0, 0, 0, 2),
                 Tag = state.Key
             };
 
@@ -485,10 +487,10 @@ namespace ESP32AIControl.WP81
 
             var shell = new Border
             {
-                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 32, 32, 32)),
-                Padding = new Thickness(10, 9, 10, 9),
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 36, 37, 42)),
+                Padding = new Thickness(16, 6, 16, 6),
                 BorderThickness = new Thickness(0, 0, 0, 1),
-                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 55, 55, 55))
+                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 56, 58, 64))
             };
 
             var row = new Grid();
@@ -580,9 +582,8 @@ namespace ESP32AIControl.WP81
                     Minimum = 0,
                     Maximum = 100,
                     StepFrequency = 1,
-                    Width = 280,
                     HorizontalAlignment = HorizontalAlignment.Stretch,
-                    Margin = new Thickness(34, 2, 0, 0)
+                    Margin = new Thickness(34, 2, 8, 0)
                 };
                 slider.ValueChanged += async delegate(object s, RangeBaseValueChangedEventArgs ev)
                 {
