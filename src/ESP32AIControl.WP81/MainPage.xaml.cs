@@ -196,13 +196,30 @@ namespace ESP32AIControl.WP81
         private void SetNavigationButton(Button button, bool isSelected)
         {
             if (button == null) return;
+
+            // Keep the bottom bar visually quiet like Android navigation:
+            // the selected destination gets a soft surface and an accent icon,
+            // rather than turning the entire navigation tile bright purple.
             button.Background = new SolidColorBrush(isSelected
-                ? Windows.UI.Color.FromArgb(255, 128, 101, 232)
-                : Windows.UI.Color.FromArgb(255, 28, 29, 36));
+                ? Windows.UI.Color.FromArgb(255, 43, 39, 57)
+                : Windows.UI.Color.FromArgb(255, 25, 26, 32));
             button.Foreground = new SolidColorBrush(isSelected
-                ? Windows.UI.Color.FromArgb(255, 255, 255, 255)
-                : Windows.UI.Color.FromArgb(255, 174, 176, 188));
+                ? Windows.UI.Color.FromArgb(255, 243, 244, 246)
+                : Windows.UI.Color.FromArgb(255, 156, 163, 175));
             button.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0));
+
+            var content = button.Content as StackPanel;
+            if (content == null) return;
+            for (var i = 0; i < content.Children.Count; i++)
+            {
+                var label = content.Children[i] as TextBlock;
+                if (label == null) continue;
+                label.Foreground = new SolidColorBrush(isSelected && i == 0
+                    ? Windows.UI.Color.FromArgb(255, 128, 101, 232)
+                    : (isSelected
+                        ? Windows.UI.Color.FromArgb(255, 243, 244, 246)
+                        : Windows.UI.Color.FromArgb(255, 156, 163, 175)));
+            }
         }
 
         private void NavigateHome_Click(object sender, RoutedEventArgs e) { ShowSection(0); }
