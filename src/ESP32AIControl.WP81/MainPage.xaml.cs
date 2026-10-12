@@ -197,11 +197,11 @@ namespace ESP32AIControl.WP81
         {
             if (button == null) return;
             button.Background = new SolidColorBrush(isSelected
-                ? Windows.UI.Color.FromArgb(255, 0, 164, 239)
-                : Windows.UI.Color.FromArgb(255, 37, 40, 50));
+                ? Windows.UI.Color.FromArgb(255, 128, 101, 232)
+                : Windows.UI.Color.FromArgb(255, 28, 29, 36));
             button.Foreground = new SolidColorBrush(isSelected
                 ? Windows.UI.Color.FromArgb(255, 255, 255, 255)
-                : Windows.UI.Color.FromArgb(255, 190, 194, 203));
+                : Windows.UI.Color.FromArgb(255, 174, 176, 188));
             button.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0));
         }
 
