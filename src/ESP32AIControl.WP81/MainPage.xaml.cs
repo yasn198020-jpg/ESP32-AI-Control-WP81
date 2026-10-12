@@ -487,16 +487,17 @@ namespace ESP32AIControl.WP81
 
             var shell = new Border
             {
-                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 36, 37, 42)),
-                Padding = new Thickness(16, 6, 16, 6),
-                BorderThickness = new Thickness(0, 0, 0, 1),
-                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 56, 58, 64))
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 28, 29, 36)),
+                CornerRadius = new CornerRadius(12),
+                Padding = new Thickness(14, 9, 14, 9),
+                BorderThickness = new Thickness(1),
+                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 48, 49, 58))
             };
 
             var row = new Grid();
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(32) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(100) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(96) });
 
             var icon = new TextBlock
             {
@@ -526,7 +527,7 @@ namespace ESP32AIControl.WP81
                 Text = string.IsNullOrEmpty(state.Value) ? "—" : state.Value,
                 FontSize = 18,
                 FontWeight = Windows.UI.Text.FontWeights.SemiBold,
-                Foreground = new SolidColorBrush(Windows.UI.Colors.White),
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 98, 168, 255)),
                 TextAlignment = TextAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
@@ -555,6 +556,9 @@ namespace ESP32AIControl.WP81
                 {
                     Content = "Нажать",
                     MinWidth = 76,
+                    Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 128, 101, 232)),
+                    Foreground = new SolidColorBrush(Windows.UI.Colors.White),
+                    BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 128, 101, 232)),
                     Padding = new Thickness(8, 5, 8, 5),
                     HorizontalAlignment = HorizontalAlignment.Right,
                     VerticalAlignment = VerticalAlignment.Center,
