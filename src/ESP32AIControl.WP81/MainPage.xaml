@@ -22,7 +22,7 @@
             <Setter Property="Padding" Value="12,8"/>
         </Style>
     </Page.Resources>
-    <Grid Background="#FF101116">
+    <Grid Background="#FF202020">
         <Grid.RowDefinitions>
             <RowDefinition Height="68"/>
             <RowDefinition Height="*"/>
@@ -57,7 +57,7 @@
         </Border>
 
         <Pivot x:Name="MainPivot" Grid.Row="1" Foreground="#FFF3F4F6"
-               Background="#FF101116" SelectionChanged="MainPivot_SelectionChanged">
+               Background="#FF202020" SelectionChanged="MainPivot_SelectionChanged">
             <Pivot.HeaderTemplate>
                 <DataTemplate>
                     <TextBlock Visibility="Collapsed" Height="0" Width="0"/>
