@@ -3,7 +3,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Page.Resources>
-        <SolidColorBrush x:Key="AccentBrush" Color="#FF00A4EF"/>
+        <SolidColorBrush x:Key="AccentBrush" Color="#FF8065E8"/>
         <SolidColorBrush x:Key="PanelBrush" Color="#FF1B1D24"/>
         <SolidColorBrush x:Key="MutedBrush" Color="#FF9CA3AF"/>
         <DataTemplate x:Key="WidgetPageHeaderTemplate">
@@ -22,15 +22,15 @@
             <Setter Property="Padding" Value="12,8"/>
         </Style>
     </Page.Resources>
-    <Grid Background="#FF202020">
+    <Grid Background="#FF121318">
         <Grid.RowDefinitions>
-            <RowDefinition Height="68"/>
+            <RowDefinition Height="60"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="60"/>
         </Grid.RowDefinitions>
 
         <!-- Android-like top bar: menu, current screen title, info and MQTT cloud status. -->
-        <Border Grid.Row="0" Background="#FF15171D" BorderBrush="#FF343844"
+        <Border Grid.Row="0" Background="#FF191A20" BorderBrush="#FF30313A"
                 BorderThickness="0,0,0,1" Padding="5,4,7,4">
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -44,7 +44,7 @@
                         BorderThickness="0" Padding="0" FontSize="25"
                         Foreground="#FFF3F4F6" VerticalAlignment="Stretch"/>
                 <TextBlock x:Name="PageSubtitle" Grid.Column="1" Text="Dashboard"
-                           FontSize="22" FontWeight="SemiBold" Foreground="#FFF3F4F6"
+                           FontSize="21" FontWeight="SemiBold" Foreground="#FFF3F4F6"
                            VerticalAlignment="Center" TextWrapping="NoWrap"/>
                 <Button x:Name="TopInfoButton" Grid.Column="2" Content="ⓘ"
                         Click="TopInfoButton_Click" Background="Transparent"
@@ -64,7 +64,7 @@
                 </DataTemplate>
             </Pivot.HeaderTemplate>
             <PivotItem Header="Главная">
-                <Grid Margin="8,0,8,4">
+                <Grid Margin="10,0,10,4">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
@@ -208,7 +208,7 @@
         </Pivot>
 
         <!-- Fixed bottom navigation inspired by the Android app. -->
-        <Grid Grid.Row="2" Background="#FF1B1D24">
+        <Grid Grid.Row="2" Background="#FF191A20">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="*"/>
