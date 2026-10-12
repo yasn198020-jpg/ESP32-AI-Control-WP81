@@ -19,9 +19,9 @@
         </Style>
     </Page.Resources>
     <Grid Background="#FF101116">
-        <Pivot x:Name="MainPivot" Foreground="#FFF3F4F6">
+        <Pivot x:Name="MainPivot" Foreground="#FFF3F4F6" Background="#FF101116">
             <PivotItem Header="Управление">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="16,8,16,12">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="12,6,12,8">
                     <StackPanel>
                         <TextBlock Text="ESP32 AI Control" FontSize="30" FontWeight="Light" Foreground="#FF00A4EF" Margin="0,4,0,0"/>
                         <TextBlock Text="SMART HOME  /  WP8.1" FontSize="12" Foreground="#FF9CA3AF" Margin="0,2,0,12"/>
@@ -29,20 +29,26 @@
                             <TextBlock x:Name="ConnectionText" Text="MQTT: отключено" FontSize="18" Foreground="#FFFFB454"/>
                         </Border>
 
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                            <Button Content="Подключить" Click="ConnectButton_Click" Margin="0,0,8,0"/>
-                            <Button Content="Отключить" Click="DisconnectButton_Click"/>
-                            <Button Content="HELLO" Click="HelloButton_Click" Margin="8,0,0,0"/>
-                        </StackPanel>
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Button Content="ПОДКЛЮЧИТЬ" Click="ConnectButton_Click" Margin="0,0,4,4"/>
+                            <Button Grid.Column="1" Content="ОТКЛЮЧИТЬ" Click="DisconnectButton_Click" Margin="4,0,0,4"/>
+                        </Grid>
+                        <Button Content="ОТПРАВИТЬ HELLO" Click="HelloButton_Click" HorizontalAlignment="Stretch" Margin="0,0,0,8"/>
 
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                            <Button x:Name="VoiceButton" Content="🎙 Голос" Click="VoiceButton_Click" Margin="0,0,8,0"/>
-                            <TextBlock x:Name="VoiceResultText" Text="Скажите: «Марфа, открой теплицу через 20 минут»"
-                                       VerticalAlignment="Center" TextWrapping="Wrap" Width="420"/>
-                        </StackPanel>
+                        <Border Background="#FF1B1D24" BorderBrush="#FF343844" BorderThickness="1" Padding="10" Margin="0,0,0,10">
+                            <StackPanel>
+                                <Button x:Name="VoiceButton" Content="🎙  МАРФА — ГОЛОСОВАЯ КОМАНДА" Click="VoiceButton_Click" HorizontalAlignment="Stretch"/>
+                                <TextBlock x:Name="VoiceResultText" Text="Например: «Открой теплицу через 20 минут»"
+                                           Foreground="#FF9CA3AF" FontSize="14" Margin="0,8,0,0"/>
+                            </StackPanel>
+                        </Border>
 
                         <TextBlock Text="ТЕПЛИЦЫ И УСТРОЙСТВА" FontSize="14" FontWeight="SemiBold" Foreground="#FF00A4EF" Margin="0,14,0,8"/>
-                        <Pivot x:Name="WidgetPages" Height="430"/>
+                        <Pivot x:Name="WidgetPages" Height="360" Margin="0,0,0,8"/>
 
                         <TextBlock Text="ЖУРНАЛ СОЕДИНЕНИЯ" FontSize="14" FontWeight="SemiBold" Foreground="#FF00A4EF" Margin="0,18,0,8"/>
                         <Border Background="#FF17191F" BorderBrush="#FF343844" BorderThickness="1" Padding="8" MinHeight="100">
@@ -61,9 +67,9 @@
                         <TextBlock Text="Запись производится с заданным интервалом, а не по каждому MQTT-пакету."
                                    TextWrapping="Wrap" Opacity="0.7" Margin="0,4,0,10"/>
                         <ComboBox x:Name="GraphWidgetBox" Header="Датчик / виджет" Margin="0,4"/>
-                        <StackPanel Orientation="Horizontal">
-                            <DatePicker x:Name="GraphFrom" Header="С" Width="200" Margin="0,4,8,4"/>
-                            <DatePicker x:Name="GraphTo" Header="По" Width="200" Margin="8,4,0,4"/>
+                        <StackPanel>
+                            <DatePicker x:Name="GraphFrom" Header="Начало периода" Margin="0,4"/>
+                            <DatePicker x:Name="GraphTo" Header="Конец периода" Margin="0,4"/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,4,0,10">
                             <Button Content="Построить" Click="BuildGraphButton_Click" Margin="0,0,8,0"/>
@@ -87,12 +93,14 @@
                             <DatePicker x:Name="ScheduleDate" Header="Дата" Width="210" Margin="0,4,8,4"/>
                             <TimePicker x:Name="ScheduleTime" Header="Время" Width="210" Margin="8,4,0,4"/>
                         </StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0,4,0,10">
-                            <Button Content="Добавить" Click="AddScheduleButton_Click" Margin="0,0,6,0"/>
-                            <Button Content="Изменить" Click="UpdateScheduleButton_Click" Margin="6,0"/>
-                            <Button Content="Отменить" Click="CancelScheduleButton_Click" Margin="6,0"/>
-                            <Button Content="Обновить" Click="RefreshScheduleButton_Click" Margin="6,0"/>
-                        </StackPanel>
+                        <Grid Margin="0,4,0,10">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <Button Content="ДОБАВИТЬ" Click="AddScheduleButton_Click" Margin="0,0,4,4"/>
+                            <Button Grid.Column="1" Content="ИЗМЕНИТЬ" Click="UpdateScheduleButton_Click" Margin="4,0,0,4"/>
+                            <Button Grid.Row="1" Content="ОТМЕНИТЬ" Click="CancelScheduleButton_Click" Margin="0,4,4,0"/>
+                            <Button Grid.Row="1" Grid.Column="1" Content="ОБНОВИТЬ" Click="RefreshScheduleButton_Click" Margin="4,4,0,0"/>
+                        </Grid>
                         <ListView x:Name="ScheduleList" Height="420" SelectionChanged="ScheduleList_SelectionChanged"/>
                     </StackPanel>
                 </ScrollViewer>
