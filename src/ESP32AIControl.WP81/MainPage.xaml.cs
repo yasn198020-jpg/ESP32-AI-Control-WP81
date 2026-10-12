@@ -58,6 +58,7 @@ namespace ESP32AIControl.WP81
         public MainPage()
         {
             InitializeComponent();
+            UpdateNavigationState();
 
             _settingsStore = new AppSettingsStore();
             _appSettings = new AppSettings();
@@ -131,9 +132,48 @@ namespace ESP32AIControl.WP81
         private void ShowSection(int index)
         {
             MainPivot.SelectedIndex = index;
+            UpdateNavigationState();
+        }
+
+        private void MainPivot_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            UpdateNavigationState();
+        }
+
+        private void UpdateNavigationState()
+        {
+            if (PageSubtitle == null || MainPivot == null) return;
+
+            if (MainPivot.SelectedIndex == 0)
+                PageSubtitle.Text = "УПРАВЛЕНИЕ УСТРОЙСТВАМИ";
+            else if (MainPivot.SelectedIndex == 1)
+                PageSubtitle.Text = "ГРАФИКИ И ИСТОРИЯ";
+            else if (MainPivot.SelectedIndex == 2)
+                PageSubtitle.Text = "ЗАПЛАНИРОВАННЫЕ КОМАНДЫ";
+            else
+                PageSubtitle.Text = "НАСТРОЙКИ ПРИЛОЖЕНИЯ";
+
+            SetNavigationButton(NavHomeButton, MainPivot.SelectedIndex == 0);
+            SetNavigationButton(NavMarfaButton, false);
+            SetNavigationButton(NavGraphsButton, MainPivot.SelectedIndex == 1);
+            SetNavigationButton(NavTasksButton, MainPivot.SelectedIndex == 2);
+            SetNavigationButton(NavSettingsButton, MainPivot.SelectedIndex == 3);
+        }
+
+        private void SetNavigationButton(Button button, bool isSelected)
+        {
+            if (button == null) return;
+            button.Background = new SolidColorBrush(isSelected
+                ? Windows.UI.Color.FromArgb(255, 0, 164, 239)
+                : Windows.UI.Color.FromArgb(255, 37, 40, 50));
+            button.Foreground = new SolidColorBrush(isSelected
+                ? Windows.UI.Color.FromArgb(255, 255, 255, 255)
+                : Windows.UI.Color.FromArgb(255, 190, 194, 203));
+            button.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0));
         }
 
         private void NavigateHome_Click(object sender, RoutedEventArgs e) { ShowSection(0); }
+        private void NavigateMarfa_Click(object sender, RoutedEventArgs e) { VoiceButton_Click(sender, e); }
         private void NavigateGraphs_Click(object sender, RoutedEventArgs e) { ShowSection(1); }
         private void NavigateTasks_Click(object sender, RoutedEventArgs e) { ShowSection(2); }
         private void NavigateSettings_Click(object sender, RoutedEventArgs e) { ShowSection(3); }
