@@ -29,24 +29,30 @@
             <RowDefinition Height="60"/>
         </Grid.RowDefinitions>
 
-        <!-- Persistent app header, mirroring the Android top bar. -->
+        <!-- Android-like top bar: menu, current screen title, info and MQTT cloud status. -->
         <Border Grid.Row="0" Background="#FF15171D" BorderBrush="#FF343844"
-                BorderThickness="0,0,0,1" Padding="14,5,14,5">
+                BorderThickness="0,0,0,1" Padding="5,4,7,4">
             <Grid>
                 <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="40"/>
                     <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="38"/>
+                    <ColumnDefinition Width="35"/>
                 </Grid.ColumnDefinitions>
-                <StackPanel VerticalAlignment="Center">
-                    <TextBlock Text="ESP32 AI Control" FontSize="23" FontWeight="SemiBold"
-                               Foreground="#FF00A4EF" TextWrapping="NoWrap"/>
-                    <TextBlock x:Name="PageSubtitle" Text="УПРАВЛЕНИЕ УСТРОЙСТВАМИ"
-                               FontSize="10" Foreground="#FF9CA3AF" Margin="1,0,0,0"
-                               TextWrapping="NoWrap"/>
-                </StackPanel>
-                <TextBlock x:Name="TopConnectionDot" Grid.Column="1" Text="●"
-                           FontSize="21" Foreground="#FFFFB454"
-                           VerticalAlignment="Center" Margin="8,0,2,0"/>
+                <Button x:Name="MenuButton" Grid.Column="0" Content="☰"
+                        Click="MenuButton_Click" Background="Transparent"
+                        BorderThickness="0" Padding="0" FontSize="25"
+                        Foreground="#FFF3F4F6" VerticalAlignment="Stretch"/>
+                <TextBlock x:Name="PageSubtitle" Grid.Column="1" Text="Dashboard"
+                           FontSize="22" FontWeight="SemiBold" Foreground="#FFF3F4F6"
+                           VerticalAlignment="Center" TextWrapping="NoWrap"/>
+                <Button x:Name="TopInfoButton" Grid.Column="2" Content="ⓘ"
+                        Click="TopInfoButton_Click" Background="Transparent"
+                        BorderThickness="0" Padding="0" FontSize="22"
+                        Foreground="#FFF3F4F6" VerticalAlignment="Stretch"/>
+                <TextBlock x:Name="TopConnectionDot" Grid.Column="3" Text="☁"
+                           FontSize="25" Foreground="#FFF44336"
+                           VerticalAlignment="Center" HorizontalAlignment="Center"/>
             </Grid>
         </Border>
 
