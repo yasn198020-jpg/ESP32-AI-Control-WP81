@@ -234,6 +234,17 @@ namespace ESP32AIControl.WP81
             try
             {
                 ReadMqttSettingsFromUi();
+
+                // Match Android behavior: persist the connection settings before connecting.
+                _appSettings.Host = _settings.Host;
+                _appSettings.Port = _settings.Port;
+                _appSettings.Prefix = _settings.Prefix;
+                _appSettings.UserName = _settings.UserName;
+                _appSettings.Password = _settings.Password;
+                _appSettings.ClientId = _settings.ClientId;
+                _appSettings.UseTls = _settings.UseTls;
+                await _settingsStore.SaveAsync(_appSettings);
+
                 await _mqtt.ConnectAsync();
                 Log("TX /" + _settings.Prefix + " HELLO");
             }
