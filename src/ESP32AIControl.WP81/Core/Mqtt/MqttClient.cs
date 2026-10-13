@@ -28,7 +28,7 @@ namespace ESP32AIControl.WP81.Core.Mqtt
             State = MqttConnectionState.Disconnected;
         }
 
-        public async Task ConnectAsync(string host, string port, string clientId, string userName, string password)
+        public async Task ConnectAsync(string host, string port, string clientId, string userName, string password, bool useTls)
         {
             if (_running)
                 return;
@@ -38,7 +38,10 @@ namespace ESP32AIControl.WP81.Core.Mqtt
 
             try
             {
-                await _socket.ConnectAsync(new Windows.Networking.HostName(host), port);
+                await _socket.ConnectAsync(
+                    new Windows.Networking.HostName(host),
+                    port,
+                    useTls ? SocketProtectionLevel.Tls12 : SocketProtectionLevel.PlainSocket);
                 _writer = new DataWriter(_socket.OutputStream);
                 _reader = new MqttPacketReader(_socket.InputStream);
 
