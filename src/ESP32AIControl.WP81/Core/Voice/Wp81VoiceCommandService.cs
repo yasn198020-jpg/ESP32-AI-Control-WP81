@@ -18,7 +18,19 @@ namespace ESP32AIControl.WP81.Core.Voice
             try
             {
                 _recognizer = new SpeechRecognizer();
-                await _recognizer.CompileConstraintsAsync();
+                _recognizer.Constraints.Add(
+                    new SpeechRecognitionTopicConstraint(
+                        SpeechRecognitionScenario.Dictation,
+                        "dictation"));
+
+                var compilation = await _recognizer.CompileConstraintsAsync();
+                if (compilation.Status != SpeechRecognitionCompilationStatus.Success)
+                {
+                    var failed = RecognitionFailed;
+                    if (failed != null)
+                        failed(this, "Не удалось подготовить распознавание речи: " + compilation.Status);
+                    return;
+                }
 
                 var result = await _recognizer.RecognizeAsync();
                 if (result != null &&
