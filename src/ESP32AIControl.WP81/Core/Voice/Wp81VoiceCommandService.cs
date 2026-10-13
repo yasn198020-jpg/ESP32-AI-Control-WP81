@@ -24,11 +24,11 @@ namespace ESP32AIControl.WP81.Core.Voice
                         "dictation"));
 
                 var compilation = await _recognizer.CompileConstraintsAsync();
-                if (compilation.Status != SpeechRecognitionCompilationStatus.Success)
+                if (compilation == null)
                 {
                     var failed = RecognitionFailed;
                     if (failed != null)
-                        failed(this, "Не удалось подготовить распознавание речи: " + compilation.Status);
+                        failed(this, "Не удалось подготовить распознавание речи.");
                     return;
                 }
 
