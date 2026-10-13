@@ -9,22 +9,37 @@ namespace ESP32AIControl.WP81.Core.Voice
         private SpeechRecognizer _recognizer;
 
         public event EventHandler<string> CommandRecognized;
+        public event EventHandler<string> RecognitionFailed;
 
         public async Task StartListeningAsync()
         {
             if (_recognizer != null) return;
 
-            _recognizer = new SpeechRecognizer();
-            await _recognizer.CompileConstraintsAsync();
+            try
+            {
+                _recognizer = new SpeechRecognizer();
+                await _recognizer.CompileConstraintsAsync();
 
-            var result = await _recognizer.RecognizeAsync();
-            var text = result == null ? string.Empty : result.Text;
-
-            var handler = CommandRecognized;
-            if (handler != null && !string.IsNullOrWhiteSpace(text))
-                handler(this, text);
-
-            await StopListeningAsync();
+                var result = await _recognizer.RecognizeAsync();
+                if (result != null &&
+                    result.Status == SpeechRecognitionResultStatus.Success &&
+                    !string.IsNullOrWhiteSpace(result.Text))
+                {
+                    var handler = CommandRecognized;
+                    if (handler != null)
+                        handler(this, result.Text);
+                }
+                else
+                {
+                    var failed = RecognitionFailed;
+                    if (failed != null)
+                        failed(this, "Не удалось распознать речь. Нажмите 🎤 и повторите.");
+                }
+            }
+            finally
+            {
+                await StopListeningAsync();
+            }
         }
 
         public Task StopListeningAsync()
@@ -34,6 +49,7 @@ namespace ESP32AIControl.WP81.Core.Voice
                 _recognizer.Dispose();
                 _recognizer = null;
             }
+
             return Task.FromResult(true);
         }
     }
