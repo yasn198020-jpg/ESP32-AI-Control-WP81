@@ -255,9 +255,10 @@
                 </StackPanel>
             </Button>
             <Button x:Name="NavMarfaButton" Grid.Column="1" Click="NavigateMarfa_Click"
-                    Height="64" Padding="0" BorderThickness="0" FontSize="11">
+                    Height="64" Padding="0" BorderThickness="0" FontSize="11"
+                    AutomationProperties.Name="Голосовое управление Марфа">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <TextBlock Text="◉" FontSize="19" HorizontalAlignment="Center"/>
+                    <TextBlock Text="🎤" FontSize="19" HorizontalAlignment="Center"/>
                     <TextBlock Text="Марфа" FontSize="10" HorizontalAlignment="Center"/>
                 </StackPanel>
             </Button>
