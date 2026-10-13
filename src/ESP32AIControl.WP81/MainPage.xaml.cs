@@ -83,6 +83,7 @@ namespace ESP32AIControl.WP81
             _mqtt.WidgetChanged += Mqtt_WidgetChanged;
             _scheduler.TaskChanged += Scheduler_TaskChanged;
             _voice.CommandRecognized += Voice_CommandRecognized;
+            _voice.RecognitionFailed += Voice_RecognitionFailed;
 
             Loaded += MainPage_Loaded;
             Unloaded += MainPage_Unloaded;
@@ -1157,6 +1158,15 @@ namespace ESP32AIControl.WP81
                 NavMarfaButton.IsEnabled = true;
                 await _voice.StopListeningAsync();
             }
+        }
+
+        private async void Voice_RecognitionFailed(object sender, string message)
+        {
+            await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, delegate
+            {
+                VoiceResultText.Text = message;
+                Log("VOICE: " + message);
+            });
         }
 
         private async void Voice_CommandRecognized(object sender, string text)
