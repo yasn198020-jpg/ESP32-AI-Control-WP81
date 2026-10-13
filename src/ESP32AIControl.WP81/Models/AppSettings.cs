@@ -48,7 +48,8 @@ namespace ESP32AIControl.WP81.Models
                 Prefix = Prefix,
                 UserName = UserName,
                 Password = Password,
-                ClientId = ClientId
+                ClientId = ClientId,
+                UseTls = UseTls
             };
         }
     }
