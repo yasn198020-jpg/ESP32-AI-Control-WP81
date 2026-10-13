@@ -171,7 +171,7 @@
                         <TextBox x:Name="UserNameBox" Header="MQTT username"/>
                         <TextBox x:Name="ClientIdBox" Header="MQTT client ID" Text="ESP32-AI-Control-WP81"/>
                         <PasswordBox x:Name="PasswordBox" Header="MQTT password"/>
-                        <CheckBox x:Name="MqttTlsCheckBox" Content="Использовать защищённое TLS-соединение" IsChecked="False" Margin="0,8,0,4"/>
+                        <CheckBox x:Name="MqttTlsCheckBox" Content="Использовать защищённое TLS-соединение" Margin="0,8,0,4"/>
 
                         <TextBlock Text="МАСШТАБ ИНТЕРФЕЙСА" FontSize="18" FontWeight="SemiBold" Foreground="#FF8065E8" Margin="0,20,0,4"/>
                         <TextBlock Text="Размер текста и элементов интерфейса" Opacity="0.7" TextWrapping="Wrap"/>
