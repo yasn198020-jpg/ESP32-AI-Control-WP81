@@ -144,6 +144,7 @@ namespace ESP32AIControl.WP81
         private void MenuButton_Click(object sender, RoutedEventArgs e)
         {
             var menu = new MenuFlyout();
+            menu.RequestedTheme = ElementTheme.Dark;
 
             var home = new MenuFlyoutItem { Text = "Главная" };
             home.Click += delegate { ShowSection(0); };
@@ -184,7 +185,7 @@ namespace ESP32AIControl.WP81
             if (PageSubtitle == null || MainPivot == null) return;
 
             if (MainPivot.SelectedIndex == 0)
-                PageSubtitle.Text = "Dashboard";
+                PageSubtitle.Text = "Главная";
             else if (MainPivot.SelectedIndex == 1)
                 PageSubtitle.Text = "Графики";
             else if (MainPivot.SelectedIndex == 2)
@@ -196,7 +197,7 @@ namespace ESP32AIControl.WP81
             SetNavigationButton(NavMarfaButton, false);
             SetNavigationButton(NavGraphsButton, MainPivot.SelectedIndex == 1);
             SetNavigationButton(NavTasksButton, MainPivot.SelectedIndex == 2);
-            SetNavigationButton(NavSettingsButton, MainPivot.SelectedIndex == 3);
+            // Settings stays available from the hamburger menu, not the bottom bar.
         }
 
         private void SetNavigationButton(Button button, bool isSelected)
@@ -221,7 +222,7 @@ namespace ESP32AIControl.WP81
                 var label = content.Children[i] as TextBlock;
                 if (label == null) continue;
                 label.Foreground = new SolidColorBrush(isSelected && i == 0
-                    ? Windows.UI.Color.FromArgb(255, 128, 101, 232)
+                    ? Windows.UI.Color.FromArgb(255, 0, 183, 255)
                     : (isSelected
                         ? Windows.UI.Color.FromArgb(255, 243, 244, 246)
                         : Windows.UI.Color.FromArgb(255, 156, 163, 175)));
@@ -547,7 +548,7 @@ namespace ESP32AIControl.WP81
             {
                 Text = isSwitch ? "◉" : (isAction ? "●" : "◆"),
                 FontSize = 21,
-                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 128, 101, 232)),
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0, 183, 255)),
                 VerticalAlignment = VerticalAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Left
             };
@@ -600,9 +601,9 @@ namespace ESP32AIControl.WP81
                 {
                     Content = "Нажать",
                     MinWidth = 76,
-                    Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 128, 101, 232)),
+                    Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0, 183, 255)),
                     Foreground = new SolidColorBrush(Windows.UI.Colors.White),
-                    BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 128, 101, 232)),
+                    BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0, 183, 255)),
                     Padding = new Thickness(8, 5, 8, 5),
                     HorizontalAlignment = HorizontalAlignment.Right,
                     VerticalAlignment = VerticalAlignment.Center,
