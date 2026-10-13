@@ -290,7 +290,6 @@ namespace ESP32AIControl.WP81
                 _appSettings.UseTls = _settings.UseTls;
                 _appSettings.UiFontScale = (float)UiFontScaleSlider.Value;
                 MainPivot.FontSize = 14 * (double)_appSettings.UiFontScale;
-                _appSettings.ClientId = _settings.ClientId;
                 _appSettings.MeasurementIntervalSeconds = Math.Max(1, interval);
                 _appSettings.RetentionDays = Math.Max(1, retention);
                 _appSettings.AutoExportPeriod = GetAutoExportTag();
@@ -325,7 +324,6 @@ namespace ESP32AIControl.WP81
             _settings.Password = _appSettings.Password;
             _settings.ClientId = string.IsNullOrEmpty(_appSettings.ClientId)
                 ? "ESP32-AI-Control-WP81" : _appSettings.ClientId;
-            _settings.UseTls = _appSettings.UseTls;
             _settings.UseTls = _appSettings.UseTls;
 
             _voiceParser = new VoiceCommandParser(
