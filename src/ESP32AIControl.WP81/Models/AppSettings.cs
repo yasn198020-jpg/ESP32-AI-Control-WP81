@@ -12,6 +12,8 @@ namespace ESP32AIControl.WP81.Models
         [DataMember] public string UserName { get; set; }
         [DataMember] public string Password { get; set; }
         [DataMember] public string ClientId { get; set; }
+        [DataMember] public bool UseTls { get; set; }
+        [DataMember] public float UiFontScale { get; set; }
         [DataMember] public int MeasurementIntervalSeconds { get; set; }
         [DataMember] public int RetentionDays { get; set; }
         [DataMember] public string AutoExportPeriod { get; set; }
@@ -27,6 +29,8 @@ namespace ESP32AIControl.WP81.Models
             UserName = string.Empty;
             Password = string.Empty;
             ClientId = "ESP32-AI-Control-WP81";
+            UseTls = false;
+            UiFontScale = 0.85f;
             MeasurementIntervalSeconds = 60;
             RetentionDays = 30;
             AutoExportPeriod = "Never";
