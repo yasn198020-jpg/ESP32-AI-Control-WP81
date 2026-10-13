@@ -239,6 +239,9 @@
                             <Button Content="Импорт export.json" Click="ImportScenarioButton_Click" Margin="0,0,8,0"/>
                             <Button Content="Проверить план" Click="TestScenarioButton_Click"/>
                         </StackPanel>
+
+                        <Button Content="Сохранить настройки" Click="SaveSettingsButton_Click" Margin="0,12,0,8"/>
+                        <TextBlock x:Name="SettingsStatus" Text="" TextWrapping="Wrap"/>
                         </StackPanel>
                     </ScrollViewer>
                 </PivotItem>
@@ -253,8 +256,7 @@
                                 <TextBlock x:Name="LogText" TextWrapping="Wrap" FontSize="13"/>
                             </ScrollViewer>
                         </Border>
-
-                        <TextBlock Text="ЭКСПОРТ ДАННЫХ" FontSize="18" FontWeight="SemiBold" Foreground="#FF8065E8" Margin="0,20,0,4"/>
+<TextBlock Text="ЭКСПОРТ ДАННЫХ" FontSize="18" FontWeight="SemiBold" Foreground="#FF8065E8" Margin="0,20,0,4"/>
                         <Button Content="Экспорт всей истории за сегодня" Click="ExportTodayButton_Click"/>
                         <TextBlock Text="Документы сохраняются в локальной папке приложения. Формат .doc совместим с Word."
                                    Opacity="0.7" TextWrapping="Wrap" Margin="0,6,0,0"/>
