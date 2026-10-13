@@ -157,8 +157,13 @@ namespace ESP32AIControl.WP81
             tasks.Click += delegate { ShowSection(2); };
             menu.Items.Add(tasks);
 
-            var settings = new MenuFlyoutItem { Text = "Настройки MQTT и приложения" };
-            settings.Click += delegate { ShowSection(3); };
+            var settings = new MenuFlyoutItem { Text = "Настройки" };
+            settings.Click += delegate
+            {
+                ShowSection(3);
+                if (SettingsPivot != null)
+                    SettingsPivot.SelectedIndex = 0;
+            };
             menu.Items.Add(settings);
 
             menu.ShowAt(MenuButton);
