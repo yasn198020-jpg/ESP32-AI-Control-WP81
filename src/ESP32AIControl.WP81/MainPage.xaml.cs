@@ -287,6 +287,10 @@ namespace ESP32AIControl.WP81
                 _appSettings.UserName = _settings.UserName;
                 _appSettings.Password = _settings.Password;
                 _appSettings.ClientId = _settings.ClientId;
+                _appSettings.UseTls = _settings.UseTls;
+                _appSettings.UiFontScale = (float)UiFontScaleSlider.Value;
+                MainPivot.FontSize = 14 * (double)_appSettings.UiFontScale;
+                _appSettings.ClientId = _settings.ClientId;
                 _appSettings.MeasurementIntervalSeconds = Math.Max(1, interval);
                 _appSettings.RetentionDays = Math.Max(1, retention);
                 _appSettings.AutoExportPeriod = GetAutoExportTag();
@@ -321,6 +325,8 @@ namespace ESP32AIControl.WP81
             _settings.Password = _appSettings.Password;
             _settings.ClientId = string.IsNullOrEmpty(_appSettings.ClientId)
                 ? "ESP32-AI-Control-WP81" : _appSettings.ClientId;
+            _settings.UseTls = _appSettings.UseTls;
+            _settings.UseTls = _appSettings.UseTls;
 
             _voiceParser = new VoiceCommandParser(
                 _appSettings.VoiceOpenCommand,
@@ -330,6 +336,10 @@ namespace ESP32AIControl.WP81
         private void ApplySettingsToUi()
         {
             HostBox.Text = _appSettings.Host;
+            ClientIdBox.Text = string.IsNullOrEmpty(_appSettings.ClientId) ? "ESP32-AI-Control-WP81" : _appSettings.ClientId;
+            MqttTlsCheckBox.IsChecked = _appSettings.UseTls;
+            UiFontScaleSlider.Value = Math.Max(0.7, Math.Min(1.1, _appSettings.UiFontScale <= 0 ? 0.85 : _appSettings.UiFontScale));
+            MainPivot.FontSize = 14 * (double)UiFontScaleSlider.Value;
             PortBox.Text = _appSettings.Port;
             PrefixBox.Text = _appSettings.Prefix;
             UserNameBox.Text = _appSettings.UserName;
@@ -358,6 +368,8 @@ namespace ESP32AIControl.WP81
             _settings.Prefix = PrefixBox.Text.Trim().Trim('/');
             _settings.UserName = UserNameBox.Text.Trim();
             _settings.Password = PasswordBox.Password;
+            _settings.ClientId = string.IsNullOrWhiteSpace(ClientIdBox.Text) ? "ESP32-AI-Control-WP81" : ClientIdBox.Text.Trim();
+            _settings.UseTls = MqttTlsCheckBox.IsChecked == true;
         }
 
         private async void ImportScenarioButton_Click(object sender, RoutedEventArgs e)
