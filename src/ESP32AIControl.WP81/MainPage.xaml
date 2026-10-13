@@ -236,8 +236,9 @@
         </Pivot>
 
         <!-- Fixed bottom navigation inspired by the Android app. -->
-        <Grid Grid.Row="2" Background="#FF191A20"
-              BorderBrush="#FF30313A" BorderThickness="0,1,0,0">
+        <Border Grid.Row="2" Background="#FF191A20"
+                BorderBrush="#FF30313A" BorderThickness="0,1,0,0">
+            <Grid Background="#FF191A20">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="*"/>
@@ -281,6 +282,7 @@
                     <TextBlock Text="Настройки" FontSize="9" HorizontalAlignment="Center"/>
                 </StackPanel>
             </Button>
-        </Grid>
+            </Grid>
+        </Border>
     </Grid>
 </Page>
