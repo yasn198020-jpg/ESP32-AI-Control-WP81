@@ -58,6 +58,8 @@ namespace ESP32AIControl.WP81
         public MainPage()
         {
             InitializeComponent();
+            if (DashboardEmptyState != null)
+                DashboardEmptyState.Visibility = WidgetPages.Items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             UpdateNavigationState();
 
             _settingsStore = new AppSettingsStore();
@@ -741,6 +743,7 @@ namespace ESP32AIControl.WP81
             page.Item = item;
             _pages[pageName] = page;
             WidgetPages.Items.Add(item);
+            if (DashboardEmptyState != null) DashboardEmptyState.Visibility = Visibility.Collapsed;
             return page;
         }
 
@@ -756,6 +759,9 @@ namespace ESP32AIControl.WP81
                 WidgetPages.Items.Remove(page.Item);
                 _pages.Remove(name);
             }
+
+            if (DashboardEmptyState != null)
+                DashboardEmptyState.Visibility = WidgetPages.Items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         }
 
         private string GetTitle(WidgetState state)
