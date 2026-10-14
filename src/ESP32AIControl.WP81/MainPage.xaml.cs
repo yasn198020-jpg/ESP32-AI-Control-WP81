@@ -102,6 +102,9 @@ namespace ESP32AIControl.WP81
             try
             {
                 _appSettings = await _settingsStore.LoadAsync();
+                if (_appSettings.SavedMqttProfiles == null)
+                    _appSettings.SavedMqttProfiles = new List<SavedMqttProfile>();
+                ApplyDefaultMqttProfileToSettings();
                 ApplySettingsToMqtt();
                 _commandExecutor.SetScenarioScript(_appSettings.IoTManagerScenario);
                 ApplySettingsToUi();
@@ -399,6 +402,193 @@ namespace ESP32AIControl.WP81
             }
         }
 
+        private void RefreshSavedMqttProfiles()
+        {
+            if (_appSettings.SavedMqttProfiles == null)
+                _appSettings.SavedMqttProfiles = new List<SavedMqttProfile>();
+
+            var selectedName = SelectedSavedMqttProfileName();
+            SavedProfilesList.Items.Clear();
+            foreach (var profile in _appSettings.SavedMqttProfiles)
+            {
+                if (profile == null || string.IsNullOrWhiteSpace(profile.Name)) continue;
+                var label = string.Equals(profile.Name, _appSettings.DefaultMqttProfileName, StringComparison.OrdinalIgnoreCase)
+                    ? "★ " + profile.Name + " (по умолчанию)" : profile.Name;
+                SavedProfilesList.Items.Add(label);
+            }
+
+            if (!string.IsNullOrEmpty(selectedName))
+            {
+                for (var i = 0; i < SavedProfilesList.Items.Count; i++)
+                {
+                    var label = SavedProfilesList.Items[i] as string;
+                    if (string.Equals((label ?? string.Empty).Replace("★ ", string.Empty).Replace(" (по умолчанию)", string.Empty), selectedName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        SavedProfilesList.SelectedIndex = i;
+                        break;
+                    }
+                }
+            }
+            if (SavedProfilesList.SelectedIndex < 0 && SavedProfilesList.Items.Count > 0)
+                SavedProfilesList.SelectedIndex = 0;
+        }
+
+        private string SelectedSavedMqttProfileName()
+        {
+            var label = SavedProfilesList == null ? null : SavedProfilesList.SelectedItem as string;
+            if (string.IsNullOrEmpty(label)) return null;
+            return label.Replace("★ ", string.Empty).Replace(" (по умолчанию)", string.Empty);
+        }
+
+        private SavedMqttProfile SelectedSavedMqttProfile()
+        {
+            var name = SelectedSavedMqttProfileName();
+            if (string.IsNullOrEmpty(name) || _appSettings.SavedMqttProfiles == null) return null;
+            return _appSettings.SavedMqttProfiles.FirstOrDefault(p => p != null &&
+                string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private void SavedProfilesList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            var profile = SelectedSavedMqttProfile();
+            if (profile != null) SavedProfileNameBox.Text = profile.Name;
+        }
+
+        private async void SaveMqttProfileButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var name = (SavedProfileNameBox.Text ?? string.Empty).Trim();
+                if (name.Length == 0)
+                    throw new InvalidOperationException("Введите название профиля.");
+
+                ReadMqttSettingsFromUi();
+                if (_appSettings.SavedMqttProfiles == null)
+                    _appSettings.SavedMqttProfiles = new List<SavedMqttProfile>();
+
+                var profile = _appSettings.SavedMqttProfiles.FirstOrDefault(p => p != null &&
+                    string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
+                if (profile == null)
+                {
+                    profile = new SavedMqttProfile();
+                    _appSettings.SavedMqttProfiles.Add(profile);
+                }
+
+                profile.Name = name;
+                profile.Host = _settings.Host;
+                profile.Port = _settings.Port;
+                profile.Prefix = _settings.Prefix;
+                profile.UserName = _settings.UserName;
+                profile.Password = _settings.Password;
+                profile.ClientId = _settings.ClientId;
+                profile.UseTls = _settings.UseTls;
+                _appSettings.Host = _settings.Host;
+                _appSettings.Port = _settings.Port;
+                _appSettings.Prefix = _settings.Prefix;
+                _appSettings.UserName = _settings.UserName;
+                _appSettings.Password = _settings.Password;
+                _appSettings.ClientId = _settings.ClientId;
+                _appSettings.UseTls = _settings.UseTls;
+
+                await _settingsStore.SaveAsync(_appSettings);
+                RefreshSavedMqttProfiles();
+                SavedProfilesStatus.Text = "Профиль «" + name + "» сохранён.";
+                Log("MQTT профиль сохранён: " + name);
+            }
+            catch (Exception ex)
+            {
+                SavedProfilesStatus.Text = "Ошибка: " + ex.Message;
+                Log("MQTT PROFILE SAVE ERROR: " + ex.Message);
+            }
+        }
+
+        private async void LoadMqttProfileButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var profile = SelectedSavedMqttProfile();
+                if (profile == null) throw new InvalidOperationException("Сначала выберите профиль.");
+
+                _appSettings.Host = profile.Host ?? string.Empty;
+                _appSettings.Port = profile.Port ?? "1883";
+                _appSettings.Prefix = profile.Prefix ?? string.Empty;
+                _appSettings.UserName = profile.UserName ?? string.Empty;
+                _appSettings.Password = profile.Password ?? string.Empty;
+                _appSettings.ClientId = string.IsNullOrEmpty(profile.ClientId) ? "ESP32-AI-Control-WP81" : profile.ClientId;
+                _appSettings.UseTls = profile.UseTls;
+                ApplySettingsToMqtt();
+                ApplySettingsToUi();
+                await _settingsStore.SaveAsync(_appSettings);
+                SavedProfilesStatus.Text = "Профиль «" + profile.Name + "» загружен. Нажмите «Подключить», чтобы применить соединение.";
+                Log("MQTT профиль загружен: " + profile.Name);
+            }
+            catch (Exception ex)
+            {
+                SavedProfilesStatus.Text = "Ошибка: " + ex.Message;
+                Log("MQTT PROFILE LOAD ERROR: " + ex.Message);
+            }
+        }
+
+        private async void SetDefaultMqttProfileButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var profile = SelectedSavedMqttProfile();
+                if (profile == null) throw new InvalidOperationException("Сначала выберите профиль.");
+                _appSettings.DefaultMqttProfileName = profile.Name;
+                await _settingsStore.SaveAsync(_appSettings);
+                RefreshSavedMqttProfiles();
+                SavedProfilesStatus.Text = "«" + profile.Name + "» будет загружаться при запуске приложения.";
+                Log("MQTT профиль по умолчанию: " + profile.Name);
+            }
+            catch (Exception ex)
+            {
+                SavedProfilesStatus.Text = "Ошибка: " + ex.Message;
+                Log("MQTT PROFILE DEFAULT ERROR: " + ex.Message);
+            }
+        }
+
+        private async void DeleteMqttProfileButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var profile = SelectedSavedMqttProfile();
+                if (profile == null) throw new InvalidOperationException("Сначала выберите профиль.");
+                var name = profile.Name;
+                _appSettings.SavedMqttProfiles.Remove(profile);
+                if (string.Equals(_appSettings.DefaultMqttProfileName, name, StringComparison.OrdinalIgnoreCase))
+                    _appSettings.DefaultMqttProfileName = string.Empty;
+                await _settingsStore.SaveAsync(_appSettings);
+                SavedProfileNameBox.Text = string.Empty;
+                RefreshSavedMqttProfiles();
+                SavedProfilesStatus.Text = "Профиль «" + name + "» удалён.";
+                Log("MQTT профиль удалён: " + name);
+            }
+            catch (Exception ex)
+            {
+                SavedProfilesStatus.Text = "Ошибка: " + ex.Message;
+                Log("MQTT PROFILE DELETE ERROR: " + ex.Message);
+            }
+        }
+
+        private void ApplyDefaultMqttProfileToSettings()
+        {
+            if (_appSettings == null || _appSettings.SavedMqttProfiles == null ||
+                string.IsNullOrEmpty(_appSettings.DefaultMqttProfileName)) return;
+
+            var profile = _appSettings.SavedMqttProfiles.FirstOrDefault(p => p != null &&
+                string.Equals(p.Name, _appSettings.DefaultMqttProfileName, StringComparison.OrdinalIgnoreCase));
+            if (profile == null) return;
+
+            _appSettings.Host = profile.Host ?? string.Empty;
+            _appSettings.Port = profile.Port ?? "1883";
+            _appSettings.Prefix = profile.Prefix ?? string.Empty;
+            _appSettings.UserName = profile.UserName ?? string.Empty;
+            _appSettings.Password = profile.Password ?? string.Empty;
+            _appSettings.ClientId = string.IsNullOrEmpty(profile.ClientId) ? "ESP32-AI-Control-WP81" : profile.ClientId;
+            _appSettings.UseTls = profile.UseTls;
+        }
+
         private void ApplySettingsToMqtt()
         {
             _settings.Host = _appSettings.Host;
@@ -431,6 +621,7 @@ namespace ESP32AIControl.WP81
             VoiceOpenCommandBox.Text = _appSettings.VoiceOpenCommand;
             VoiceCloseCommandBox.Text = _appSettings.VoiceCloseCommand;
             ScenarioTextBox.Text = _appSettings.IoTManagerScenario;
+            RefreshSavedMqttProfiles();
 
             foreach (var item in AutoExportBox.Items)
             {
