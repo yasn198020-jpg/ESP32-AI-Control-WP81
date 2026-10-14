@@ -354,6 +354,88 @@ namespace ESP32AIControl.WP81
             }
         }
 
+        private async void ExportSettingsBackupButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                ReadMqttSettingsFromUi();
+
+                int interval;
+                if (!int.TryParse(MeasurementIntervalBox.Text, out interval))
+                    throw new InvalidOperationException("Интервал записи должен быть числом.");
+                int retention;
+                if (!int.TryParse(RetentionDaysBox.Text, out retention))
+                    throw new InvalidOperationException("Период хранения должен быть числом.");
+
+                _appSettings.Host = _settings.Host;
+                _appSettings.Port = _settings.Port;
+                _appSettings.Prefix = _settings.Prefix;
+                _appSettings.UserName = _settings.UserName;
+                _appSettings.Password = _settings.Password;
+                _appSettings.ClientId = _settings.ClientId;
+                _appSettings.UseTls = _settings.UseTls;
+                _appSettings.UiFontScale = (float)UiFontScaleSlider.Value;
+                _appSettings.MeasurementIntervalSeconds = Math.Max(1, interval);
+                _appSettings.RetentionDays = Math.Max(1, retention);
+                _appSettings.AutoExportPeriod = GetAutoExportTag();
+                _appSettings.VoiceOpenCommand = VoiceOpenCommandBox.Text.Trim();
+                _appSettings.VoiceCloseCommand = VoiceCloseCommandBox.Text.Trim();
+                _appSettings.IoTManagerScenario = ScenarioTextBox.Text ?? string.Empty;
+
+                var picker = new FileSavePicker();
+                picker.SuggestedStartLocation = PickerLocationId.DocumentsLibrary;
+                picker.SuggestedFileName = "ESP32-AI-Control-settings-backup";
+                picker.FileTypeChoices.Add("Резервная копия настроек", new List<string> { ".json" });
+                var file = await picker.PickSaveFileAsync();
+                if (file == null) return;
+
+                await _settingsStore.ExportToFileAsync(file, _appSettings);
+                await _settingsStore.SaveAsync(_appSettings);
+                SettingsStatus.Text = "Резервная копия сохранена: " + file.Name;
+                Log("SETTINGS BACKUP EXPORTED: " + file.Name);
+            }
+            catch (Exception ex)
+            {
+                SettingsStatus.Text = "Ошибка резервного копирования: " + ex.Message;
+                Log("SETTINGS BACKUP EXPORT ERROR: " + ex.Message);
+            }
+        }
+
+        private async void ImportSettingsBackupButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var picker = new FileOpenPicker();
+                picker.ViewMode = PickerViewMode.List;
+                picker.SuggestedStartLocation = PickerLocationId.DocumentsLibrary;
+                picker.FileTypeFilter.Add(".json");
+
+                var file = await picker.PickSingleFileAsync();
+                if (file == null) return;
+
+                var imported = await _settingsStore.ImportFromFileAsync(file);
+                _appSettings = imported;
+                await _settingsStore.SaveAsync(_appSettings);
+
+                ApplyDefaultMqttProfileToSettings();
+                ApplySettingsToMqtt();
+                _commandExecutor.SetScenarioScript(_appSettings.IoTManagerScenario ?? string.Empty);
+                _voiceParser = new VoiceCommandParser(
+                    _appSettings.VoiceOpenCommand ?? string.Empty,
+                    _appSettings.VoiceCloseCommand ?? string.Empty);
+                ApplySettingsToUi();
+                RefreshSavedMqttProfiles();
+
+                SettingsStatus.Text = "Настройки восстановлены из файла: " + file.Name;
+                Log("SETTINGS BACKUP IMPORTED: " + file.Name);
+            }
+            catch (Exception ex)
+            {
+                SettingsStatus.Text = "Ошибка восстановления: " + ex.Message;
+                Log("SETTINGS BACKUP IMPORT ERROR: " + ex.Message);
+            }
+        }
+
         private async void SaveSettingsButton_Click(object sender, RoutedEventArgs e)
         {
             try
