@@ -241,6 +241,21 @@
                         </StackPanel>
                     </ScrollViewer>
                 </PivotItem>
+                <PivotItem Header="Сохранённые">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="8,0,8,8">
+                            <TextBlock Text="СОХРАНЁННЫЕ MQTT-ПРОФИЛИ" FontSize="18" FontWeight="SemiBold" Foreground="#FF00B7FF" Margin="0,20,0,4"/>
+                            <TextBlock Text="Храните подключения к разным серверам или теплицам. Пароль сохраняется вместе с профилем." TextWrapping="Wrap" Opacity="0.7" Margin="0,0,0,8"/>
+                            <TextBox x:Name="SavedProfileNameBox" Header="Название профиля" PlaceholderText="Например, Основная теплица"/>
+                            <ListView x:Name="SavedProfilesList" Height="190" SelectionMode="Single" SelectionChanged="SavedProfilesList_SelectionChanged"/>
+                            <Button Content="Сохранить текущие параметры" Click="SaveMqttProfileButton_Click" Margin="0,8,0,4"/>
+                            <Button Content="Загрузить выбранный профиль" Click="LoadMqttProfileButton_Click" Margin="0,4"/>
+                            <Button Content="Сделать профилем по умолчанию" Click="SetDefaultMqttProfileButton_Click" Margin="0,4"/>
+                            <Button Content="Удалить выбранный профиль" Click="DeleteMqttProfileButton_Click" Margin="0,4"/>
+                            <TextBlock x:Name="SavedProfilesStatus" Text="" TextWrapping="Wrap" Margin="0,8,0,4"/>
+                        </StackPanel>
+                    </ScrollViewer>
+                </PivotItem>
                 <PivotItem Header="Голос">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel Margin="8,0,8,8">
