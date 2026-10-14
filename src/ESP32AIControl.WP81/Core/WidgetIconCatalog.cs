@@ -140,7 +140,7 @@ namespace ESP32AIControl.WP81.Core
                 if (value.StartsWith(candidate, StringComparison.Ordinal))
                 {
                     int consumed = candidate.Length;
-                    if (consumed < value.Length && value[consumed] == '\\uFE0F') consumed++;
+                    if (consumed < value.Length && value[consumed] == '\uFE0F') consumed++;
                     emoji = candidate;
                     remainingTitle = value.Substring(consumed).TrimStart();
                     return true;
@@ -153,7 +153,7 @@ namespace ESP32AIControl.WP81.Core
             if ("☀☁⛅❄⚡".IndexOf(first) >= 0)
             {
                 int consumed = 1;
-                if (consumed < value.Length && value[consumed] == '\\uFE0F') consumed++;
+                if (consumed < value.Length && value[consumed] == '\uFE0F') consumed++;
                 emoji = value.Substring(0, consumed);
                 remainingTitle = value.Substring(consumed).TrimStart();
                 return true;
