@@ -640,6 +640,7 @@ namespace ESP32AIControl.WP81
             };
 
             var row = new Grid();
+            visual.Row = row;
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(96) });
@@ -652,6 +653,7 @@ namespace ESP32AIControl.WP81
             if (WidgetIconCatalog.TryGetLeadingEmoji(GetTitle(state), out receivedEmoji, out visibleTitle))
             {
                 var emojiIcon = WidgetIconCatalog.CreateForEmoji(receivedEmoji);
+                visual.EmojiIcon = emojiIcon;
                 emojiIcon.VerticalAlignment = VerticalAlignment.Center;
                 emojiIcon.HorizontalAlignment = HorizontalAlignment.Center;
                 Grid.SetColumn(emojiIcon, 0);
@@ -781,7 +783,7 @@ namespace ESP32AIControl.WP81
                     MoveWidgetVisual(visual, newPage);
 
                 visual.State = state;
-                visual.Title.Text = GetTitle(state);
+                ApplyWidgetTitle(visual, state);
                 _widgetIndex[state.Key] = state;
             }
 
@@ -876,6 +878,36 @@ namespace ESP32AIControl.WP81
 
             if (DashboardEmptyState != null)
                 DashboardEmptyState.Visibility = WidgetPages.Items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private void ApplyWidgetTitle(WidgetVisual visual, WidgetState state)
+        {
+            var title = GetTitle(state);
+            string emoji;
+            string visibleTitle;
+            bool hasEmoji = WidgetIconCatalog.TryGetLeadingEmoji(title, out emoji, out visibleTitle);
+
+            if (hasEmoji)
+            {
+                visual.Title.Text = visibleTitle;
+                if (visual.Row != null)
+                {
+                    if (visual.EmojiIcon != null)
+                        visual.Row.Children.Remove(visual.EmojiIcon);
+                    visual.EmojiIcon = WidgetIconCatalog.CreateForEmoji(emoji);
+                    visual.EmojiIcon.VerticalAlignment = VerticalAlignment.Center;
+                    visual.EmojiIcon.HorizontalAlignment = HorizontalAlignment.Center;
+                    Grid.SetColumn(visual.EmojiIcon, 0);
+                    visual.Row.Children.Insert(0, visual.EmojiIcon);
+                }
+            }
+            else
+            {
+                visual.Title.Text = title;
+                if (visual.Row != null && visual.EmojiIcon != null)
+                    visual.Row.Children.Remove(visual.EmojiIcon);
+                visual.EmojiIcon = null;
+            }
         }
 
         private string GetTitle(WidgetState state)
@@ -1392,6 +1424,8 @@ namespace ESP32AIControl.WP81
             public string PageName { get; set; }
             public StackPanel Container { get; set; }
             public TextBlock Title { get; set; }
+            public Grid Row { get; set; }
+            public FrameworkElement EmojiIcon { get; set; }
             public TextBlock ValueText { get; set; }
             public FrameworkElement Control { get; set; }
         }
