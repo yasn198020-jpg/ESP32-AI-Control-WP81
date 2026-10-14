@@ -75,4 +75,6 @@ jobs:
             exit 0
           fi
           git commit -m "Bundle full Noto Emoji PNG set for WP8.1"
+          git fetch origin ui/lumia830-dashboard-test
+          git rebase origin/ui/lumia830-dashboard-test
           git push origin HEAD:ui/lumia830-dashboard-test
