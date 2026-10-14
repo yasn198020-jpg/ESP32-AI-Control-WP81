@@ -641,22 +641,16 @@ namespace ESP32AIControl.WP81
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(96) });
 
-            var icon = new TextBlock
-            {
-                Text = isSwitch ? "◉" : (isAction ? "●" : "◆"),
-                FontSize = 21,
-                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0, 183, 255)),
-                VerticalAlignment = VerticalAlignment.Center,
-                HorizontalAlignment = HorizontalAlignment.Left
-            };
+            var icon = WidgetIconCatalog.Create(GetTitle(state), type);
+            icon.VerticalAlignment = VerticalAlignment.Center;
+            icon.HorizontalAlignment = HorizontalAlignment.Left;
             Grid.SetColumn(icon, 0);
             row.Children.Add(icon);
 
             visual.Title = new TextBlock
             {
-                Text = GetTitle(state),
+                Text = WidgetIconCatalog.CleanTitle(GetTitle(state)),
                 FontSize = 16,
-                FontFamily = new Windows.UI.Xaml.Media.FontFamily("Segoe UI Symbol"),
                 Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 243, 244, 246)),
                 TextWrapping = TextWrapping.Wrap,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -764,7 +758,7 @@ namespace ESP32AIControl.WP81
                     MoveWidgetVisual(visual, newPage);
 
                 visual.State = state;
-                visual.Title.Text = GetTitle(state);
+                visual.Title.Text = WidgetIconCatalog.CleanTitle(GetTitle(state));
                 _widgetIndex[state.Key] = state;
             }
 
