@@ -278,16 +278,16 @@ namespace ESP32AIControl.WP81.Core
 
         private static string GetNotoEmojiFileName(string emoji)
         {
-            if (emoji == "\\U0001F952") return "emoji_u1f952.png"; // cucumber
-            if (emoji == "\\U0001F345") return "emoji_u1f345.png"; // tomato
-            if (emoji == "\\U0001F336") return "emoji_u1f336.png"; // hot pepper
-            if (emoji == "\\U0001F331") return "emoji_u1f331.png"; // seedling
-            if (emoji == "\\U0001F33F") return "emoji_u1f33f.png"; // herb
-            if (emoji == "\\U0001F321") return "emoji_u1f321.png"; // thermometer
-            if (emoji == "\\U0001F6AA") return "emoji_u1f6aa.png"; // door
-            if (emoji == "\\U0001FA9F") return "emoji_u1fa9f.png"; // window
-            if (emoji == "\\U0001F4A1") return "emoji_u1f4a1.png"; // light bulb
-            if (emoji == "\\U0001F4A7") return "emoji_u1f4a7.png"; // water drop
+            if (emoji == "\U0001F952") return "emoji_u1f952.png"; // cucumber
+            if (emoji == "\U0001F345") return "emoji_u1f345.png"; // tomato
+            if (emoji == "\U0001F336") return "emoji_u1f336.png"; // hot pepper
+            if (emoji == "\U0001F331") return "emoji_u1f331.png"; // seedling
+            if (emoji == "\U0001F33F") return "emoji_u1f33f.png"; // herb
+            if (emoji == "\U0001F321") return "emoji_u1f321.png"; // thermometer
+            if (emoji == "\U0001F6AA") return "emoji_u1f6aa.png"; // door
+            if (emoji == "\U0001FA9F") return "emoji_u1fa9f.png"; // window
+            if (emoji == "\U0001F4A1") return "emoji_u1f4a1.png"; // light bulb
+            if (emoji == "\U0001F4A7") return "emoji_u1f4a7.png"; // water drop
             return null;
         }
 
