@@ -1,13 +1,19 @@
-# WP8.1 Noto Emoji icon smoke test
+# WP8.1 Noto Emoji rendering test
 
-The app bundles selected official Noto Emoji PNG artwork under
-`src/ESP32AIControl.WP81/Assets/NotoEmoji/`. The images are included in the
-app package and loaded locally; the build and runtime do not download them.
-The upstream license and attribution are kept alongside the images.
+The app bundles the official Noto Emoji PNG artwork locally under
+`src/ESP32AIControl.WP81/Assets/NotoEmoji/`. The current asset index contains
+3,750 Unicode-named emoji images plus 259 country flags. Assets are included
+in the app package; build and runtime do not download them. The upstream
+license and attribution are kept alongside the images.
+
+The renderer derives asset filenames from Unicode code points, ignores
+presentation selectors, and supports sequence filenames for skin tones,
+keycaps and ZWJ emoji. Country flags are resolved through ISO country-code
+images. If a sequence has no matching upstream image, the existing vector
+fallback prevents a missing-image box.
 
 Test by setting a widget title to each prefix below. The leading emoji should
-be replaced by its bundled Noto Emoji artwork and the remaining title text
-should stay visible.
+be replaced by Noto artwork and the remaining title text should stay visible.
 
 | Case | Test title | What to verify |
 |---|---|---|
@@ -15,13 +21,16 @@ should stay visible.
 | Tomato | `🍅 Tomatoes` | Noto tomato image |
 | Pepper | `🌶️ Pepper` | Noto pepper image |
 | Seedling | `🌱 Seedling` | Noto seedling image |
-| Herb | `🌿 Herb` | Noto herb image |
 | Thermometer | `🌡️ Temperature` | Noto thermometer image |
 | Door | `🚪 Door` | Noto door image |
 | Window | `🪟 Window` | Noto window image |
 | Light | `💡 Light` | Noto light-bulb image |
-| Water | `💧 Water` | Noto water-drop image |
-| Unsupported sequence | `👨‍👩‍👧‍👦 Family` | Safe vector fallback |
+| Finland flag | `🇫🇮 Finland` | Finnish flag image |
+| US flag | `🇺🇸 United States` | US flag image |
+| Skin tone | `👍🏽 Like` | Matching skin-tone image |
+| Family ZWJ sequence | `👨‍👩‍👧‍👦 Family` | Combined family image |
+| Keycap | `1️⃣ One` | Keycap image |
+| Heart with selector | `❤️ Heart` | Heart image |
 
 Also verify ordinary titles such as `Door`, `Temperature 20°`, and
 `Widget 1` remain unchanged. MQTT values, command execution and scheduling
