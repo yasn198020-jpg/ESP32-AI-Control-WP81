@@ -261,7 +261,8 @@ namespace ESP32AIControl.WP81.Core
         public static FrameworkElement CreateForEmoji(string emoji)
         {
             string fileName = GetNotoEmojiFileName(emoji);
-            if (fileName == null) return CreateVectorForEmoji(emoji);
+            if (fileName == null || !NotoEmojiAssetIndex.Contains(fileName))
+                return CreateVectorForEmoji(emoji);
 
             var host = new Grid { Width = 26, Height = 26 };
             var image = new Image
