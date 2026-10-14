@@ -3,6 +3,7 @@ using System.IO;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Json;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Windows.Foundation;
 using Windows.Storage;
@@ -13,6 +14,7 @@ namespace ESP32AIControl.WP81.Core
     public sealed class AppSettingsStore
     {
         private const string FileName = "app-settings.json";
+        private static readonly SemaphoreSlim SaveLock = new SemaphoreSlim(1, 1);
 
         private static Task<StorageFile> GetFileAsync(StorageFolder folder, string fileName)
         {
@@ -128,16 +130,24 @@ namespace ESP32AIControl.WP81.Core
         {
             if (settings == null) return;
 
-            using (var stream = new MemoryStream())
+            await SaveLock.WaitAsync();
+            try
             {
-                var serializer = new DataContractJsonSerializer(typeof(AppSettings));
-                serializer.WriteObject(stream, settings);
-                var json = Encoding.UTF8.GetString(stream.ToArray(), 0, (int)stream.Length);
-                var file = await CreateFileAsync(
-                    ApplicationData.Current.LocalFolder,
-                    FileName,
-                    CreationCollisionOption.ReplaceExisting);
-                await WriteTextAsync(file, json);
+                using (var stream = new MemoryStream())
+                {
+                    var serializer = new DataContractJsonSerializer(typeof(AppSettings));
+                    serializer.WriteObject(stream, settings);
+                    var json = Encoding.UTF8.GetString(stream.ToArray(), 0, (int)stream.Length);
+                    var file = await CreateFileAsync(
+                        ApplicationData.Current.LocalFolder,
+                        FileName,
+                        CreationCollisionOption.ReplaceExisting);
+                    await WriteTextAsync(file, json);
+                }
+            }
+            finally
+            {
+                SaveLock.Release();
             }
         }
     }
