@@ -154,6 +154,34 @@ namespace ESP32AIControl.WP81.Core
             int firstCodePoint;
             int consumed;
             ReadCodePoint(value, 0, out firstCodePoint, out consumed);
+
+            // Keycap emoji start with an ASCII digit, # or *; do not treat the
+            // same character as emoji unless the keycap combining mark follows.
+            bool keycapBase = firstCodePoint == 0x23 || firstCodePoint == 0x2A ||
+                              (firstCodePoint >= 0x30 && firstCodePoint <= 0x39);
+            if (keycapBase)
+            {
+                int keycapEnd = consumed;
+                int nextPoint;
+                int nextLength;
+                if (keycapEnd < value.Length)
+                {
+                    ReadCodePoint(value, keycapEnd, out nextPoint, out nextLength);
+                    if (nextPoint == 0xFE0F) keycapEnd += nextLength;
+                }
+                if (keycapEnd < value.Length)
+                {
+                    ReadCodePoint(value, keycapEnd, out nextPoint, out nextLength);
+                    if (nextPoint == 0x20E3)
+                    {
+                        consumed = keycapEnd + nextLength;
+                        emoji = value.Substring(0, consumed);
+                        remainingTitle = value.Substring(consumed).TrimStart();
+                        return true;
+                    }
+                }
+            }
+
             if (!IsEmojiCodePoint(firstCodePoint)) return false;
 
             while (consumed < value.Length)
@@ -164,6 +192,7 @@ namespace ESP32AIControl.WP81.Core
 
                 if (nextCodePoint == 0xFE0E || nextCodePoint == 0xFE0F ||
                     (nextCodePoint >= 0x1F3FB && nextCodePoint <= 0x1F3FF) ||
+                    (nextCodePoint >= 0xE0020 && nextCodePoint <= 0xE007F) ||
                     nextCodePoint == 0x20E3)
                 {
                     consumed += nextLength;
