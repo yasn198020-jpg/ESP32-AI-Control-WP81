@@ -623,6 +623,7 @@ namespace ESP32AIControl.WP81
             {
                 Text = GetTitle(state),
                 FontSize = 16,
+                FontFamily = new Windows.UI.Xaml.Media.FontFamily("Segoe UI Symbol"),
                 Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 243, 244, 246)),
                 TextWrapping = TextWrapping.Wrap,
                 VerticalAlignment = VerticalAlignment.Center,
