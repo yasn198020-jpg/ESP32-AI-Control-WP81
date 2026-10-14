@@ -29,10 +29,11 @@ jobs:
           index="src/ESP32AIControl.WP81/Core/NotoEmojiAssetIndex.cs"
           tmp="$RUNNER_TEMP/noto-emoji"
           mkdir -p "$dest"
-          git clone --depth 1 https://github.com/googlefonts/noto-emoji.git "$tmp"
+          git clone --depth 1 --filter=blob:none --sparse https://github.com/googlefonts/noto-emoji.git "$tmp"
+          git -C "$tmp" sparse-checkout set 2D/png/128
           test -d "$tmp/2D/png/128"
           find "$tmp/2D/png/128" -maxdepth 1 -type f -name '*.png' -exec cp -f {} "$dest/" \;
-          cp "$tmp/LICENSE" "$dest/LICENSE"
+          curl --fail --location --retry 3 "https://raw.githubusercontent.com/googlefonts/noto-emoji/main/LICENSE" --output "$dest/LICENSE"
           cat > "$dest/README.txt" <<'EOF'
           Noto Emoji PNG artwork bundled for ESP32-AI-Control WP8.1.
           Upstream: https://github.com/googlefonts/noto-emoji
