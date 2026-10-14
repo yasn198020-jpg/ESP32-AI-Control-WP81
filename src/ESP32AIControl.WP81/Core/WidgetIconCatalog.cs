@@ -150,7 +150,7 @@ namespace ESP32AIControl.WP81.Core
             // Common BMP emoji are also matched explicitly, including optional
             // variation selectors used by MQTT publishers.
             char first = value[0];
-            if ("☀☁⛅🌧❄⚡".IndexOf(first) >= 0)
+            if ("☀☁⛅❄⚡".IndexOf(first) >= 0)
             {
                 int consumed = 1;
                 if (consumed < value.Length && value[consumed] == '\\uFE0F') consumed++;
