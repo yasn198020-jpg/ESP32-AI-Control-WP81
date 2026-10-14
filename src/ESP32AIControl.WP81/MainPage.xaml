@@ -72,9 +72,9 @@
                         BorderThickness="0" Padding="0"
                         Foreground="#FFF3F4F6" VerticalAlignment="Stretch"
                         HorizontalAlignment="Stretch" AutomationProperties.Name="Открыть меню">
-                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Width="24" Spacing="5">
-                        <Border Height="2" Background="#FF00B7FF" CornerRadius="1"/>
-                        <Border Height="2" Background="#FF00B7FF" CornerRadius="1"/>
+                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Width="24">
+                        <Border Height="2" Background="#FF00B7FF" CornerRadius="1" Margin="0,0,0,4"/>
+                        <Border Height="2" Background="#FF00B7FF" CornerRadius="1" Margin="0,0,0,4"/>
                         <Border Height="2" Background="#FF00B7FF" CornerRadius="1"/>
                     </StackPanel>
                 </Button>
