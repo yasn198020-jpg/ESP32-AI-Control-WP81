@@ -152,6 +152,33 @@ namespace ESP32AIControl.WP81.Core
             target.UseTls = source.UseTls;
         }
 
+        private static bool HasSavedProfiles(AppSettings settings)
+        {
+            return settings != null && settings.SavedMqttProfiles != null
+                && settings.SavedMqttProfiles.Count > 0;
+        }
+
+        private static bool RestoreSavedProfiles(AppSettings source, AppSettings target)
+        {
+            if (!HasSavedProfiles(source)) return false;
+
+            var changed = false;
+            if (!HasSavedProfiles(target))
+            {
+                target.SavedMqttProfiles = source.SavedMqttProfiles;
+                changed = true;
+            }
+
+            if (string.IsNullOrWhiteSpace(target.DefaultMqttProfileName)
+                && !string.IsNullOrWhiteSpace(source.DefaultMqttProfileName))
+            {
+                target.DefaultMqttProfileName = source.DefaultMqttProfileName;
+                changed = true;
+            }
+
+            return changed;
+        }
+
         public async Task<AppSettings> LoadAsync()
         {
             AppSettings local = null;
@@ -168,16 +195,29 @@ namespace ESP32AIControl.WP81.Core
             // retaining unrelated local preferences and scenario settings.
             if (local != null)
             {
+                var restored = false;
+
+                // A newly installed app can create a local file with factory
+                // values before the roaming copy becomes available. Restore
+                // the connection and the saved-profile list independently.
                 if (!HasConfiguredMqtt(local) && HasConfiguredMqtt(roaming))
                 {
                     CopyMqttSettings(roaming, local);
+                    restored = true;
                     LastLoadSource = "RoamingFolder (MQTT restored over default local values)";
-                    await SaveAsync(local);
                 }
-                else
+
+                if (RestoreSavedProfiles(roaming, local))
                 {
-                    LastLoadSource = "LocalFolder";
+                    restored = true;
+                    LastLoadSource = "RoamingFolder (saved MQTT profiles restored)";
                 }
+
+                if (restored)
+                    await SaveAsync(local);
+                else
+                    LastLoadSource = "LocalFolder";
+
                 return local;
             }
 
