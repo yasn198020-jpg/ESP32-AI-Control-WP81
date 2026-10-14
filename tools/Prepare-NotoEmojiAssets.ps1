@@ -6,7 +6,7 @@ $ErrorActionPreference = "Stop"
 $tag = "v2026-09-24-unicode18_0"
 $marker = Join-Path $Destination ".noto-emoji-version"
 if ((Test-Path $marker) -and ((Get-Content $marker -Raw).Trim() -eq $tag) -and
-    (Test-Path (Join-Path $Destination "1f600.png"))) {
+    (Test-Path (Join-Path $Destination "emoji_u1f600.png"))) {
     Write-Host "Noto Emoji assets already prepared ($tag)."
     exit 0
 }
