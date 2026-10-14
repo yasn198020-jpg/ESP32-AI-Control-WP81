@@ -261,34 +261,54 @@ namespace ESP32AIControl.WP81.Core
         public static FrameworkElement CreateForEmoji(string emoji)
         {
             string fileName = GetNotoEmojiFileName(emoji);
-            if (fileName != null)
-            {
-                var image = new Image
-                {
-                    Width = 26,
-                    Height = 26,
-                    Stretch = Stretch.Uniform,
-                    Source = new BitmapImage(new Uri("ms-appx:///Assets/NotoEmoji/" + fileName, UriKind.Absolute))
-                };
-                return image;
-            }
+            if (fileName == null) return CreateVectorForEmoji(emoji);
 
-            return CreateVectorForEmoji(emoji);
+            var host = new Grid { Width = 26, Height = 26 };
+            var image = new Image
+            {
+                Width = 26,
+                Height = 26,
+                Stretch = Stretch.Uniform,
+                Source = new BitmapImage(new Uri("ms-appx:///Assets/NotoEmoji/" + fileName, UriKind.Absolute))
+            };
+
+            // Some Unicode sequences do not have a standalone Noto PNG asset.
+            // Keep those safe on WP8.1 instead of leaving a broken image element.
+            image.ImageFailed += (sender, args) =>
+            {
+                host.Children.Clear();
+                host.Children.Add(CreateVectorForEmoji(emoji));
+            };
+            host.Children.Add(image);
+            return host;
         }
 
         private static string GetNotoEmojiFileName(string emoji)
         {
-            if (emoji == "\U0001F952") return "emoji_u1f952.png"; // cucumber
-            if (emoji == "\U0001F345") return "emoji_u1f345.png"; // tomato
-            if (emoji == "\U0001F336") return "emoji_u1f336.png"; // hot pepper
-            if (emoji == "\U0001F331") return "emoji_u1f331.png"; // seedling
-            if (emoji == "\U0001F33F") return "emoji_u1f33f.png"; // herb
-            if (emoji == "\U0001F321") return "emoji_u1f321.png"; // thermometer
-            if (emoji == "\U0001F6AA") return "emoji_u1f6aa.png"; // door
-            if (emoji == "\U0001FA9F") return "emoji_u1fa9f.png"; // window
-            if (emoji == "\U0001F4A1") return "emoji_u1f4a1.png"; // light bulb
-            if (emoji == "\U0001F4A7") return "emoji_u1f4a7.png"; // water drop
-            return null;
+            if (string.IsNullOrEmpty(emoji)) return null;
+
+            // Noto names files by Unicode code point, separated with underscores.
+            // This also covers flags, skin tones, keycaps and ZWJ sequences.
+            var name = new System.Text.StringBuilder("emoji_u");
+            bool hasCodePoint = false;
+            for (int i = 0; i < emoji.Length;)
+            {
+                int codePoint;
+                int length;
+                ReadCodePoint(emoji, i, out codePoint, out length);
+                i += length;
+
+                // Presentation selectors affect text rendering, not the Noto asset name.
+                if (codePoint == 0xFE0E || codePoint == 0xFE0F) continue;
+
+                if (hasCodePoint) name.Append('_');
+                name.Append(codePoint.ToString("x", System.Globalization.CultureInfo.InvariantCulture));
+                hasCodePoint = true;
+            }
+
+            if (!hasCodePoint) return null;
+            name.Append(".png");
+            return name.ToString();
         }
 
         /// <summary>App-owned vector symbol for an emoji sequence.</summary>
