@@ -51,9 +51,12 @@ namespace ESP32AIControl.WP81
             new List<MeasurementPoint>();
 
         private DispatcherTimer _autoExportTimer;
+        private DispatcherTimer _mqttSupervisorTimer;
         private bool _syncingControls;
         private bool _initializing;
         private bool _autoExportRunning;
+        private bool _mqttReconnectEnabled;
+        private bool _mqttReconnectInProgress;
 
         public MainPage()
         {
@@ -115,6 +118,12 @@ namespace ESP32AIControl.WP81
                 await RefreshScheduleAsync();
                 RefreshGraphWidgets();
                 Log("Приложение и локальное хранилище готовы.");
+
+                // Android starts its MQTT foreground service automatically.
+                // On WP8.1 keep reconnecting while the app is active and reconnect on resume.
+                _mqttReconnectEnabled = true;
+                StartMqttSupervisor();
+                await EnsureMqttConnectedAsync("запуск приложения");
             }
             catch (Exception ex)
             {
@@ -130,6 +139,56 @@ namespace ESP32AIControl.WP81
         {
             if (_autoExportTimer != null)
                 _autoExportTimer.Stop();
+        }
+
+        private void StartMqttSupervisor()
+        {
+            if (_mqttSupervisorTimer != null)
+                return;
+
+            _mqttSupervisorTimer = new DispatcherTimer();
+            _mqttSupervisorTimer.Interval = TimeSpan.FromSeconds(15);
+            _mqttSupervisorTimer.Tick += MqttSupervisorTimer_Tick;
+            _mqttSupervisorTimer.Start();
+        }
+
+        private async void MqttSupervisorTimer_Tick(object sender, object e)
+        {
+            await EnsureMqttConnectedAsync("проверка соединения");
+        }
+
+        public async void OnApplicationResuming()
+        {
+            if (_appSettings == null)
+                return;
+
+            _mqttReconnectEnabled = true;
+            await EnsureMqttConnectedAsync("возврат приложения из фона");
+        }
+
+        private async Task EnsureMqttConnectedAsync(string reason)
+        {
+            if (!_mqttReconnectEnabled || _initializing || _mqttReconnectInProgress)
+                return;
+
+            if (_mqtt.State != MqttConnectionState.Disconnected)
+                return;
+
+            _mqttReconnectInProgress = true;
+            try
+            {
+                Log("MQTT: восстанавливаю соединение (" + reason + ")…");
+                await _mqtt.ConnectAsync();
+                Log("MQTT: соединение восстановлено, подписка активна.");
+            }
+            catch (Exception ex)
+            {
+                Log("MQTT reconnect: " + ex.Message);
+            }
+            finally
+            {
+                _mqttReconnectInProgress = false;
+            }
         }
 
         private void ShowSection(int index)
@@ -241,6 +300,7 @@ namespace ESP32AIControl.WP81
             try
             {
                 ReadMqttSettingsFromUi();
+                _mqttReconnectEnabled = true;
 
                 // Match Android behavior: persist the connection settings before connecting.
                 _appSettings.Host = _settings.Host;
@@ -263,6 +323,7 @@ namespace ESP32AIControl.WP81
 
         private async void DisconnectButton_Click(object sender, RoutedEventArgs e)
         {
+            _mqttReconnectEnabled = false;
             try { await _mqtt.DisconnectAsync(); }
             catch (Exception ex) { Log("ERROR: " + ex.Message); }
         }
