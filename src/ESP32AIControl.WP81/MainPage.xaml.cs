@@ -118,6 +118,8 @@ namespace ESP32AIControl.WP81
                 await RefreshScheduleAsync();
                 RefreshGraphWidgets();
                 Log("Приложение и локальное хранилище готовы.");
+                Log("Настройки: источник " + (_settingsStore.LastLoadSource ?? "неизвестен") +
+                    "; резерв MQTT: " + (_settingsStore.LastRoamingSaveStatus ?? "не проверено"));
 
                 // Android starts its MQTT foreground service automatically.
                 // On WP8.1 keep reconnecting while the app is active and reconnect on resume.
@@ -387,7 +389,8 @@ namespace ESP32AIControl.WP81
                 await CleanupHistoryAsync();
 
                 SettingsStatus.Text = "Настройки сохранены.";
-                Log("Настройки сохранены.");
+                Log("Настройки сохранены. Резерв MQTT: " +
+                    (_settingsStore.LastRoamingSaveStatus ?? "не проверено"));
             }
             catch (Exception ex)
             {
