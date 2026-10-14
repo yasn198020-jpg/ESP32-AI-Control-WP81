@@ -440,6 +440,39 @@ namespace ESP32AIControl.WP81
             }
         }
 
+        private async void MqttSetting_LostFocus(object sender, RoutedEventArgs e)
+        {
+            await SaveMqttSettingsQuietlyAsync();
+        }
+
+        private async void MqttTlsCheckBox_Changed(object sender, RoutedEventArgs e)
+        {
+            await SaveMqttSettingsQuietlyAsync();
+        }
+
+        private async Task SaveMqttSettingsQuietlyAsync()
+        {
+            if (_initializing || _appSettings == null || _settingsStore == null)
+                return;
+
+            try
+            {
+                ReadMqttSettingsFromUi();
+                _appSettings.Host = _settings.Host;
+                _appSettings.Port = _settings.Port;
+                _appSettings.Prefix = _settings.Prefix;
+                _appSettings.UserName = _settings.UserName;
+                _appSettings.Password = _settings.Password;
+                _appSettings.ClientId = _settings.ClientId;
+                _appSettings.UseTls = _settings.UseTls;
+                await _settingsStore.SaveAsync(_appSettings);
+            }
+            catch (Exception ex)
+            {
+                Log("Не удалось сохранить настройки MQTT: " + ex.Message);
+            }
+        }
+
         private void ReadMqttSettingsFromUi()
         {
             _settings.Host = HostBox.Text.Trim();
