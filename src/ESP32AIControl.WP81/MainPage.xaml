@@ -67,10 +67,17 @@
                     <ColumnDefinition Width="38"/>
                     <ColumnDefinition Width="35"/>
                 </Grid.ColumnDefinitions>
-                <Button x:Name="MenuButton" Grid.Column="0" Content="☰"
+                <Button x:Name="MenuButton" Grid.Column="0"
                         Click="MenuButton_Click" Background="Transparent"
-                        BorderThickness="0" Padding="0" FontSize="25"
-                        Foreground="#FFF3F4F6" VerticalAlignment="Stretch"/>
+                        BorderThickness="0" Padding="0"
+                        Foreground="#FFF3F4F6" VerticalAlignment="Stretch"
+                        HorizontalAlignment="Stretch" AutomationProperties.Name="Открыть меню">
+                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Width="24" Spacing="5">
+                        <Border Height="2" Background="#FF00B7FF" CornerRadius="1"/>
+                        <Border Height="2" Background="#FF00B7FF" CornerRadius="1"/>
+                        <Border Height="2" Background="#FF00B7FF" CornerRadius="1"/>
+                    </StackPanel>
+                </Button>
                 <TextBlock x:Name="PageSubtitle" Grid.Column="1" Text="Dashboard"
                            FontSize="21" FontWeight="SemiBold" Foreground="#FFF3F4F6"
                            VerticalAlignment="Center" TextWrapping="NoWrap"/>
@@ -99,8 +106,23 @@
                     </Grid.RowDefinitions>
 
                     <!-- Page tabs and live widgets are the focus of the Android dashboard. -->
-                    <Pivot x:Name="WidgetPages" Grid.Row="0" Margin="0"
-                           HeaderTemplate="{StaticResource WidgetPageHeaderTemplate}"/>
+                    <Grid Grid.Row="0">
+                        <Pivot x:Name="WidgetPages" Margin="0"
+                               HeaderTemplate="{StaticResource WidgetPageHeaderTemplate}"/>
+                        <StackPanel x:Name="DashboardEmptyState" VerticalAlignment="Center"
+                                    HorizontalAlignment="Center" Margin="24"
+                                    IsHitTestVisible="False">
+                            <TextBlock Text="Дашборд" FontSize="27" FontWeight="SemiBold"
+                                       Foreground="#FF00B7FF" HorizontalAlignment="Center"/>
+                            <TextBlock Text="Здесь появятся виджеты теплиц"
+                                       FontSize="16" Foreground="#FFF3F4F6"
+                                       TextAlignment="Center" Margin="0,12,0,4"/>
+                            <TextBlock Text="Откройте меню ☰ и подключитесь к MQTT в настройках."
+                                       FontSize="13" Foreground="#FF9CA3AF"
+                                       TextAlignment="Center" TextWrapping="Wrap"
+                                       HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </Grid>
 
                     <!-- The bottom-nav microphone reports recognition here without taking dashboard space. -->
                     <TextBlock x:Name="VoiceResultText" Grid.Row="1"
