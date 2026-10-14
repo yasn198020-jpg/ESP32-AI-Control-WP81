@@ -1,7 +1,8 @@
 <Page
     x:Class="ESP32AIControl.WP81.MainPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    RequestedTheme="Dark">
     <Page.Resources>
         <SolidColorBrush x:Key="AccentBrush" Color="#FF00B7FF"/>
         <SolidColorBrush x:Key="PanelBrush" Color="#FF1B1D24"/>
@@ -9,6 +10,7 @@
         <DataTemplate x:Key="WidgetPageHeaderTemplate">
             <Border Background="#FF30313A" CornerRadius="9" Padding="14,9" Margin="0,0,6,0">
                 <TextBlock Text="{Binding}" FontSize="14" FontWeight="SemiBold"
+                           FontFamily="Segoe UI Symbol"
                            Foreground="#FFF3F4F6" TextWrapping="NoWrap"/>
             </Border>
         </DataTemplate>
