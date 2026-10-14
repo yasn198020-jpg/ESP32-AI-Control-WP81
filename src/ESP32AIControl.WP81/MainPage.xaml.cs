@@ -640,21 +640,46 @@ namespace ESP32AIControl.WP81
             };
 
             var row = new Grid();
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(96) });
 
-            // Keep the title exactly as supplied by MQTT. Do not replace a received
-            // emoji (for example 🥒) with a guessed vector icon or strip it out.
-            visual.Title = new TextBlock
+            // WP8.1 may not contain glyphs for modern emoji. Detect supported emoji
+            // by their exact Unicode sequence and draw an app-owned vector equivalent.
+            // The underlying MQTT state is never modified.
+            string receivedEmoji;
+            string visibleTitle;
+            if (WidgetIconCatalog.TryGetLeadingEmoji(GetTitle(state), out receivedEmoji, out visibleTitle))
             {
-                Text = GetTitle(state),
-                FontSize = 16,
-                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 243, 244, 246)),
-                TextWrapping = TextWrapping.Wrap,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 8, 0)
-            };
-            Grid.SetColumn(visual.Title, 0);
+                var emojiIcon = WidgetIconCatalog.CreateForEmoji(receivedEmoji);
+                emojiIcon.VerticalAlignment = VerticalAlignment.Center;
+                emojiIcon.HorizontalAlignment = HorizontalAlignment.Center;
+                Grid.SetColumn(emojiIcon, 0);
+                row.Children.Add(emojiIcon);
+                visual.Title = new TextBlock
+                {
+                    Text = visibleTitle,
+                    FontSize = 16,
+                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 243, 244, 246)),
+                    TextWrapping = TextWrapping.Wrap,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(0, 0, 8, 0)
+                };
+            }
+            else
+            {
+                // Unsupported emoji are not guessed or removed; preserve the MQTT title.
+                visual.Title = new TextBlock
+                {
+                    Text = GetTitle(state),
+                    FontSize = 16,
+                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 243, 244, 246)),
+                    TextWrapping = TextWrapping.Wrap,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(0, 0, 8, 0)
+                };
+            }
+            Grid.SetColumn(visual.Title, 1);
             row.Children.Add(visual.Title);
 
             visual.ValueText = new TextBlock
