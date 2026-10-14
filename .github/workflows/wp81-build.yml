@@ -2,7 +2,7 @@ name: WP81 Build
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, ui/lumia830-dashboard-test ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:

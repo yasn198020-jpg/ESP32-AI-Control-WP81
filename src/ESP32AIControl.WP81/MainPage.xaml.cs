@@ -51,13 +51,20 @@ namespace ESP32AIControl.WP81
             new List<MeasurementPoint>();
 
         private DispatcherTimer _autoExportTimer;
+        private DispatcherTimer _mqttSupervisorTimer;
         private bool _syncingControls;
         private bool _initializing;
         private bool _autoExportRunning;
+        private bool _mqttReconnectEnabled;
+        private bool _mqttReconnectInProgress;
+        private int _selectedSection = 0;
 
         public MainPage()
         {
             InitializeComponent();
+            if (DashboardEmptyState != null)
+                DashboardEmptyState.Visibility = WidgetPages.Items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            UpdateNavigationState();
 
             _settingsStore = new AppSettingsStore();
             _appSettings = new AppSettings();
@@ -82,6 +89,7 @@ namespace ESP32AIControl.WP81
             _mqtt.WidgetChanged += Mqtt_WidgetChanged;
             _scheduler.TaskChanged += Scheduler_TaskChanged;
             _voice.CommandRecognized += Voice_CommandRecognized;
+            _voice.RecognitionFailed += Voice_RecognitionFailed;
 
             Loaded += MainPage_Loaded;
             Unloaded += MainPage_Unloaded;
@@ -95,6 +103,9 @@ namespace ESP32AIControl.WP81
             try
             {
                 _appSettings = await _settingsStore.LoadAsync();
+                if (_appSettings.SavedMqttProfiles == null)
+                    _appSettings.SavedMqttProfiles = new List<SavedMqttProfile>();
+                ApplyDefaultMqttProfileToSettings();
                 ApplySettingsToMqtt();
                 _commandExecutor.SetScenarioScript(_appSettings.IoTManagerScenario);
                 ApplySettingsToUi();
@@ -111,6 +122,13 @@ namespace ESP32AIControl.WP81
                 await RefreshScheduleAsync();
                 RefreshGraphWidgets();
                 Log("Приложение и локальное хранилище готовы.");
+                Log("Настройки: источник " + (_settingsStore.LastLoadSource ?? "неизвестен") +
+                    "; резерв MQTT: " + (_settingsStore.LastRoamingSaveStatus ?? "не проверено"));
+
+                // Android starts its MQTT foreground service automatically.
+                // On WP8.1 keep reconnecting while the app is active and reconnect on resume.
+                _mqttReconnectEnabled = true;
+                StartMqttSupervisor();
             }
             catch (Exception ex)
             {
@@ -120,6 +138,9 @@ namespace ESP32AIControl.WP81
             {
                 _initializing = false;
             }
+
+            // Connect only after settings and scheduled tasks have finished loading.
+            await EnsureMqttConnectedAsync("запуск приложения");
         }
 
         private void MainPage_Unloaded(object sender, RoutedEventArgs e)
@@ -128,12 +149,156 @@ namespace ESP32AIControl.WP81
                 _autoExportTimer.Stop();
         }
 
+        private void StartMqttSupervisor()
+        {
+            if (_mqttSupervisorTimer != null)
+                return;
+
+            _mqttSupervisorTimer = new DispatcherTimer();
+            _mqttSupervisorTimer.Interval = TimeSpan.FromSeconds(15);
+            _mqttSupervisorTimer.Tick += MqttSupervisorTimer_Tick;
+            _mqttSupervisorTimer.Start();
+        }
+
+        private async void MqttSupervisorTimer_Tick(object sender, object e)
+        {
+            await EnsureMqttConnectedAsync("проверка соединения");
+        }
+
+        public async void OnApplicationResuming()
+        {
+            if (_appSettings == null)
+                return;
+
+            _mqttReconnectEnabled = true;
+            await EnsureMqttConnectedAsync("возврат приложения из фона");
+        }
+
+        private async Task EnsureMqttConnectedAsync(string reason)
+        {
+            if (!_mqttReconnectEnabled || _initializing || _mqttReconnectInProgress)
+                return;
+
+            if (_mqtt.State != MqttConnectionState.Disconnected)
+                return;
+
+            _mqttReconnectInProgress = true;
+            try
+            {
+                Log("MQTT: восстанавливаю соединение (" + reason + ")…");
+                await _mqtt.ConnectAsync();
+                Log("MQTT: соединение восстановлено, подписка активна.");
+            }
+            catch (Exception ex)
+            {
+                Log("MQTT reconnect: " + ex.Message);
+            }
+            finally
+            {
+                _mqttReconnectInProgress = false;
+            }
+        }
+
         private void ShowSection(int index)
         {
-            MainPivot.SelectedIndex = index;
+            _selectedSection = Math.Max(0, Math.Min(3, index));
+            UpdateNavigationState();
+        }
+
+        private void MenuButton_Click(object sender, RoutedEventArgs e)
+        {
+            var menu = new MenuFlyout();
+
+            var home = new MenuFlyoutItem { Text = "Главная" };
+            home.Click += delegate { ShowSection(0); };
+            menu.Items.Add(home);
+
+            var graphs = new MenuFlyoutItem { Text = "Графики и история" };
+            graphs.Click += delegate { ShowSection(1); };
+            menu.Items.Add(graphs);
+
+            var tasks = new MenuFlyoutItem { Text = "Запланированные команды" };
+            tasks.Click += delegate { ShowSection(2); };
+            menu.Items.Add(tasks);
+
+            var settings = new MenuFlyoutItem { Text = "Настройки" };
+            settings.Click += delegate
+            {
+                ShowSection(3);
+                if (SettingsPivot != null)
+                    SettingsPivot.SelectedIndex = 0;
+            };
+            menu.Items.Add(settings);
+
+            menu.ShowAt(MenuButton);
+        }
+
+        private async void TopInfoButton_Click(object sender, RoutedEventArgs e)
+        {
+            var state = ConnectionText == null ? "Состояние MQTT неизвестно." : ConnectionText.Text;
+            var dialog = new Windows.UI.Popups.MessageDialog(
+                state + Environment.NewLine +
+                "Параметры MQTT, сценарий IoTManager и журнал доступны в разделе «Настройки».",
+                "ESP32 AI Control");
+            await dialog.ShowAsync();
+        }
+
+        private void UpdateNavigationState()
+        {
+            if (PageSubtitle == null || MainSections == null) return;
+
+            HomeSection.Visibility = _selectedSection == 0 ? Visibility.Visible : Visibility.Collapsed;
+            GraphsSection.Visibility = _selectedSection == 1 ? Visibility.Visible : Visibility.Collapsed;
+            TasksSection.Visibility = _selectedSection == 2 ? Visibility.Visible : Visibility.Collapsed;
+            SettingsSection.Visibility = _selectedSection == 3 ? Visibility.Visible : Visibility.Collapsed;
+
+            if (_selectedSection == 0)
+                PageSubtitle.Text = "Главная";
+            else if (_selectedSection == 1)
+                PageSubtitle.Text = "Графики";
+            else if (_selectedSection == 2)
+                PageSubtitle.Text = "Задачи";
+            else
+                PageSubtitle.Text = "Настройки";
+
+            SetNavigationButton(NavHomeButton, _selectedSection == 0);
+            SetNavigationButton(NavMarfaButton, false);
+            SetNavigationButton(NavGraphsButton, _selectedSection == 1);
+            SetNavigationButton(NavTasksButton, _selectedSection == 2);
+            // Settings stays available from the hamburger menu, not the bottom bar.
+        }
+
+        private void SetNavigationButton(Button button, bool isSelected)
+        {
+            if (button == null) return;
+
+            // Keep the bottom bar visually quiet like Android navigation:
+            // the selected destination gets a soft surface and an accent icon,
+            // rather than turning the entire navigation tile bright purple.
+            button.Background = new SolidColorBrush(isSelected
+                ? Windows.UI.Color.FromArgb(255, 43, 39, 57)
+                : Windows.UI.Color.FromArgb(255, 25, 26, 32));
+            button.Foreground = new SolidColorBrush(isSelected
+                ? Windows.UI.Color.FromArgb(255, 243, 244, 246)
+                : Windows.UI.Color.FromArgb(255, 156, 163, 175));
+            button.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0));
+
+            var content = button.Content as StackPanel;
+            if (content == null) return;
+            for (var i = 0; i < content.Children.Count; i++)
+            {
+                var label = content.Children[i] as TextBlock;
+                if (label == null) continue;
+                label.Foreground = new SolidColorBrush(isSelected && i == 0
+                    ? Windows.UI.Color.FromArgb(255, 0, 183, 255)
+                    : (isSelected
+                        ? Windows.UI.Color.FromArgb(255, 243, 244, 246)
+                        : Windows.UI.Color.FromArgb(255, 156, 163, 175)));
+            }
         }
 
         private void NavigateHome_Click(object sender, RoutedEventArgs e) { ShowSection(0); }
+        private void NavigateMarfa_Click(object sender, RoutedEventArgs e) { VoiceButton_Click(sender, e); }
         private void NavigateGraphs_Click(object sender, RoutedEventArgs e) { ShowSection(1); }
         private void NavigateTasks_Click(object sender, RoutedEventArgs e) { ShowSection(2); }
         private void NavigateSettings_Click(object sender, RoutedEventArgs e) { ShowSection(3); }
@@ -143,6 +308,18 @@ namespace ESP32AIControl.WP81
             try
             {
                 ReadMqttSettingsFromUi();
+                _mqttReconnectEnabled = true;
+
+                // Match Android behavior: persist the connection settings before connecting.
+                _appSettings.Host = _settings.Host;
+                _appSettings.Port = _settings.Port;
+                _appSettings.Prefix = _settings.Prefix;
+                _appSettings.UserName = _settings.UserName;
+                _appSettings.Password = _settings.Password;
+                _appSettings.ClientId = _settings.ClientId;
+                _appSettings.UseTls = _settings.UseTls;
+                await _settingsStore.SaveAsync(_appSettings);
+
                 await _mqtt.ConnectAsync();
                 Log("TX /" + _settings.Prefix + " HELLO");
             }
@@ -154,6 +331,7 @@ namespace ESP32AIControl.WP81
 
         private async void DisconnectButton_Click(object sender, RoutedEventArgs e)
         {
+            _mqttReconnectEnabled = false;
             try { await _mqtt.DisconnectAsync(); }
             catch (Exception ex) { Log("ERROR: " + ex.Message); }
         }
@@ -177,6 +355,84 @@ namespace ESP32AIControl.WP81
             }
         }
 
+        private async void ExportSettingsBackupButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                ReadMqttSettingsFromUi();
+
+                int interval;
+                if (!int.TryParse(MeasurementIntervalBox.Text, out interval))
+                    throw new InvalidOperationException("Интервал записи должен быть числом.");
+                int retention;
+                if (!int.TryParse(RetentionDaysBox.Text, out retention))
+                    throw new InvalidOperationException("Период хранения должен быть числом.");
+
+                _appSettings.Host = _settings.Host;
+                _appSettings.Port = _settings.Port;
+                _appSettings.Prefix = _settings.Prefix;
+                _appSettings.UserName = _settings.UserName;
+                _appSettings.Password = _settings.Password;
+                _appSettings.ClientId = _settings.ClientId;
+                _appSettings.UseTls = _settings.UseTls;
+                _appSettings.UiFontScale = (float)UiFontScaleSlider.Value;
+                _appSettings.MeasurementIntervalSeconds = Math.Max(1, interval);
+                _appSettings.RetentionDays = Math.Max(1, retention);
+                _appSettings.AutoExportPeriod = GetAutoExportTag();
+                _appSettings.VoiceOpenCommand = VoiceOpenCommandBox.Text.Trim();
+                _appSettings.VoiceCloseCommand = VoiceCloseCommandBox.Text.Trim();
+                _appSettings.IoTManagerScenario = ScenarioTextBox.Text ?? string.Empty;
+
+                // FileSavePicker is not supported reliably on Windows Phone 8.1.
+                // Save to the user's Pictures library, which is outside app-local storage.
+                var folder = Windows.Storage.KnownFolders.SavedPictures;
+                var file = await folder.CreateFileAsync(
+                    "ESP32-AI-Control-settings-backup.json",
+                    Windows.Storage.CreationCollisionOption.ReplaceExisting);
+
+                await _settingsStore.ExportToFileAsync(file, _appSettings);
+                await _settingsStore.SaveAsync(_appSettings);
+                SettingsStatus.Text = "Резервная копия сохранена в Изображения\\ESP32-AI-Control-settings-backup.json";
+                Log("SETTINGS BACKUP EXPORTED: " + file.Name);
+            }
+            catch (Exception ex)
+            {
+                SettingsStatus.Text = "Ошибка резервного копирования: " + ex.Message;
+                Log("SETTINGS BACKUP EXPORT ERROR: " + ex.Message);
+            }
+        }
+
+        private async void ImportSettingsBackupButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Restore from the persistent Pictures library backup created by this app.
+                var file = await Windows.Storage.KnownFolders.SavedPictures.GetFileAsync(
+                    "ESP32-AI-Control-settings-backup.json");
+
+                var imported = await _settingsStore.ImportFromFileAsync(file);
+                _appSettings = imported;
+                await _settingsStore.SaveAsync(_appSettings);
+
+                ApplyDefaultMqttProfileToSettings();
+                ApplySettingsToMqtt();
+                _commandExecutor.SetScenarioScript(_appSettings.IoTManagerScenario ?? string.Empty);
+                _voiceParser = new VoiceCommandParser(
+                    _appSettings.VoiceOpenCommand ?? string.Empty,
+                    _appSettings.VoiceCloseCommand ?? string.Empty);
+                ApplySettingsToUi();
+                RefreshSavedMqttProfiles();
+
+                SettingsStatus.Text = "Настройки восстановлены из резервной копии: " + file.Name;
+                Log("SETTINGS BACKUP IMPORTED: " + file.Name);
+            }
+            catch (Exception ex)
+            {
+                SettingsStatus.Text = "Ошибка восстановления: " + ex.Message;
+                Log("SETTINGS BACKUP IMPORT ERROR: " + ex.Message);
+            }
+        }
+
         private async void SaveSettingsButton_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -196,6 +452,10 @@ namespace ESP32AIControl.WP81
                 _appSettings.UserName = _settings.UserName;
                 _appSettings.Password = _settings.Password;
                 _appSettings.ClientId = _settings.ClientId;
+                _appSettings.UseTls = _settings.UseTls;
+                _appSettings.UiFontScale = (float)UiFontScaleSlider.Value;
+                WidgetPages.FontSize = 14 * (double)_appSettings.UiFontScale;
+                SettingsPivot.FontSize = 14 * (double)_appSettings.UiFontScale;
                 _appSettings.MeasurementIntervalSeconds = Math.Max(1, interval);
                 _appSettings.RetentionDays = Math.Max(1, retention);
                 _appSettings.AutoExportPeriod = GetAutoExportTag();
@@ -212,13 +472,201 @@ namespace ESP32AIControl.WP81
                 await CleanupHistoryAsync();
 
                 SettingsStatus.Text = "Настройки сохранены.";
-                Log("Настройки сохранены.");
+                Log("Настройки сохранены. Резерв MQTT: " +
+                    (_settingsStore.LastRoamingSaveStatus ?? "не проверено"));
             }
             catch (Exception ex)
             {
                 SettingsStatus.Text = "Ошибка: " + ex.Message;
                 Log("SETTINGS ERROR: " + ex.Message);
             }
+        }
+
+        private void RefreshSavedMqttProfiles()
+        {
+            if (_appSettings.SavedMqttProfiles == null)
+                _appSettings.SavedMqttProfiles = new List<SavedMqttProfile>();
+
+            var selectedName = SelectedSavedMqttProfileName();
+            SavedProfilesList.Items.Clear();
+            foreach (var profile in _appSettings.SavedMqttProfiles)
+            {
+                if (profile == null || string.IsNullOrWhiteSpace(profile.Name)) continue;
+                var label = string.Equals(profile.Name, _appSettings.DefaultMqttProfileName, StringComparison.OrdinalIgnoreCase)
+                    ? "★ " + profile.Name + " (по умолчанию)" : profile.Name;
+                SavedProfilesList.Items.Add(label);
+            }
+
+            if (!string.IsNullOrEmpty(selectedName))
+            {
+                for (var i = 0; i < SavedProfilesList.Items.Count; i++)
+                {
+                    var label = SavedProfilesList.Items[i] as string;
+                    if (string.Equals((label ?? string.Empty).Replace("★ ", string.Empty).Replace(" (по умолчанию)", string.Empty), selectedName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        SavedProfilesList.SelectedIndex = i;
+                        break;
+                    }
+                }
+            }
+            if (SavedProfilesList.SelectedIndex < 0 && SavedProfilesList.Items.Count > 0)
+                SavedProfilesList.SelectedIndex = 0;
+        }
+
+        private string SelectedSavedMqttProfileName()
+        {
+            var label = SavedProfilesList == null ? null : SavedProfilesList.SelectedItem as string;
+            if (string.IsNullOrEmpty(label)) return null;
+            return label.Replace("★ ", string.Empty).Replace(" (по умолчанию)", string.Empty);
+        }
+
+        private SavedMqttProfile SelectedSavedMqttProfile()
+        {
+            var name = SelectedSavedMqttProfileName();
+            if (string.IsNullOrEmpty(name) || _appSettings.SavedMqttProfiles == null) return null;
+            return _appSettings.SavedMqttProfiles.FirstOrDefault(p => p != null &&
+                string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private void SavedProfilesList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            var profile = SelectedSavedMqttProfile();
+            if (profile != null) SavedProfileNameBox.Text = profile.Name;
+        }
+
+        private async void SaveMqttProfileButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var name = (SavedProfileNameBox.Text ?? string.Empty).Trim();
+                if (name.Length == 0)
+                    throw new InvalidOperationException("Введите название профиля.");
+
+                ReadMqttSettingsFromUi();
+                if (_appSettings.SavedMqttProfiles == null)
+                    _appSettings.SavedMqttProfiles = new List<SavedMqttProfile>();
+
+                var profile = _appSettings.SavedMqttProfiles.FirstOrDefault(p => p != null &&
+                    string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
+                if (profile == null)
+                {
+                    profile = new SavedMqttProfile();
+                    _appSettings.SavedMqttProfiles.Add(profile);
+                }
+
+                profile.Name = name;
+                profile.Host = _settings.Host;
+                profile.Port = _settings.Port;
+                profile.Prefix = _settings.Prefix;
+                profile.UserName = _settings.UserName;
+                profile.Password = _settings.Password;
+                profile.ClientId = _settings.ClientId;
+                profile.UseTls = _settings.UseTls;
+                _appSettings.Host = _settings.Host;
+                _appSettings.Port = _settings.Port;
+                _appSettings.Prefix = _settings.Prefix;
+                _appSettings.UserName = _settings.UserName;
+                _appSettings.Password = _settings.Password;
+                _appSettings.ClientId = _settings.ClientId;
+                _appSettings.UseTls = _settings.UseTls;
+
+                await _settingsStore.SaveAsync(_appSettings);
+                RefreshSavedMqttProfiles();
+                SavedProfilesStatus.Text = "Профиль «" + name + "» сохранён.";
+                Log("MQTT профиль сохранён: " + name);
+            }
+            catch (Exception ex)
+            {
+                SavedProfilesStatus.Text = "Ошибка: " + ex.Message;
+                Log("MQTT PROFILE SAVE ERROR: " + ex.Message);
+            }
+        }
+
+        private async void LoadMqttProfileButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var profile = SelectedSavedMqttProfile();
+                if (profile == null) throw new InvalidOperationException("Сначала выберите профиль.");
+
+                _appSettings.Host = profile.Host ?? string.Empty;
+                _appSettings.Port = profile.Port ?? "1883";
+                _appSettings.Prefix = profile.Prefix ?? string.Empty;
+                _appSettings.UserName = profile.UserName ?? string.Empty;
+                _appSettings.Password = profile.Password ?? string.Empty;
+                _appSettings.ClientId = string.IsNullOrEmpty(profile.ClientId) ? "ESP32-AI-Control-WP81" : profile.ClientId;
+                _appSettings.UseTls = profile.UseTls;
+                ApplySettingsToMqtt();
+                ApplySettingsToUi();
+                await _settingsStore.SaveAsync(_appSettings);
+                SavedProfilesStatus.Text = "Профиль «" + profile.Name + "» загружен. Нажмите «Подключить», чтобы применить соединение.";
+                Log("MQTT профиль загружен: " + profile.Name);
+            }
+            catch (Exception ex)
+            {
+                SavedProfilesStatus.Text = "Ошибка: " + ex.Message;
+                Log("MQTT PROFILE LOAD ERROR: " + ex.Message);
+            }
+        }
+
+        private async void SetDefaultMqttProfileButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var profile = SelectedSavedMqttProfile();
+                if (profile == null) throw new InvalidOperationException("Сначала выберите профиль.");
+                _appSettings.DefaultMqttProfileName = profile.Name;
+                await _settingsStore.SaveAsync(_appSettings);
+                RefreshSavedMqttProfiles();
+                SavedProfilesStatus.Text = "«" + profile.Name + "» будет загружаться при запуске приложения.";
+                Log("MQTT профиль по умолчанию: " + profile.Name);
+            }
+            catch (Exception ex)
+            {
+                SavedProfilesStatus.Text = "Ошибка: " + ex.Message;
+                Log("MQTT PROFILE DEFAULT ERROR: " + ex.Message);
+            }
+        }
+
+        private async void DeleteMqttProfileButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var profile = SelectedSavedMqttProfile();
+                if (profile == null) throw new InvalidOperationException("Сначала выберите профиль.");
+                var name = profile.Name;
+                _appSettings.SavedMqttProfiles.Remove(profile);
+                if (string.Equals(_appSettings.DefaultMqttProfileName, name, StringComparison.OrdinalIgnoreCase))
+                    _appSettings.DefaultMqttProfileName = string.Empty;
+                await _settingsStore.SaveAsync(_appSettings);
+                SavedProfileNameBox.Text = string.Empty;
+                RefreshSavedMqttProfiles();
+                SavedProfilesStatus.Text = "Профиль «" + name + "» удалён.";
+                Log("MQTT профиль удалён: " + name);
+            }
+            catch (Exception ex)
+            {
+                SavedProfilesStatus.Text = "Ошибка: " + ex.Message;
+                Log("MQTT PROFILE DELETE ERROR: " + ex.Message);
+            }
+        }
+
+        private void ApplyDefaultMqttProfileToSettings()
+        {
+            if (_appSettings == null || _appSettings.SavedMqttProfiles == null ||
+                string.IsNullOrEmpty(_appSettings.DefaultMqttProfileName)) return;
+
+            var profile = _appSettings.SavedMqttProfiles.FirstOrDefault(p => p != null &&
+                string.Equals(p.Name, _appSettings.DefaultMqttProfileName, StringComparison.OrdinalIgnoreCase));
+            if (profile == null) return;
+
+            _appSettings.Host = profile.Host ?? string.Empty;
+            _appSettings.Port = profile.Port ?? "1883";
+            _appSettings.Prefix = profile.Prefix ?? string.Empty;
+            _appSettings.UserName = profile.UserName ?? string.Empty;
+            _appSettings.Password = profile.Password ?? string.Empty;
+            _appSettings.ClientId = string.IsNullOrEmpty(profile.ClientId) ? "ESP32-AI-Control-WP81" : profile.ClientId;
+            _appSettings.UseTls = profile.UseTls;
         }
 
         private void ApplySettingsToMqtt()
@@ -230,6 +678,7 @@ namespace ESP32AIControl.WP81
             _settings.Password = _appSettings.Password;
             _settings.ClientId = string.IsNullOrEmpty(_appSettings.ClientId)
                 ? "ESP32-AI-Control-WP81" : _appSettings.ClientId;
+            _settings.UseTls = _appSettings.UseTls;
 
             _voiceParser = new VoiceCommandParser(
                 _appSettings.VoiceOpenCommand,
@@ -239,6 +688,11 @@ namespace ESP32AIControl.WP81
         private void ApplySettingsToUi()
         {
             HostBox.Text = _appSettings.Host;
+            ClientIdBox.Text = string.IsNullOrEmpty(_appSettings.ClientId) ? "ESP32-AI-Control-WP81" : _appSettings.ClientId;
+            MqttTlsCheckBox.IsChecked = _appSettings.UseTls;
+            UiFontScaleSlider.Value = Math.Max(0.7, Math.Min(1.1, _appSettings.UiFontScale <= 0 ? 0.85 : _appSettings.UiFontScale));
+            WidgetPages.FontSize = 14 * (double)UiFontScaleSlider.Value;
+            SettingsPivot.FontSize = 14 * (double)UiFontScaleSlider.Value;
             PortBox.Text = _appSettings.Port;
             PrefixBox.Text = _appSettings.Prefix;
             UserNameBox.Text = _appSettings.UserName;
@@ -248,6 +702,7 @@ namespace ESP32AIControl.WP81
             VoiceOpenCommandBox.Text = _appSettings.VoiceOpenCommand;
             VoiceCloseCommandBox.Text = _appSettings.VoiceCloseCommand;
             ScenarioTextBox.Text = _appSettings.IoTManagerScenario;
+            RefreshSavedMqttProfiles();
 
             foreach (var item in AutoExportBox.Items)
             {
@@ -260,6 +715,39 @@ namespace ESP32AIControl.WP81
             }
         }
 
+        private async void MqttSetting_LostFocus(object sender, RoutedEventArgs e)
+        {
+            await SaveMqttSettingsQuietlyAsync();
+        }
+
+        private async void MqttTlsCheckBox_Changed(object sender, RoutedEventArgs e)
+        {
+            await SaveMqttSettingsQuietlyAsync();
+        }
+
+        private async Task SaveMqttSettingsQuietlyAsync()
+        {
+            if (_initializing || _appSettings == null || _settingsStore == null)
+                return;
+
+            try
+            {
+                ReadMqttSettingsFromUi();
+                _appSettings.Host = _settings.Host;
+                _appSettings.Port = _settings.Port;
+                _appSettings.Prefix = _settings.Prefix;
+                _appSettings.UserName = _settings.UserName;
+                _appSettings.Password = _settings.Password;
+                _appSettings.ClientId = _settings.ClientId;
+                _appSettings.UseTls = _settings.UseTls;
+                await _settingsStore.SaveAsync(_appSettings);
+            }
+            catch (Exception ex)
+            {
+                Log("Не удалось сохранить настройки MQTT: " + ex.Message);
+            }
+        }
+
         private void ReadMqttSettingsFromUi()
         {
             _settings.Host = HostBox.Text.Trim();
@@ -267,6 +755,8 @@ namespace ESP32AIControl.WP81
             _settings.Prefix = PrefixBox.Text.Trim().Trim('/');
             _settings.UserName = UserNameBox.Text.Trim();
             _settings.Password = PasswordBox.Password;
+            _settings.ClientId = string.IsNullOrWhiteSpace(ClientIdBox.Text) ? "ESP32-AI-Control-WP81" : ClientIdBox.Text.Trim();
+            _settings.UseTls = MqttTlsCheckBox.IsChecked == true;
         }
 
         private async void ImportScenarioButton_Click(object sender, RoutedEventArgs e)
@@ -381,6 +871,11 @@ namespace ESP32AIControl.WP81
             await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, delegate
             {
                 ConnectionText.Text = "MQTT: " + e.State;
+                if (TopConnectionDot != null)
+                    TopConnectionDot.Foreground = new SolidColorBrush(
+                        e.State == MqttConnectionState.Connected
+                            ? Windows.UI.Color.FromArgb(255, 76, 175, 80)
+                            : Windows.UI.Color.FromArgb(255, 244, 67, 54));
             });
         }
 
@@ -393,9 +888,11 @@ namespace ESP32AIControl.WP81
                 PageName = pageName
             };
 
+            // Match Android's compact dashboard rows: 16dp horizontal spacing,
+            // small vertical rhythm, and no oversized fixed-width controls.
             visual.Container = new StackPanel
             {
-                Margin = new Thickness(0, 0, 0, 8),
+                Margin = new Thickness(0, 0, 0, 2),
                 Tag = state.Key
             };
 
@@ -407,37 +904,55 @@ namespace ESP32AIControl.WP81
 
             var shell = new Border
             {
-                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 27, 29, 36)),
-                Padding = new Thickness(10, 9, 10, 9),
-                BorderThickness = new Thickness(0, 0, 0, 1),
-                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 47, 49, 59))
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 28, 29, 36)),
+                CornerRadius = new CornerRadius(12),
+                Padding = new Thickness(14, 9, 14, 9),
+                BorderThickness = new Thickness(1),
+                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 48, 49, 58))
             };
 
             var row = new Grid();
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(32) });
+            visual.Row = row;
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(100) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(96) });
 
-            var icon = new TextBlock
+            // WP8.1 may not contain glyphs for modern emoji. Detect supported emoji
+            // by their exact Unicode sequence and draw an app-owned vector equivalent.
+            // The underlying MQTT state is never modified.
+            string receivedEmoji;
+            string visibleTitle;
+            if (WidgetIconCatalog.TryGetLeadingEmoji(GetTitle(state), out receivedEmoji, out visibleTitle))
             {
-                Text = isSwitch ? "◉" : (isAction ? "●" : "◆"),
-                FontSize = 21,
-                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 177, 92, 255)),
-                VerticalAlignment = VerticalAlignment.Center,
-                HorizontalAlignment = HorizontalAlignment.Left
-            };
-            Grid.SetColumn(icon, 0);
-            row.Children.Add(icon);
-
-            visual.Title = new TextBlock
+                var emojiIcon = WidgetIconCatalog.CreateForEmoji(receivedEmoji);
+                visual.EmojiIcon = emojiIcon;
+                emojiIcon.VerticalAlignment = VerticalAlignment.Center;
+                emojiIcon.HorizontalAlignment = HorizontalAlignment.Center;
+                Grid.SetColumn(emojiIcon, 0);
+                row.Children.Add(emojiIcon);
+                visual.Title = new TextBlock
+                {
+                    Text = visibleTitle,
+                    FontSize = 16,
+                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 243, 244, 246)),
+                    TextWrapping = TextWrapping.Wrap,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(0, 0, 8, 0)
+                };
+            }
+            else
             {
-                Text = GetTitle(state),
-                FontSize = 16,
-                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 243, 244, 246)),
-                TextWrapping = TextWrapping.Wrap,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(2, 0, 6, 0)
-            };
+                // Unsupported emoji are not guessed or removed; preserve the MQTT title.
+                visual.Title = new TextBlock
+                {
+                    Text = GetTitle(state),
+                    FontSize = 16,
+                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 243, 244, 246)),
+                    TextWrapping = TextWrapping.Wrap,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(0, 0, 8, 0)
+                };
+            }
             Grid.SetColumn(visual.Title, 1);
             row.Children.Add(visual.Title);
 
@@ -446,7 +961,7 @@ namespace ESP32AIControl.WP81
                 Text = string.IsNullOrEmpty(state.Value) ? "—" : state.Value,
                 FontSize = 18,
                 FontWeight = Windows.UI.Text.FontWeights.SemiBold,
-                Foreground = new SolidColorBrush(Windows.UI.Colors.White),
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 98, 168, 255)),
                 TextAlignment = TextAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
@@ -454,62 +969,59 @@ namespace ESP32AIControl.WP81
 
             if (isSwitch)
             {
-                var check = new CheckBox
+                var toggle = new ToggleSwitch
                 {
-                    Content = "Вкл.",
+                    OnContent = "Вкл.",
+                    OffContent = "Выкл.",
                     Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 209, 213, 219)),
                     VerticalAlignment = VerticalAlignment.Center,
                     HorizontalAlignment = HorizontalAlignment.Right,
                     MinWidth = 82
                 };
-                check.Checked += delegate { PublishSwitchValue(visual, true); };
-                check.Unchecked += delegate { PublishSwitchValue(visual, false); };
-                visual.Control = check;
-                Grid.SetColumn(check, 2);
-                row.Children.Add(check);
+                toggle.Toggled += delegate { PublishSwitchValue(visual, toggle.IsOn); };
+                visual.Control = toggle;
+                Grid.SetColumn(toggle, 2);
+                row.Children.Add(toggle);
+                visual.ValueText.Visibility = Visibility.Collapsed;
+            }
+            else if (isAction)
+            {
+                var button = new Button
+                {
+                    Content = "Нажать",
+                    MinWidth = 76,
+                    Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0, 183, 255)),
+                    Foreground = new SolidColorBrush(Windows.UI.Colors.White),
+                    BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0, 183, 255)),
+                    Padding = new Thickness(8, 5, 8, 5),
+                    HorizontalAlignment = HorizontalAlignment.Right,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(0)
+                };
+                button.Click += async delegate { await PublishControl(visual, "1"); };
+                visual.Control = button;
+                Grid.SetColumn(button, 2);
+                row.Children.Add(button);
                 visual.ValueText.Visibility = Visibility.Collapsed;
             }
             else
             {
-                var valueBadge = new Border
-                {
-                    Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 25, 118, 210)),
-                    Child = visual.ValueText,
-                    Padding = new Thickness(5, 5, 5, 5),
-                    MinWidth = 76,
-                    HorizontalAlignment = HorizontalAlignment.Right,
-                    VerticalAlignment = VerticalAlignment.Center
-                };
-                Grid.SetColumn(valueBadge, 2);
-                row.Children.Add(valueBadge);
+                Grid.SetColumn(visual.ValueText, 2);
+                row.Children.Add(visual.ValueText);
             }
 
             shell.Child = row;
             visual.Container.Children.Add(shell);
 
-            if (isAction)
-            {
-                var button = new Button
-                {
-                    Content = "Выполнить",
-                    MinWidth = 130,
-                    HorizontalAlignment = HorizontalAlignment.Right,
-                    Margin = new Thickness(0, 5, 0, 0)
-                };
-                button.Click += async delegate { await PublishControl(visual, "1"); };
-                visual.Control = button;
-                visual.Container.Children.Add(button);
-            }
-            else if (isSlider)
+            if (isSlider)
             {
                 var slider = new Slider
                 {
                     Minimum = 0,
                     Maximum = 100,
                     StepFrequency = 1,
-                    Width = 280,
                     HorizontalAlignment = HorizontalAlignment.Stretch,
-                    Margin = new Thickness(34, 2, 0, 0)
+                    Margin = new Thickness(34, 2, 8, 0)
                 };
                 slider.ValueChanged += async delegate(object s, RangeBaseValueChangedEventArgs ev)
                 {
@@ -518,18 +1030,6 @@ namespace ESP32AIControl.WP81
                 };
                 visual.Control = slider;
                 visual.Container.Children.Add(slider);
-            }
-            else if (!isSwitch)
-            {
-                var info = new TextBlock
-                {
-                    Text = "Только отображение",
-                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 156, 163, 175)),
-                    FontSize = 11,
-                    Margin = new Thickness(34, 2, 0, 0)
-                };
-                visual.Container.Children.Add(info);
-                if (!isAction) visual.Control = info;
             }
 
             return visual;
@@ -555,7 +1055,7 @@ namespace ESP32AIControl.WP81
                     MoveWidgetVisual(visual, newPage);
 
                 visual.State = state;
-                visual.Title.Text = GetTitle(state);
+                ApplyWidgetTitle(visual, state);
                 _widgetIndex[state.Key] = state;
             }
 
@@ -621,12 +1121,17 @@ namespace ESP32AIControl.WP81
             var item = new PivotItem
             {
                 Header = pageName,
-                Content = page.Content,
+                Content = new ScrollViewer
+                {
+                    Content = page.Content,
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+                },
                 Tag = pageName
             };
             page.Item = item;
             _pages[pageName] = page;
             WidgetPages.Items.Add(item);
+            if (DashboardEmptyState != null) DashboardEmptyState.Visibility = Visibility.Collapsed;
             return page;
         }
 
@@ -641,6 +1146,39 @@ namespace ESP32AIControl.WP81
                 var page = _pages[name];
                 WidgetPages.Items.Remove(page.Item);
                 _pages.Remove(name);
+            }
+
+            if (DashboardEmptyState != null)
+                DashboardEmptyState.Visibility = WidgetPages.Items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private void ApplyWidgetTitle(WidgetVisual visual, WidgetState state)
+        {
+            var title = GetTitle(state);
+            string emoji;
+            string visibleTitle;
+            bool hasEmoji = WidgetIconCatalog.TryGetLeadingEmoji(title, out emoji, out visibleTitle);
+
+            if (hasEmoji)
+            {
+                visual.Title.Text = visibleTitle;
+                if (visual.Row != null)
+                {
+                    if (visual.EmojiIcon != null)
+                        visual.Row.Children.Remove(visual.EmojiIcon);
+                    visual.EmojiIcon = WidgetIconCatalog.CreateForEmoji(emoji);
+                    visual.EmojiIcon.VerticalAlignment = VerticalAlignment.Center;
+                    visual.EmojiIcon.HorizontalAlignment = HorizontalAlignment.Center;
+                    Grid.SetColumn(visual.EmojiIcon, 0);
+                    visual.Row.Children.Insert(0, visual.EmojiIcon);
+                }
+            }
+            else
+            {
+                visual.Title.Text = title;
+                if (visual.Row != null && visual.EmojiIcon != null)
+                    visual.Row.Children.Remove(visual.EmojiIcon);
+                visual.EmojiIcon = null;
             }
         }
 
@@ -666,10 +1204,10 @@ namespace ESP32AIControl.WP81
             if (visual.ValueText != null)
                 visual.ValueText.Text = string.IsNullOrEmpty(value) ? "—" : value;
 
-            var check = visual.Control as CheckBox;
-            if (check != null)
+            var toggle = visual.Control as ToggleSwitch;
+            if (toggle != null)
             {
-                check.IsChecked = ParseBoolean(value);
+                toggle.IsOn = ParseBoolean(value);
                 return;
             }
 
@@ -1056,7 +1594,7 @@ namespace ESP32AIControl.WP81
         {
             try
             {
-                VoiceButton.IsEnabled = false;
+                NavMarfaButton.IsEnabled = false;
                 VoiceResultText.Text = "Слушаю…";
                 await _voice.StartListeningAsync();
             }
@@ -1067,9 +1605,18 @@ namespace ESP32AIControl.WP81
             }
             finally
             {
-                VoiceButton.IsEnabled = true;
+                NavMarfaButton.IsEnabled = true;
                 await _voice.StopListeningAsync();
             }
+        }
+
+        private async void Voice_RecognitionFailed(object sender, string message)
+        {
+            await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, delegate
+            {
+                VoiceResultText.Text = message;
+                Log("VOICE: " + message);
+            });
         }
 
         private async void Voice_CommandRecognized(object sender, string text)
@@ -1149,6 +1696,8 @@ namespace ESP32AIControl.WP81
             public string PageName { get; set; }
             public StackPanel Container { get; set; }
             public TextBlock Title { get; set; }
+            public Grid Row { get; set; }
+            public FrameworkElement EmojiIcon { get; set; }
             public TextBlock ValueText { get; set; }
             public FrameworkElement Control { get; set; }
         }

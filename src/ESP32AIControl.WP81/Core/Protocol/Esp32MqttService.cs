@@ -47,7 +47,8 @@ namespace ESP32AIControl.WP81.Core.Protocol
                 _settings.Port,
                 _settings.ClientId,
                 _settings.UserName,
-                _settings.Password);
+                _settings.Password,
+                _settings.UseTls);
 
             await _mqtt.SubscribeAsync("/" + _settings.Prefix + "/#", 1);
             await PublishHelloAsync();

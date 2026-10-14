@@ -47,6 +47,9 @@
     <Content Include="Assets\**\*.*" />
   </ItemGroup>
 
+  <!-- Emoji icons are drawn by WidgetIconCatalog in C#; no network download or
+       generated emoji assets are required during build. -->
+
   <ItemGroup>
     <Compile Include="App.xaml.cs" />
     <Compile Include="MainPage.xaml.cs">
