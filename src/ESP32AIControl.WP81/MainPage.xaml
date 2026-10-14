@@ -60,7 +60,7 @@
         </Grid.RowDefinitions>
 
         <!-- Android-like top bar: menu, current screen title, info and MQTT cloud status. -->
-        <Border Grid.Row="0" Panel.ZIndex="1" Background="#FF191A20" BorderBrush="#FF30313A"
+        <Border Grid.Row="0" Background="#FF191A20" BorderBrush="#FF30313A"
                 BorderThickness="0,0,0,1" Padding="5,7,7,7">
             <Grid>
                 <Grid.ColumnDefinitions>
