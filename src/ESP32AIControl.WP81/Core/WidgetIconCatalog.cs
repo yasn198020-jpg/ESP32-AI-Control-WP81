@@ -147,18 +147,81 @@ namespace ESP32AIControl.WP81.Core
                 }
             }
 
-            // Common BMP emoji are also matched explicitly, including optional
-            // variation selectors used by MQTT publishers.
-            char first = value[0];
-            if ("☀☁⛅❄⚡".IndexOf(first) >= 0)
+            // WP8.1 devices have incomplete emoji font coverage. Treat any leading
+            // Unicode emoji as an icon request, not as text that can become a square.
+            // Keep the full sequence (variation selectors, skin tones, flags and ZWJ
+            // sequences) out of the visible title; unsupported symbols get a safe vector fallback.
+            int firstCodePoint;
+            int consumed;
+            ReadCodePoint(value, 0, out firstCodePoint, out consumed);
+            if (!IsEmojiCodePoint(firstCodePoint)) return false;
+
+            while (consumed < value.Length)
             {
-                int consumed = 1;
-                if (consumed < value.Length && value[consumed] == '\uFE0F') consumed++;
-                emoji = value.Substring(0, consumed);
-                remainingTitle = value.Substring(consumed).TrimStart();
-                return true;
+                int nextCodePoint;
+                int nextLength;
+                ReadCodePoint(value, consumed, out nextCodePoint, out nextLength);
+
+                if (nextCodePoint == 0xFE0E || nextCodePoint == 0xFE0F ||
+                    (nextCodePoint >= 0x1F3FB && nextCodePoint <= 0x1F3FF) ||
+                    nextCodePoint == 0x20E3)
+                {
+                    consumed += nextLength;
+                    continue;
+                }
+
+                // Keep joined emoji (for example, family or person-with-tool) together.
+                if (nextCodePoint == 0x200D)
+                {
+                    consumed += nextLength;
+                    if (consumed < value.Length)
+                    {
+                        int joinedCodePoint;
+                        int joinedLength;
+                        ReadCodePoint(value, consumed, out joinedCodePoint, out joinedLength);
+                        consumed += joinedLength;
+                    }
+                    continue;
+                }
+
+                // Regional-indicator flags consist of two code points.
+                if (firstCodePoint >= 0x1F1E6 && firstCodePoint <= 0x1F1FF &&
+                    nextCodePoint >= 0x1F1E6 && nextCodePoint <= 0x1F1FF)
+                    consumed += nextLength;
+                break;
             }
-            return false;
+
+            emoji = value.Substring(0, consumed);
+            remainingTitle = value.Substring(consumed).TrimStart();
+            return true;
+        }
+
+        private static void ReadCodePoint(string value, int index, out int codePoint, out int length)
+        {
+            char first = value[index];
+            if (char.IsHighSurrogate(first) && index + 1 < value.Length &&
+                char.IsLowSurrogate(value[index + 1]))
+            {
+                codePoint = char.ConvertToUtf32(first, value[index + 1]);
+                length = 2;
+            }
+            else
+            {
+                codePoint = first;
+                length = 1;
+            }
+        }
+
+        private static bool IsEmojiCodePoint(int codePoint)
+        {
+            return (codePoint >= 0x1F000 && codePoint <= 0x1FAFF) ||
+                   (codePoint >= 0x2600 && codePoint <= 0x27BF) ||
+                   (codePoint >= 0x2300 && codePoint <= 0x23FF) ||
+                   codePoint == 0x00A9 || codePoint == 0x00AE ||
+                   codePoint == 0x203C || codePoint == 0x2049 ||
+                   codePoint == 0x2122 || codePoint == 0x2139 ||
+                   codePoint == 0x3030 || codePoint == 0x303D ||
+                   codePoint == 0x3297 || codePoint == 0x3299;
         }
 
         /// <summary>Draws a locally-rendered icon for the detected MQTT emoji.</summary>
@@ -220,7 +283,12 @@ namespace ESP32AIControl.WP81.Core
             }
             else
             {
-                Add(canvas, new Ellipse { Width = 18, Height = 18, Stroke = amber, StrokeThickness = 2 }, 4, 4);
+                // Universal app-owned symbol for emoji not yet mapped to a dedicated drawing.
+                // It deliberately uses shapes rather than a device font, so no tofu squares appear.
+                Add(canvas, new Ellipse { Width = 20, Height = 20, Stroke = accent, StrokeThickness = 2 }, 3, 3);
+                Add(canvas, new Ellipse { Width = 4, Height = 4, Fill = amber }, 7, 8);
+                Add(canvas, new Ellipse { Width = 4, Height = 4, Fill = amber }, 15, 8);
+                Add(canvas, new Line { X1 = 8, Y1 = 16, X2 = 18, Y2 = 16, Stroke = green, StrokeThickness = 2 }, 0, 0);
             }
             return canvas;
         }
