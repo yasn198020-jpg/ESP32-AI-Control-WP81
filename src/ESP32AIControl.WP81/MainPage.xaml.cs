@@ -382,16 +382,16 @@ namespace ESP32AIControl.WP81
                 _appSettings.VoiceCloseCommand = VoiceCloseCommandBox.Text.Trim();
                 _appSettings.IoTManagerScenario = ScenarioTextBox.Text ?? string.Empty;
 
-                var picker = new FileSavePicker();
-                picker.SuggestedStartLocation = PickerLocationId.DocumentsLibrary;
-                picker.SuggestedFileName = "ESP32-AI-Control-settings-backup";
-                picker.FileTypeChoices.Add("Резервная копия настроек", new List<string> { ".json" });
-                var file = await picker.PickSaveFileAsync();
-                if (file == null) return;
+                // FileSavePicker is not supported reliably on Windows Phone 8.1.
+                // Save to the user's Pictures library, which is outside app-local storage.
+                var folder = Windows.Storage.KnownFolders.SavedPictures;
+                var file = await folder.CreateFileAsync(
+                    "ESP32-AI-Control-settings-backup.json",
+                    Windows.Storage.CreationCollisionOption.ReplaceExisting);
 
                 await _settingsStore.ExportToFileAsync(file, _appSettings);
                 await _settingsStore.SaveAsync(_appSettings);
-                SettingsStatus.Text = "Резервная копия сохранена: " + file.Name;
+                SettingsStatus.Text = "Резервная копия сохранена в Изображения\\ESP32-AI-Control-settings-backup.json";
                 Log("SETTINGS BACKUP EXPORTED: " + file.Name);
             }
             catch (Exception ex)
@@ -405,13 +405,9 @@ namespace ESP32AIControl.WP81
         {
             try
             {
-                var picker = new FileOpenPicker();
-                picker.ViewMode = PickerViewMode.List;
-                picker.SuggestedStartLocation = PickerLocationId.DocumentsLibrary;
-                picker.FileTypeFilter.Add(".json");
-
-                var file = await picker.PickSingleFileAsync();
-                if (file == null) return;
+                // Restore from the persistent Pictures library backup created by this app.
+                var file = await Windows.Storage.KnownFolders.SavedPictures.GetFileAsync(
+                    "ESP32-AI-Control-settings-backup.json");
 
                 var imported = await _settingsStore.ImportFromFileAsync(file);
                 _appSettings = imported;
@@ -426,7 +422,7 @@ namespace ESP32AIControl.WP81
                 ApplySettingsToUi();
                 RefreshSavedMqttProfiles();
 
-                SettingsStatus.Text = "Настройки восстановлены из файла: " + file.Name;
+                SettingsStatus.Text = "Настройки восстановлены из резервной копии: " + file.Name;
                 Log("SETTINGS BACKUP IMPORTED: " + file.Name);
             }
             catch (Exception ex)
