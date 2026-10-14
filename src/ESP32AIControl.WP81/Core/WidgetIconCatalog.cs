@@ -224,8 +224,58 @@ namespace ESP32AIControl.WP81.Core
                    codePoint == 0x3297 || codePoint == 0x3299;
         }
 
-        /// <summary>Draws a locally-rendered icon for the detected MQTT emoji.</summary>
+        /// <summary>
+        /// Displays the matching bundled Noto Emoji PNG in full color. The app package
+        /// contains the complete pinned image set, so rendering works without internet.
+        /// </summary>
         public static FrameworkElement CreateForEmoji(string emoji)
+        {
+            string assetName = GetEmojiAssetName(emoji);
+            var image = new Image
+            {
+                Width = 26,
+                Height = 26,
+                Stretch = Windows.UI.Xaml.Media.Stretch.Uniform,
+                Source = new Windows.UI.Xaml.Media.Imaging.BitmapImage(
+                    new Uri("ms-appx:///Assets/Emoji/" + assetName))
+            };
+            var host = new Border
+            {
+                Width = 26,
+                Height = 26,
+                Child = image
+            };
+            image.ImageFailed += (sender, args) =>
+            {
+                // Some Unicode sequences have no standalone artwork in Noto.
+                host.Child = CreateVectorForEmoji(emoji);
+            };
+            return host;
+        }
+
+        private static string GetEmojiAssetName(string emoji)
+        {
+            var name = new System.Text.StringBuilder();
+            int index = 0;
+            while (index < emoji.Length)
+            {
+                int codePoint;
+                int length;
+                ReadCodePoint(emoji, index, out codePoint, out length);
+                index += length;
+
+                // Presentation selectors are not part of Noto PNG file names.
+                if (codePoint == 0xFE0E || codePoint == 0xFE0F)
+                    continue;
+
+                if (name.Length > 0) name.Append('-');
+                name.Append(codePoint.ToString("x"));
+            }
+            return name.ToString() + ".png";
+        }
+
+        /// <summary>Vector fallback for a sequence with no bundled Noto artwork.</summary>
+        private static FrameworkElement CreateVectorForEmoji(string emoji)
         {
             var canvas = new Canvas { Width = 26, Height = 26 };
             Brush green = new SolidColorBrush(Green);
