@@ -288,8 +288,27 @@ namespace ESP32AIControl.WP81.Core
         {
             if (string.IsNullOrEmpty(emoji)) return null;
 
-            // Noto names files by Unicode code point, separated with underscores.
-            // This also covers flags, skin tones, keycaps and ZWJ sequences.
+            // Country flags use ISO country-code filenames in Noto's separate flag set.
+            int firstCodePoint;
+            int firstLength;
+            ReadCodePoint(emoji, 0, out firstCodePoint, out firstLength);
+            if (firstCodePoint >= 0x1F1E6 && firstCodePoint <= 0x1F1FF &&
+                firstLength < emoji.Length)
+            {
+                int secondCodePoint;
+                int secondLength;
+                ReadCodePoint(emoji, firstLength, out secondCodePoint, out secondLength);
+                if (secondCodePoint >= 0x1F1E6 && secondCodePoint <= 0x1F1FF)
+                {
+                    char firstLetter = (char)('a' + firstCodePoint - 0x1F1E6);
+                    char secondLetter = (char)('a' + secondCodePoint - 0x1F1E6);
+                    string flagFile = "flag_" + firstLetter + secondLetter + ".png";
+                    if (NotoEmojiAssetIndex.Contains(flagFile)) return flagFile;
+                }
+            }
+
+            // Noto names ordinary emoji by Unicode code point, separated with underscores.
+            // This also covers skin tones, keycaps and ZWJ sequences.
             var name = new System.Text.StringBuilder("emoji_u");
             bool hasCodePoint = false;
             for (int i = 0; i < emoji.Length;)
