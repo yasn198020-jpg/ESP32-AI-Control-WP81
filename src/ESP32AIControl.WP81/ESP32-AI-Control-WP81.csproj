@@ -44,7 +44,7 @@
 
   <ItemGroup>
     <AppxManifest Include="Package.appxmanifest" />
-    <Content Include="Assets\**\*.*" />
+    <Content Include="Assets\**\*.*" Exclude="Assets\Emoji\**\*.*" />
   </ItemGroup>
 
   <ItemGroup>
