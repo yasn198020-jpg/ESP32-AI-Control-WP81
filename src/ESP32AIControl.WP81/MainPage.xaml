@@ -96,11 +96,11 @@
             </Grid>
         </Border>
 
-        <Pivot x:Name="MainPivot" Grid.Row="1" Margin="0,-12,0,0" Foreground="#FFF3F4F6"
+        <Pivot x:Name="MainPivot" Grid.Row="1" Foreground="#FFF3F4F6"
                Background="#FF121318" SelectionChanged="MainPivot_SelectionChanged">
             <Pivot.HeaderTemplate>
                 <DataTemplate>
-                    <TextBlock Visibility="Collapsed" Height="0" Width="0"/>
+                    <TextBlock Visibility="Collapsed" Height="0" Width="0" Margin="0" Padding="0"/>
                 </DataTemplate>
             </Pivot.HeaderTemplate>
             <PivotItem Header="Главная">
