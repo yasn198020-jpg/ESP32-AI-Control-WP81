@@ -126,28 +126,70 @@ namespace ESP32AIControl.WP81.Core
             await WriteTextAsync(file, json);
         }
 
+        public string LastLoadSource { get; private set; }
+        public string LastRoamingSaveStatus { get; private set; }
+
+        private static bool HasConfiguredMqtt(AppSettings settings)
+        {
+            if (settings == null) return false;
+            return !string.IsNullOrWhiteSpace(settings.UserName)
+                || !string.IsNullOrWhiteSpace(settings.Password)
+                || !string.IsNullOrWhiteSpace(settings.Host) && settings.Host != "m4.wqtt.ru"
+                || !string.IsNullOrWhiteSpace(settings.Port) && settings.Port != "2815"
+                || !string.IsNullOrWhiteSpace(settings.Prefix) && settings.Prefix != "dghjko"
+                || !string.IsNullOrWhiteSpace(settings.ClientId) && settings.ClientId != "ESP32-AI-Control-WP81"
+                || settings.UseTls;
+        }
+
+        private static void CopyMqttSettings(AppSettings source, AppSettings target)
+        {
+            target.Host = source.Host;
+            target.Port = source.Port;
+            target.Prefix = source.Prefix;
+            target.UserName = source.UserName;
+            target.Password = source.Password;
+            target.ClientId = source.ClientId;
+            target.UseTls = source.UseTls;
+        }
+
         public async Task<AppSettings> LoadAsync()
         {
-            try
+            AppSettings local = null;
+            AppSettings roaming = null;
+
+            try { local = await LoadFromFolderAsync(ApplicationData.Current.LocalFolder); }
+            catch { }
+
+            try { roaming = await LoadFromFolderAsync(ApplicationData.Current.RoamingFolder); }
+            catch { }
+
+            // A local file may exist but contain factory/default MQTT values.
+            // In that case, prefer a configured roaming MQTT profile while
+            // retaining unrelated local preferences and scenario settings.
+            if (local != null)
             {
-                return await LoadFromFolderAsync(ApplicationData.Current.LocalFolder);
+                if (!HasConfiguredMqtt(local) && HasConfiguredMqtt(roaming))
+                {
+                    CopyMqttSettings(roaming, local);
+                    LastLoadSource = "RoamingFolder (MQTT restored over default local values)";
+                    await SaveAsync(local);
+                }
+                else
+                {
+                    LastLoadSource = "LocalFolder";
+                }
+                return local;
             }
-            catch
+
+            if (roaming != null)
             {
-                // LocalFolder is cleared on uninstall. Try the user's roaming
-                // application data so settings can be restored after reinstall
-                // or on another phone using the same app package and Microsoft account.
-                try
-                {
-                    var settings = await LoadFromFolderAsync(ApplicationData.Current.RoamingFolder);
-                    await SaveAsync(settings); // restore local copy for normal startup
-                    return settings;
-                }
-                catch
-                {
-                    return new AppSettings();
-                }
+                LastLoadSource = "RoamingFolder";
+                await SaveAsync(roaming); // recreate local copy for normal startup
+                return roaming;
             }
+
+            LastLoadSource = "Defaults (no readable settings file)";
+            return new AppSettings();
         }
 
         public async Task SaveAsync(AppSettings settings)
@@ -168,9 +210,11 @@ namespace ESP32AIControl.WP81.Core
                 try
                 {
                     await SaveToFolderAsync(ApplicationData.Current.RoamingFolder, json);
+                    LastRoamingSaveStatus = "OK";
                 }
-                catch
+                catch (Exception ex)
                 {
+                    LastRoamingSaveStatus = "ERROR: " + ex.Message;
                     // Local save succeeded; roaming backup is best-effort.
                 }
             }
