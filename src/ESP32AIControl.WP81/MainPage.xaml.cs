@@ -123,7 +123,6 @@ namespace ESP32AIControl.WP81
                 // On WP8.1 keep reconnecting while the app is active and reconnect on resume.
                 _mqttReconnectEnabled = true;
                 StartMqttSupervisor();
-                await EnsureMqttConnectedAsync("запуск приложения");
             }
             catch (Exception ex)
             {
@@ -133,6 +132,9 @@ namespace ESP32AIControl.WP81
             {
                 _initializing = false;
             }
+
+            // Connect only after settings and scheduled tasks have finished loading.
+            await EnsureMqttConnectedAsync("запуск приложения");
         }
 
         private void MainPage_Unloaded(object sender, RoutedEventArgs e)
