@@ -21,19 +21,17 @@ namespace ESP32AIControl.WP81.Core.Voice
             {
                 _recognizer = new SpeechRecognizer();
 
-                stage = "настройка распознавания речи";
-                _recognizer.Constraints.Add(
-                    new SpeechRecognitionTopicConstraint(
-                        SpeechRecognitionScenario.Dictation,
-                        "dictation"));
-
-                stage = "подготовка распознавания";
+                // Не добавляем SpeechRecognitionTopicConstraint:
+                // на некоторых конфигурациях Windows Phone 8.1
+                // сценарий Dictation недоступен для системного языка.
+                // Без ограничений используется стандартная грамматика диктовки.
+                stage = "подготовка стандартного распознавания";
                 var compilation = await _recognizer.CompileConstraintsAsync();
                 if (compilation == null)
                 {
                     var failed = RecognitionFailed;
                     if (failed != null)
-                        failed(this, "Не удалось подготовить распознавание речи: система не вернула результат проверки. Попробуйте ещё раз.");
+                        failed(this, "Не удалось подготовить стандартное распознавание речи: система не вернула результат.");
                     return;
                 }
 
@@ -41,8 +39,8 @@ namespace ESP32AIControl.WP81.Core.Voice
                 {
                     var failed = RecognitionFailed;
                     if (failed != null)
-                        failed(this, "Не удалось подготовить распознавание речи. Статус системы: " +
-                            compilation.Status.ToString() + ". Проверьте языковые данные и поддержку распознавания.");
+                        failed(this, "Не удалось подготовить стандартное распознавание речи. Статус системы: " +
+                            compilation.Status.ToString() + ". Проверьте язык речи и доступность службы распознавания.");
                     return;
                 }
 
