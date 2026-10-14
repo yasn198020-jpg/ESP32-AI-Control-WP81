@@ -96,14 +96,8 @@
             </Grid>
         </Border>
 
-        <Pivot x:Name="MainPivot" Grid.Row="1" Margin="0,-32,0,0" Foreground="#FFF3F4F6"
-               Background="#FF121318" SelectionChanged="MainPivot_SelectionChanged">
-            <Pivot.HeaderTemplate>
-                <DataTemplate>
-                    <TextBlock Visibility="Collapsed" Height="0" Width="0" Margin="0" Padding="0"/>
-                </DataTemplate>
-            </Pivot.HeaderTemplate>
-            <PivotItem Header="Главная">
+        <Grid x:Name="MainSections" Grid.Row="1" Background="#FF121318">
+<Grid x:Name="HomeSection" Visibility="Visible">
                 <Grid Margin="10,0,10,4">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="*"/>
@@ -135,9 +129,9 @@
                                Foreground="#FF9CA3AF" FontSize="12"
                                Margin="8,2,8,6" TextTrimming="CharacterEllipsis"/>
                 </Grid>
-            </PivotItem>
+            </Grid>
 
-            <PivotItem Header="Графики">
+            <Grid x:Name="GraphsSection" Visibility="Collapsed">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="16,8,16,12">
                     <StackPanel>
                         <TextBlock Text="ГРАФИКИ" FontSize="28" FontWeight="Light" Foreground="#FF00B7FF"/>
@@ -158,9 +152,9 @@
                         </Border>
                     </StackPanel>
                 </ScrollViewer>
-            </PivotItem>
+            </Grid>
 
-            <PivotItem Header="Задачи">
+            <Grid x:Name="TasksSection" Visibility="Collapsed">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="16,8,16,12">
                     <StackPanel>
                         <TextBlock Text="ЗАПЛАНИРОВАННЫЕ КОМАНДЫ" FontSize="26" FontWeight="Light" Foreground="#FF00B7FF"/>
@@ -181,9 +175,9 @@
                         <ListView x:Name="ScheduleList" Height="420" SelectionChanged="ScheduleList_SelectionChanged"/>
                     </StackPanel>
                 </ScrollViewer>
-            </PivotItem>
+            </Grid>
 
-            <PivotItem Header="Настройки">
+            <Grid x:Name="SettingsSection" Visibility="Collapsed">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="12,6,12,8">
                     <StackPanel>
                         <TextBlock Text="НАСТРОЙКИ ПРИЛОЖЕНИЯ" FontSize="18" FontWeight="SemiBold" Foreground="#FF00B7FF" Margin="0,0,0,8"/>
@@ -313,8 +307,8 @@
                         
                     </StackPanel>
                 </ScrollViewer>
-            </PivotItem>
-        </Pivot>
+            </Grid>
+        </Grid>
 
         <!-- Fixed bottom navigation inspired by the Android app. -->
         <Border Grid.Row="2" Background="#FF191A20"
