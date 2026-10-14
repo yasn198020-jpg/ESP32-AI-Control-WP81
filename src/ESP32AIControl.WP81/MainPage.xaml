@@ -96,7 +96,7 @@
             </Grid>
         </Border>
 
-        <Pivot x:Name="MainPivot" Grid.Row="1" Margin="0,-32,0,0" Foreground="#FFF3F4F6"
+        <Pivot x:Name="MainPivot" Grid.Row="1" Foreground="#FFF3F4F6"
                Background="#FF121318" SelectionChanged="MainPivot_SelectionChanged">
             <Pivot.HeaderTemplate>
                 <DataTemplate>
