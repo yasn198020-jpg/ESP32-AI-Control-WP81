@@ -33,7 +33,7 @@ namespace ESP32AIControl.WP81.Core.Voice
                 {
                     var failed = RecognitionFailed;
                     if (failed != null)
-                        failed(this, "Не удалось подготовить распознавание речи. Попробуйте ещё раз.");
+                        failed(this, "Не удалось подготовить распознавание речи: система не вернула результат проверки. Попробуйте ещё раз.");
                     return;
                 }
 
@@ -41,7 +41,8 @@ namespace ESP32AIControl.WP81.Core.Voice
                 {
                     var failed = RecognitionFailed;
                     if (failed != null)
-                        failed(this, "Не удалось подготовить распознавание речи. Проверьте доступность языковых данных распознавания.");
+                        failed(this, "Не удалось подготовить распознавание речи. Статус системы: " +
+                            compilation.Status.ToString() + ". Проверьте языковые данные и поддержку распознавания.");
                     return;
                 }
 
