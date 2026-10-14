@@ -1,4 +1,4 @@
-name: Vendor Noto Emoji assets (one-time)
+name: Vendor full Noto Emoji set for WP8.1
 
 on:
   push:
@@ -20,34 +20,59 @@ jobs:
         with:
           ref: ui/lumia830-dashboard-test
           token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Download selected official Noto Emoji PNG assets
+
+      - name: Fetch official Noto Emoji PNG artwork
         shell: bash
         run: |
           set -euo pipefail
           dest="src/ESP32AIControl.WP81/Assets/NotoEmoji"
+          index="src/ESP32AIControl.WP81/Core/NotoEmojiAssetIndex.cs"
+          tmp="$RUNNER_TEMP/noto-emoji"
           mkdir -p "$dest"
-          base="https://raw.githubusercontent.com/googlefonts/noto-emoji/main/2D/png/128"
-          for code in 1f952 1f345 1f336 1f331 1f33f 1f321 1f6aa 1fa9f 1f4a1 1f4a7; do
-            curl --fail --location --retry 3 "$base/emoji_u${code}.png" --output "$dest/emoji_u${code}.png"
-          done
-          curl --fail --location --retry 3 "https://raw.githubusercontent.com/googlefonts/noto-emoji/main/LICENSE" --output "$dest/LICENSE"
+          git clone --depth 1 https://github.com/googlefonts/noto-emoji.git "$tmp"
+          test -d "$tmp/2D/png/128"
+          find "$tmp/2D/png/128" -maxdepth 1 -type f -name '*.png' -exec cp -f {} "$dest/" \;
+          cp "$tmp/LICENSE" "$dest/LICENSE"
           cat > "$dest/README.txt" <<'EOF'
-          Noto Emoji PNG assets bundled for ESP32-AI-Control WP8.1.
-          Source: https://github.com/googlefonts/noto-emoji
-          Images are copied from 2D/png/128 and licensed under Apache License 2.0.
-          See LICENSE in this directory for the upstream license text.
-          These files are packaged with the app; build and runtime do not download them.
+          Noto Emoji PNG artwork bundled for ESP32-AI-Control WP8.1.
+          Upstream: https://github.com/googlefonts/noto-emoji
+          Source directory: 2D/png/128
+          These PNG assets are distributed under the upstream Apache License 2.0.
+          The app packages these files locally; build and runtime do not download them.
+          The WP8.1 app uses an asset index to resolve supported Unicode sequences.
           EOF
-      - name: Commit vendored assets to the test branch
+          python3 - <<'PY'
+          import os, re
+          folder = "src/ESP32AIControl.WP81/Assets/NotoEmoji"
+          names = sorted(n for n in os.listdir(folder) if re.fullmatch(r"emoji_u[0-9a-f_]+\.png", n))
+          if not names:
+              raise SystemExit("No Noto Emoji PNG assets found")
+          with open("src/ESP32AIControl.WP81/Core/NotoEmojiAssetIndex.cs", "w", encoding="utf-8", newline="\n") as f:
+              f.write("using System.Collections.Generic;\n\n")
+              f.write("namespace ESP32AIControl.WP81.Core\n{\n")
+              f.write("    /// <summary>Generated index of bundled Noto Emoji PNG files.</summary>\n")
+              f.write("    internal static class NotoEmojiAssetIndex\n    {\n")
+              f.write("        private static readonly HashSet<string> Names = new HashSet<string>(new string[]\n        {\n")
+              for name in names:
+                  f.write('            "' + name + '",\n')
+              f.write("        }, System.StringComparer.OrdinalIgnoreCase);\n\n")
+              f.write("        public static bool Contains(string fileName)\n        {\n")
+              f.write("            return !string.IsNullOrEmpty(fileName) && Names.Contains(fileName);\n")
+              f.write("        }\n    }\n}\n")
+          print("Indexed", len(names), "Noto Emoji PNG assets")
+          PY
+          echo "Bundled $(find "$dest" -maxdepth 1 -type f -name '*.png' | wc -l) PNG files."
+
+      - name: Commit full asset set to the test branch
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/ESP32AIControl.WP81/Assets/NotoEmoji
+          git add src/ESP32AIControl.WP81/Assets/NotoEmoji src/ESP32AIControl.WP81/Core/NotoEmojiAssetIndex.cs
           if git diff --cached --quiet; then
-            echo "Noto Emoji assets are already present."
+            echo "Noto Emoji assets are already current."
             exit 0
           fi
-          git commit -m "Bundle Noto Emoji PNG assets for WP8.1"
+          git commit -m "Bundle full Noto Emoji PNG set for WP8.1"
           git push origin HEAD:ui/lumia830-dashboard-test
