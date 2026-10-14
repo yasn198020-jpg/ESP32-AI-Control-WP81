@@ -22,16 +22,16 @@ try {
     Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
     Expand-Archive -LiteralPath $zip -DestinationPath $temp -Force
     $sourceRoot = Get-ChildItem -LiteralPath $temp -Directory |
-        Where-Object { Test-Path (Join-Path $_.FullName "png\128") } |
+        Where-Object { Test-Path (Join-Path $_.FullName "2D\png\128") } |
         Select-Object -First 1
-    if (-not $sourceRoot) { throw "The Noto Emoji archive did not contain png/128." }
+    if (-not $sourceRoot) { throw "The Noto Emoji archive did not contain 2D/png/128." }
 
     if (Test-Path $Destination) {
         Get-ChildItem -LiteralPath $Destination -Force | Remove-Item -Recurse -Force
     } else {
         New-Item -ItemType Directory -Force -Path $Destination | Out-Null
     }
-    $pngRoot = Join-Path $sourceRoot.FullName "png\128"
+    $pngRoot = Join-Path $sourceRoot.FullName "2D\png\128"
     Copy-Item -Path (Join-Path $pngRoot "*.png") -Destination $Destination -Force
     $license = Join-Path $sourceRoot.FullName "fonts\LICENSE"
     if (Test-Path $license) { Copy-Item $license (Join-Path $Destination "LICENSE.txt") -Force }
