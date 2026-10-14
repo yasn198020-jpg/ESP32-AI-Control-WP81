@@ -70,17 +70,19 @@
                 <Button x:Name="MenuButton" Grid.Column="0"
                         Click="MenuButton_Click" Background="Transparent"
                         BorderThickness="0" Padding="0"
-                        Foreground="#FFF3F4F6" VerticalAlignment="Stretch"
-                        HorizontalAlignment="Stretch" AutomationProperties.Name="Открыть меню">
-                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Width="24">
-                        <Border Height="2" Background="#FF00B7FF" CornerRadius="1" Margin="0,0,0,4"/>
-                        <Border Height="2" Background="#FF00B7FF" CornerRadius="1" Margin="0,0,0,4"/>
-                        <Border Height="2" Background="#FF00B7FF" CornerRadius="1"/>
+                        Foreground="#FFF3F4F6" VerticalAlignment="Center"
+                        HorizontalAlignment="Center" Width="40" Height="48"
+                        AutomationProperties.Name="Открыть меню">
+                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Width="27">
+                        <Border Height="3" Background="#FFF3F4F6" CornerRadius="1" Margin="0,0,0,5"/>
+                        <Border Height="3" Background="#FFF3F4F6" CornerRadius="1" Margin="0,0,0,5"/>
+                        <Border Height="3" Background="#FFF3F4F6" CornerRadius="1"/>
                     </StackPanel>
                 </Button>
                 <TextBlock x:Name="PageSubtitle" Grid.Column="1" Text="Главная"
                            FontSize="24" FontWeight="SemiBold" Foreground="#FFF3F4F6"
                            VerticalAlignment="Center" HorizontalAlignment="Center"
+                           Margin="0,-5,0,0"
                            TextAlignment="Center" TextWrapping="NoWrap"/>
                 <Button x:Name="TopInfoButton" Grid.Column="2" Content="ⓘ"
                         Click="TopInfoButton_Click" Background="Transparent"
