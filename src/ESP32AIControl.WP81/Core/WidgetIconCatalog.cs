@@ -254,58 +254,16 @@ namespace ESP32AIControl.WP81.Core
         }
 
         /// <summary>
-        /// Displays the matching bundled Noto Emoji PNG in full color. The app package
-        /// contains the complete pinned image set, so rendering works without internet.
+        /// Creates an app-owned colored vector icon for the leading emoji.
+        /// This is intentionally self-contained: no font download, PNG download,
+        /// generated assets, or network access is required to build or run the app.
         /// </summary>
         public static FrameworkElement CreateForEmoji(string emoji)
         {
-            string assetName = GetEmojiAssetName(emoji);
-            var image = new Image
-            {
-                Width = 26,
-                Height = 26,
-                Stretch = Windows.UI.Xaml.Media.Stretch.Uniform,
-                Source = new Windows.UI.Xaml.Media.Imaging.BitmapImage(
-                    new Uri("ms-appx:///Assets/Emoji/" + assetName))
-            };
-            var host = new Border
-            {
-                Width = 26,
-                Height = 26,
-                Child = image
-            };
-            image.ImageFailed += (sender, args) =>
-            {
-                // Some Unicode sequences have no standalone artwork in Noto.
-                host.Child = CreateVectorForEmoji(emoji);
-            };
-            return host;
+            return CreateVectorForEmoji(emoji);
         }
 
-        private static string GetEmojiAssetName(string emoji)
-        {
-            var name = new System.Text.StringBuilder();
-            int index = 0;
-            while (index < emoji.Length)
-            {
-                int codePoint;
-                int length;
-                ReadCodePoint(emoji, index, out codePoint, out length);
-                index += length;
-
-                // Presentation selectors are not part of Noto PNG file names.
-                if (codePoint == 0xFE0E || codePoint == 0xFE0F)
-                    continue;
-
-                if (name.Length > 0) name.Append('_');
-                name.Append(codePoint <= 0xFFFF
-                    ? codePoint.ToString("x4")
-                    : codePoint.ToString("x"));
-            }
-            return "emoji_u" + name.ToString() + ".png";
-        }
-
-        /// <summary>Vector fallback for a sequence with no bundled Noto artwork.</summary>
+        /// <summary>App-owned vector symbol for an emoji sequence.</summary>
         private static FrameworkElement CreateVectorForEmoji(string emoji)
         {
             var canvas = new Canvas { Width = 26, Height = 26 };
