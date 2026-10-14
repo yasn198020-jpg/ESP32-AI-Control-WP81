@@ -15,25 +15,25 @@ namespace ESP32AIControl.WP81.Core.Voice
         {
             if (_recognizer != null) return;
 
-            var stage = "создание SpeechRecognizer";
+            var stage = "создание распознавателя речи";
 
             try
             {
                 _recognizer = new SpeechRecognizer();
 
-                stage = "добавление ограничения распознавания";
+                stage = "настройка распознавания речи";
                 _recognizer.Constraints.Add(
                     new SpeechRecognitionTopicConstraint(
                         SpeechRecognitionScenario.Dictation,
                         "dictation"));
 
-                stage = "CompileConstraintsAsync";
+                stage = "подготовка распознавания";
                 var compilation = await _recognizer.CompileConstraintsAsync();
                 if (compilation == null)
                 {
                     var failed = RecognitionFailed;
                     if (failed != null)
-                        failed(this, "Не удалось подготовить распознавание речи (результат подготовки пустой).");
+                        failed(this, "Не удалось подготовить распознавание речи. Попробуйте ещё раз.");
                     return;
                 }
 
@@ -41,11 +41,11 @@ namespace ESP32AIControl.WP81.Core.Voice
                 {
                     var failed = RecognitionFailed;
                     if (failed != null)
-                        failed(this, "Подготовка распознавания не пройдена: " + compilation.Status);
+                        failed(this, "Не удалось подготовить распознавание речи. Проверьте доступность языковых данных распознавания.");
                     return;
                 }
 
-                stage = "RecognizeAsync";
+                stage = "запуск прослушивания";
                 var result = await _recognizer.RecognizeAsync();
                 if (result != null &&
                     result.Status == SpeechRecognitionResultStatus.Success &&
@@ -59,13 +59,14 @@ namespace ESP32AIControl.WP81.Core.Voice
                 {
                     var failed = RecognitionFailed;
                     if (failed != null)
-                        failed(this, "Не удалось распознать речь. Нажмите 🎤 и повторите.");
+                        failed(this, "Речь не распознана. Нажмите на микрофон и повторите фразу.");
                 }
             }
             catch (Exception ex)
             {
                 throw new InvalidOperationException(
-                    "Ошибка голосового этапа [" + stage + "]: " + ex.Message, ex);
+                    "Не удалось выполнить этап «" + stage + "». Код ошибки: 0x" +
+                    ex.HResult.ToString("X8") + ".", ex);
             }
             finally
             {
