@@ -104,7 +104,7 @@
                 </DataTemplate>
             </Pivot.HeaderTemplate>
             <PivotItem Header="Главная">
-                <Grid Margin="10,0,10,4">
+                <Grid Margin="10,-18,10,4">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
