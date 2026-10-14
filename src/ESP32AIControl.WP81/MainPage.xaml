@@ -305,7 +305,10 @@
                     </ScrollViewer>
                 </PivotItem>
                         </Pivot>
-                        <Button Content="Сохранить настройки" Click="SaveSettingsButton_Click" Margin="0,12,0,8"/>
+                        <Button Content="Сохранить настройки" Click="SaveSettingsButton_Click" Margin="0,12,0,4"/>
+                        <Button Content="Создать резервную копию в файл" Click="ExportSettingsBackupButton_Click" Margin="0,4"/>
+                        <Button Content="Восстановить настройки из файла" Click="ImportSettingsBackupButton_Click" Margin="0,4,0,8"/>
+                        <TextBlock Text="Храните файл отдельно от приложения. После переустановки выберите его для восстановления." TextWrapping="Wrap" Opacity="0.7" Margin="0,0,0,8"/>
                         <TextBlock x:Name="SettingsStatus" Text="" TextWrapping="Wrap"/>
                         
                     </StackPanel>
