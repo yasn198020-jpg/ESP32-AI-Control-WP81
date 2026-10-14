@@ -120,6 +120,29 @@ namespace ESP32AIControl.WP81.Core
             }
         }
 
+        public async Task ExportToFileAsync(StorageFile file, AppSettings settings)
+        {
+            if (file == null) throw new ArgumentNullException("file");
+            if (settings == null) throw new ArgumentNullException("settings");
+            await WriteTextAsync(file, Serialize(settings));
+        }
+
+        public async Task<AppSettings> ImportFromFileAsync(StorageFile file)
+        {
+            if (file == null) throw new ArgumentNullException("file");
+            var json = await ReadTextAsync(file);
+            using (var stream = new MemoryStream(Encoding.UTF8.GetBytes(json)))
+            {
+                var serializer = new DataContractJsonSerializer(typeof(AppSettings));
+                var settings = serializer.ReadObject(stream) as AppSettings;
+                if (settings == null)
+                    throw new InvalidOperationException("Файл резервной копии не содержит настроек.");
+                if (settings.SavedMqttProfiles == null)
+                    settings.SavedMqttProfiles = new System.Collections.Generic.List<SavedMqttProfile>();
+                return settings;
+            }
+        }
+
         private static async Task SaveToFolderAsync(StorageFolder folder, string json)
         {
             var file = await CreateFileAsync(folder, FileName, CreationCollisionOption.ReplaceExisting);
