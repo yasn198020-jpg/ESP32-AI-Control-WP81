@@ -144,7 +144,6 @@ namespace ESP32AIControl.WP81
         private void MenuButton_Click(object sender, RoutedEventArgs e)
         {
             var menu = new MenuFlyout();
-            menu.RequestedTheme = ElementTheme.Dark;
 
             var home = new MenuFlyoutItem { Text = "Главная" };
             home.Click += delegate { ShowSection(0); };
