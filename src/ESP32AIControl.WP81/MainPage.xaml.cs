@@ -57,6 +57,7 @@ namespace ESP32AIControl.WP81
         private bool _autoExportRunning;
         private bool _mqttReconnectEnabled;
         private bool _mqttReconnectInProgress;
+        private int _selectedSection = 0;
 
         public MainPage()
         {
@@ -200,12 +201,7 @@ namespace ESP32AIControl.WP81
 
         private void ShowSection(int index)
         {
-            MainPivot.SelectedIndex = index;
-            UpdateNavigationState();
-        }
-
-        private void MainPivot_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
+            _selectedSection = Math.Max(0, Math.Min(3, index));
             UpdateNavigationState();
         }
 
@@ -249,21 +245,26 @@ namespace ESP32AIControl.WP81
 
         private void UpdateNavigationState()
         {
-            if (PageSubtitle == null || MainPivot == null) return;
+            if (PageSubtitle == null || MainSections == null) return;
 
-            if (MainPivot.SelectedIndex == 0)
+            HomeSection.Visibility = _selectedSection == 0 ? Visibility.Visible : Visibility.Collapsed;
+            GraphsSection.Visibility = _selectedSection == 1 ? Visibility.Visible : Visibility.Collapsed;
+            TasksSection.Visibility = _selectedSection == 2 ? Visibility.Visible : Visibility.Collapsed;
+            SettingsSection.Visibility = _selectedSection == 3 ? Visibility.Visible : Visibility.Collapsed;
+
+            if (_selectedSection == 0)
                 PageSubtitle.Text = "Главная";
-            else if (MainPivot.SelectedIndex == 1)
+            else if (_selectedSection == 1)
                 PageSubtitle.Text = "Графики";
-            else if (MainPivot.SelectedIndex == 2)
+            else if (_selectedSection == 2)
                 PageSubtitle.Text = "Задачи";
             else
                 PageSubtitle.Text = "Настройки";
 
-            SetNavigationButton(NavHomeButton, MainPivot.SelectedIndex == 0);
+            SetNavigationButton(NavHomeButton, _selectedSection == 0);
             SetNavigationButton(NavMarfaButton, false);
-            SetNavigationButton(NavGraphsButton, MainPivot.SelectedIndex == 1);
-            SetNavigationButton(NavTasksButton, MainPivot.SelectedIndex == 2);
+            SetNavigationButton(NavGraphsButton, _selectedSection == 1);
+            SetNavigationButton(NavTasksButton, _selectedSection == 2);
             // Settings stays available from the hamburger menu, not the bottom bar.
         }
 
@@ -453,7 +454,8 @@ namespace ESP32AIControl.WP81
                 _appSettings.ClientId = _settings.ClientId;
                 _appSettings.UseTls = _settings.UseTls;
                 _appSettings.UiFontScale = (float)UiFontScaleSlider.Value;
-                MainPivot.FontSize = 14 * (double)_appSettings.UiFontScale;
+                WidgetPages.FontSize = 14 * (double)_appSettings.UiFontScale;
+                SettingsPivot.FontSize = 14 * (double)_appSettings.UiFontScale;
                 _appSettings.MeasurementIntervalSeconds = Math.Max(1, interval);
                 _appSettings.RetentionDays = Math.Max(1, retention);
                 _appSettings.AutoExportPeriod = GetAutoExportTag();
@@ -689,7 +691,8 @@ namespace ESP32AIControl.WP81
             ClientIdBox.Text = string.IsNullOrEmpty(_appSettings.ClientId) ? "ESP32-AI-Control-WP81" : _appSettings.ClientId;
             MqttTlsCheckBox.IsChecked = _appSettings.UseTls;
             UiFontScaleSlider.Value = Math.Max(0.7, Math.Min(1.1, _appSettings.UiFontScale <= 0 ? 0.85 : _appSettings.UiFontScale));
-            MainPivot.FontSize = 14 * (double)UiFontScaleSlider.Value;
+            WidgetPages.FontSize = 14 * (double)UiFontScaleSlider.Value;
+            SettingsPivot.FontSize = 14 * (double)UiFontScaleSlider.Value;
             PortBox.Text = _appSettings.Port;
             PrefixBox.Text = _appSettings.Prefix;
             UserNameBox.Text = _appSettings.UserName;
