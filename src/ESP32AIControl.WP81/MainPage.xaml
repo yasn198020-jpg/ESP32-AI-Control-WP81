@@ -52,14 +52,14 @@
     </Page.Resources>
     <Grid Background="#FF121318">
         <Grid.RowDefinitions>
-            <RowDefinition Height="60"/>
+            <RowDefinition Height="78"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="64"/>
         </Grid.RowDefinitions>
 
         <!-- Android-like top bar: menu, current screen title, info and MQTT cloud status. -->
         <Border Grid.Row="0" Background="#FF191A20" BorderBrush="#FF30313A"
-                BorderThickness="0,0,0,1" Padding="5,4,7,4">
+                BorderThickness="0,0,0,1" Padding="5,7,7,7">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="40"/>
@@ -78,9 +78,10 @@
                         <Border Height="2" Background="#FF00B7FF" CornerRadius="1"/>
                     </StackPanel>
                 </Button>
-                <TextBlock x:Name="PageSubtitle" Grid.Column="1" Text="Dashboard"
-                           FontSize="21" FontWeight="SemiBold" Foreground="#FFF3F4F6"
-                           VerticalAlignment="Center" TextWrapping="NoWrap"/>
+                <TextBlock x:Name="PageSubtitle" Grid.Column="1" Text="Главная"
+                           FontSize="24" FontWeight="SemiBold" Foreground="#FFF3F4F6"
+                           VerticalAlignment="Center" HorizontalAlignment="Center"
+                           TextAlignment="Center" TextWrapping="NoWrap"/>
                 <Button x:Name="TopInfoButton" Grid.Column="2" Content="ⓘ"
                         Click="TopInfoButton_Click" Background="Transparent"
                         BorderThickness="0" Padding="0" FontSize="22"
