@@ -30,9 +30,19 @@ jobs:
           tmp="$RUNNER_TEMP/noto-emoji"
           mkdir -p "$dest"
           git clone --depth 1 --filter=blob:none --sparse https://github.com/googlefonts/noto-emoji.git "$tmp"
-          git -C "$tmp" sparse-checkout set 2D/png/128
+          git -C "$tmp" sparse-checkout set 2D/png/128 third_party/region-flags/png
           test -d "$tmp/2D/png/128"
           find "$tmp/2D/png/128" -maxdepth 1 -type f -name '*.png' -exec cp -f {} "$dest/" \;
+          # Noto stores country flags separately from code-point-named emoji PNGs.
+          if [ -d "$tmp/third_party/region-flags/png" ]; then
+            for flag in "$tmp"/third_party/region-flags/png/*.png; do
+              [ -f "$flag" ] || continue
+              code="$(basename "$flag" .png)"
+              if [[ "$code" =~ ^[A-Z]{2}$ ]]; then
+                cp "$flag" "$dest/flag_${code,,}.png"
+              fi
+            done
+          fi
           curl --fail --location --retry 3 "https://raw.githubusercontent.com/googlefonts/noto-emoji/main/LICENSE" --output "$dest/LICENSE"
           cat > "$dest/README.txt" <<'EOF'
           Noto Emoji PNG artwork bundled for ESP32-AI-Control WP8.1.
@@ -45,7 +55,7 @@ jobs:
           python3 - <<'PY'
           import os, re
           folder = "src/ESP32AIControl.WP81/Assets/NotoEmoji"
-          names = sorted(n for n in os.listdir(folder) if re.fullmatch(r"emoji_u[0-9a-f_]+\.png", n))
+          names = sorted(n for n in os.listdir(folder) if re.fullmatch(r"(emoji_u[0-9a-f_]+|flag_[a-z]{2})\.png", n))
           if not names:
               raise SystemExit("No Noto Emoji PNG assets found")
           with open("src/ESP32AIControl.WP81/Core/NotoEmojiAssetIndex.cs", "w", encoding="utf-8", newline="\n") as f:
