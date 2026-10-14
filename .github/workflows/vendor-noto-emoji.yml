@@ -1,0 +1,53 @@
+name: Vendor Noto Emoji assets (one-time)
+
+on:
+  push:
+    branches:
+      - ui/lumia830-dashboard-test
+    paths:
+      - .github/workflows/vendor-noto-emoji.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  vendor-assets:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout test branch
+        uses: actions/checkout@v4
+        with:
+          ref: ui/lumia830-dashboard-test
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Download selected official Noto Emoji PNG assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          dest="src/ESP32AIControl.WP81/Assets/NotoEmoji"
+          mkdir -p "$dest"
+          base="https://raw.githubusercontent.com/googlefonts/noto-emoji/main/2D/png/128"
+          for code in 1f952 1f345 1f336 1f331 1f33f 1f321 1f6aa 1fa9f 1f4a1 1f4a7; do
+            curl --fail --location --retry 3 "$base/emoji_u${code}.png" --output "$dest/emoji_u${code}.png"
+          done
+          curl --fail --location --retry 3 "https://raw.githubusercontent.com/googlefonts/noto-emoji/main/LICENSE" --output "$dest/LICENSE"
+          cat > "$dest/README.txt" <<'EOF'
+          Noto Emoji PNG assets bundled for ESP32-AI-Control WP8.1.
+          Source: https://github.com/googlefonts/noto-emoji
+          Images are copied from 2D/png/128 and licensed under Apache License 2.0.
+          See LICENSE in this directory for the upstream license text.
+          These files are packaged with the app; build and runtime do not download them.
+          EOF
+      - name: Commit vendored assets to the test branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/ESP32AIControl.WP81/Assets/NotoEmoji
+          if git diff --cached --quiet; then
+            echo "Noto Emoji assets are already present."
+            exit 0
+          fi
+          git commit -m "Bundle Noto Emoji PNG assets for WP8.1"
+          git push origin HEAD:ui/lumia830-dashboard-test
