@@ -268,10 +268,12 @@ namespace ESP32AIControl.WP81.Core
                 if (codePoint == 0xFE0E || codePoint == 0xFE0F)
                     continue;
 
-                if (name.Length > 0) name.Append('-');
-                name.Append(codePoint.ToString("x"));
+                if (name.Length > 0) name.Append('_');
+                name.Append(codePoint <= 0xFFFF
+                    ? codePoint.ToString("x4")
+                    : codePoint.ToString("x"));
             }
-            return name.ToString() + ".png";
+            return "emoji_u" + name.ToString() + ".png";
         }
 
         /// <summary>Vector fallback for a sequence with no bundled Noto artwork.</summary>
