@@ -640,26 +640,21 @@ namespace ESP32AIControl.WP81
             };
 
             var row = new Grid();
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(32) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(96) });
 
-            var icon = WidgetIconCatalog.Create(GetTitle(state), type);
-            icon.VerticalAlignment = VerticalAlignment.Center;
-            icon.HorizontalAlignment = HorizontalAlignment.Left;
-            Grid.SetColumn(icon, 0);
-            row.Children.Add(icon);
-
+            // Keep the title exactly as supplied by MQTT. Do not replace a received
+            // emoji (for example 🥒) with a guessed vector icon or strip it out.
             visual.Title = new TextBlock
             {
-                Text = WidgetIconCatalog.CleanTitle(GetTitle(state)),
+                Text = GetTitle(state),
                 FontSize = 16,
                 Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 243, 244, 246)),
                 TextWrapping = TextWrapping.Wrap,
                 VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(2, 0, 6, 0)
+                Margin = new Thickness(0, 0, 8, 0)
             };
-            Grid.SetColumn(visual.Title, 1);
+            Grid.SetColumn(visual.Title, 0);
             row.Children.Add(visual.Title);
 
             visual.ValueText = new TextBlock
@@ -761,7 +756,7 @@ namespace ESP32AIControl.WP81
                     MoveWidgetVisual(visual, newPage);
 
                 visual.State = state;
-                visual.Title.Text = WidgetIconCatalog.CleanTitle(GetTitle(state));
+                visual.Title.Text = GetTitle(state);
                 _widgetIndex[state.Key] = state;
             }
 
