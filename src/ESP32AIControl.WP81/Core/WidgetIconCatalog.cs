@@ -139,10 +139,10 @@ namespace ESP32AIControl.WP81.Core
                 if (candidate.IndexOf(' ') >= 0) continue;
                 if (value.StartsWith(candidate, StringComparison.Ordinal))
                 {
-                    int consumed = candidate.Length;
-                    if (consumed < value.Length && value[consumed] == '\uFE0F') consumed++;
+                    int candidateLength = candidate.Length;
+                    if (candidateLength < value.Length && value[candidateLength] == '\uFE0F') candidateLength++;
                     emoji = candidate;
-                    remainingTitle = value.Substring(consumed).TrimStart();
+                    remainingTitle = value.Substring(candidateLength).TrimStart();
                     return true;
                 }
             }
