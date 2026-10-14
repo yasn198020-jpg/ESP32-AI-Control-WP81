@@ -320,7 +320,20 @@
                     Height="64" Padding="0" BorderThickness="0" FontSize="11"
                     AutomationProperties.Name="Голосовое управление Марфа">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <TextBlock Text="🎤" FontSize="19" HorizontalAlignment="Center"/>
+                    <Grid Width="24" Height="24" HorizontalAlignment="Center">
+                        <Border Width="8" Height="14" CornerRadius="4"
+                                Background="#FF00B7FF" VerticalAlignment="Top"
+                                HorizontalAlignment="Center" Margin="0,1,0,0"/>
+                        <Border Width="17" Height="13" CornerRadius="7"
+                                BorderBrush="#FF00B7FF" BorderThickness="2"
+                                Background="Transparent" VerticalAlignment="Top"
+                                HorizontalAlignment="Center" Margin="0,5,0,0"/>
+                        <Rectangle Width="2" Height="5" Fill="#FF00B7FF"
+                                   VerticalAlignment="Bottom" HorizontalAlignment="Center"
+                                   Margin="0,0,0,2"/>
+                        <Rectangle Width="10" Height="2" Fill="#FF00B7FF"
+                                   VerticalAlignment="Bottom" HorizontalAlignment="Center"/>
+                    </Grid>
                     <TextBlock Text="Марфа" FontSize="10" HorizontalAlignment="Center"/>
                 </StackPanel>
             </Button>
