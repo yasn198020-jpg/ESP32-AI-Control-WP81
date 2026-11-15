@@ -400,28 +400,42 @@ namespace ESP32AIControl.WP81
             {
                 _commandExecutor.SetScenarioScript(ScenarioTextBox.Text ?? string.Empty);
 
-                Log("SCENARIO READ: разобрано правил = " +
-                    _commandExecutor.GetScenarioRuleCount().ToString(CultureInfo.InvariantCulture));
+                var ruleCount = _commandExecutor.GetScenarioRuleCount();
+                var report = new List<string>();
+                report.Add("Найдено правил: " + ruleCount.ToString(CultureInfo.InvariantCulture));
+                if (ruleCount == 0)
+                    report.Add("Правила не найдены. Проверьте наличие блока scenario=> и условия if / then.");
 
                 var open = VoiceOpenCommandBox.Text.Trim();
                 var close = VoiceCloseCommandBox.Text.Trim();
 
-                if (string.IsNullOrEmpty(open) && string.IsNullOrEmpty(close))
-                    throw new InvalidOperationException("Заполните команды открытия/закрытия.");
-
                 if (!string.IsNullOrEmpty(open))
-                    LogScenarioPlan("OPEN", open);
+                    report.Add(LogScenarioPlan("OPEN", open));
 
                 if (!string.IsNullOrEmpty(close))
-                    LogScenarioPlan("CLOSE", close);
+                    report.Add(LogScenarioPlan("CLOSE", close));
 
-                ScenarioStatus.Text = "План проверен. Подробности — в журнале.";
+                if (string.IsNullOrEmpty(open) && string.IsNullOrEmpty(close))
+                    report.Add("Команды открытия и закрытия не настроены. Планирование команд пропущено.");
+
+                ScenarioPlanText.Text = string.Join(Environment.NewLine + Environment.NewLine, report);
+                ScenarioStatus.Text = "Проверка завершена. Найдено правил: " +
+                    ruleCount.ToString(CultureInfo.InvariantCulture) + ".";
+                Log("SCENARIO TEST COMPLETE: rules=" + ruleCount.ToString(CultureInfo.InvariantCulture));
             }
             catch (Exception ex)
             {
+                ScenarioPlanText.Text = "Проверка не выполнена: " + ex.Message;
                 ScenarioStatus.Text = "Ошибка проверки: " + ex.Message;
                 Log("SCENARIO TEST ERROR: " + ex.Message);
             }
+        }
+
+        private void ClearScenarioButton_Click(object sender, RoutedEventArgs e)
+        {
+            ScenarioTextBox.Text = string.Empty;
+            ScenarioPlanText.Text = "Поле очищено. Сохранённый сценарий не изменён — нажмите «Сохранить сценарий», чтобы заменить его.";
+            ScenarioStatus.Text = "Редактор очищен; сохранённые настройки не изменены.";
         }
 
         private async void SaveScenarioButton_Click(object sender, RoutedEventArgs e)
@@ -442,18 +456,29 @@ namespace ESP32AIControl.WP81
             }
         }
 
-        private void LogScenarioPlan(string name, string command)
+        private string LogScenarioPlan(string name, string command)
         {
             Log("SCENARIO TEST " + name + ": " + command);
 
             var plan = _commandExecutor.BuildPlan(command);
+            var lines = new List<string>();
+            lines.Add(name + ": " + command);
+
+            if (plan.Actions.Count == 0)
+                lines.Add("  Нет дополнительных действий в плане. Команда будет проверена исполнителем напрямую.");
 
             for (var i = 0; i < plan.Actions.Count; i++)
             {
                 var action = plan.Actions[i];
+                var line = (action.IsDependency ? "  Зависимость: " : "  Действие: ") + action.Command;
+                if (!string.IsNullOrEmpty(action.Reason))
+                    line += " — " + action.Reason;
+                lines.Add(line);
                 Log("PLAN " + (action.IsDependency ? "DEP " : "ACT ") + action.Command +
                     (string.IsNullOrEmpty(action.Reason) ? string.Empty : " | " + action.Reason));
             }
+
+            return string.Join(Environment.NewLine, lines);
         }
 
         private string GetAutoExportTag()
