@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using ESP32AIControl.WP81.Core.State;
 
@@ -8,6 +9,7 @@ namespace ESP32AIControl.WP81.Core.Voice
     public sealed class ParsedVoiceCommand
     {
         public string Command { get; set; }
+        public IList<string> Commands { get; set; }
         public DateTimeOffset? ExecuteAt { get; set; }
         public bool RequiresConfirmation { get; set; }
         public string ConfirmationText { get; set; }
@@ -63,42 +65,81 @@ namespace ESP32AIControl.WP81.Core.Voice
                 return null;
             }
 
-            var command = string.Empty;
+            var commands = new List<string>();
             var requiresConfirmation = false;
             if (asksOpen && !string.IsNullOrWhiteSpace(_openCommand))
             {
-                command = _openCommand;
+                commands.Add(_openCommand);
                 requiresConfirmation = true;
             }
             else if (asksClose && !string.IsNullOrWhiteSpace(_closeCommand))
             {
-                command = _closeCommand;
+                commands.Add(_closeCommand);
                 requiresConfirmation = true;
             }
             else
             {
                 // Match the original utterance so case-sensitive MQTT IDs and values
                 // are not silently converted to lowercase.
-                var direct = Regex.Match(original,
-                    @"([a-z0-9_-]+/[a-z0-9_.:-]+)\s*=\s*([^\s]+)",
+                var directMatches = Regex.Matches(original,
+                    @"([a-z0-9_-]+/[a-z0-9_.:-]+)\s*=\s*([^\s,;]+)",
                     RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-                if (direct.Success)
-                    command = direct.Groups[1].Value + "=" + direct.Groups[2].Value;
+                if (directMatches.Count > 0)
+                {
+                    foreach (Match direct in directMatches)
+                        commands.Add(direct.Groups[1].Value + "=" + direct.Groups[2].Value);
+                }
 
-                if (string.IsNullOrWhiteSpace(command) && _naturalResolver != null)
+                if (commands.Count == 0 && _naturalResolver != null)
                 {
                     string reason;
-                    command = _naturalResolver.ResolveCommand(original, out reason);
+                    var resolved = _naturalResolver.ResolveCommands(original, out reason);
                     if (!string.IsNullOrWhiteSpace(reason))
                         LastReason = reason;
-                    requiresConfirmation = !string.IsNullOrWhiteSpace(command);
+                    if (resolved != null)
+                        commands.AddRange(resolved);
+                    requiresConfirmation = commands.Count > 0;
                 }
             }
 
-            if (string.IsNullOrWhiteSpace(command))
+            if (commands.Count == 0)
             {
                 if (string.IsNullOrWhiteSpace(LastReason))
                     LastReason = "Не удалось однозначно определить команду или управляемый элемент.";
+                return null;
+            }
+
+            // Never execute two contradictory values for the same MQTT control.
+            var targetValues = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var uniqueCommands = new List<string>();
+            foreach (var item in commands)
+            {
+                var separator = item.IndexOf('=');
+                if (separator <= 0 || separator == item.Length - 1)
+                {
+                    LastReason = "Одна из команд имеет неверный формат. Ничего не отправлено.";
+                    return null;
+                }
+
+                var target = item.Substring(0, separator).Trim();
+                var value = item.Substring(separator + 1).Trim();
+                string existing;
+                if (targetValues.TryGetValue(target, out existing) &&
+                    !string.Equals(existing, value, StringComparison.OrdinalIgnoreCase))
+                {
+                    LastReason = "В одной фразе обнаружены противоречивые команды для одного устройства. Ничего не отправлено.";
+                    return null;
+                }
+
+                targetValues[target] = value;
+                if (!uniqueCommands.Contains(item, StringComparer.OrdinalIgnoreCase))
+                    uniqueCommands.Add(item);
+            }
+            commands = uniqueCommands;
+
+            if (commands.Count > 5)
+            {
+                LastReason = "За одну фразу можно выполнить не более пяти действий.";
                 return null;
             }
 
@@ -113,13 +154,20 @@ namespace ESP32AIControl.WP81.Core.Voice
                 return null;
             }
 
+            if (executeAt.HasValue && commands.Count > 1)
+            {
+                LastReason = "Пока нельзя безопасно запланировать несколько команд одной фразой. Скажите их отдельно.";
+                return null;
+            }
+
             return new ParsedVoiceCommand
             {
-                Command = command.Trim(),
+                Command = commands[0].Trim(),
+                Commands = commands,
                 ExecuteAt = executeAt,
                 RequiresConfirmation = requiresConfirmation,
                 ConfirmationText = requiresConfirmation
-                    ? "Марфа предлагает выполнить команду:\n" + command.Trim() +
+                    ? "Марфа предлагает выполнить команды:\n" + string.Join("\n", commands.ToArray()) +
                       (executeAt.HasValue ? "\nВремя: " + executeAt.Value.ToString("g") : string.Empty)
                     : string.Empty
             };
