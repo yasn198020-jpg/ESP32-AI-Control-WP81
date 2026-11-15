@@ -156,7 +156,7 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             var widgets = _devices.GetWidgetsSnapshot();
             var targetPage = targetState == null ? string.Empty : (targetState.Page ?? string.Empty);
             var targetDescription = targetState == null ? string.Empty : (targetState.Description ?? string.Empty);
-            WidgetState candidate = null;
+            var bestCandidates = new List<WidgetState>();
             var bestScore = 0;
 
             for (var i = 0; i < widgets.Count; i++)
@@ -170,10 +170,32 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                 if (string.Equals(w.DeviceId, target.DeviceId, StringComparison.OrdinalIgnoreCase)) score += 2;
                 if (HasAny(w.Description, ManualWords)) score += 2;
                 if (score == 0) continue;
-                if (score > bestScore) { bestScore = score; candidate = w; }
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    bestCandidates.Clear();
+                    bestCandidates.Add(w);
+                }
+                else if (score == bestScore)
+                {
+                    bestCandidates.Add(w);
+                }
             }
 
-            if (candidate == null || !IsValue(candidate.Value, "0")) return;
+            if (bestCandidates.Count == 0) return;
+            if (bestCandidates.Count > 1)
+            {
+                var requiresChange = bestCandidates.Any(x => IsValue(x.Value, "0"));
+                if (requiresChange)
+                    throw new InvalidOperationException(
+                        "Не удалось однозначно определить переключатель автоматического режима для " +
+                        (string.IsNullOrWhiteSpace(targetDescription) ? target.WidgetId : targetDescription) +
+                        ". Уточните виджет автоматического режима; команда не отправлена.");
+                return;
+            }
+
+            var candidate = bestCandidates[0];
+            if (!IsValue(candidate.Value, "0")) return;
             if (ContainsAction(plan, candidate.DeviceId, candidate.Id, "1")) return;
 
             plan.Actions.Add(new ScenarioAction
