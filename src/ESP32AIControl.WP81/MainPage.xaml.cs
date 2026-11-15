@@ -510,9 +510,16 @@ namespace ESP32AIControl.WP81
             var definition = NormalizeType(state.DefinitionName);
             var isSwitch = type == "switch" || type == "toggle" || type == "checkbox" || type == "vbutton" || type == "inputbool";
             var isAction = type == "button" || type == "action" || type == "buttonout" || type == "buttonin" || type == "pushbutton";
-            var isSlider = type == "slider" || type == "range" || type == "inputdgt" || type == "inputint" || type == "inputfloat" || definition == "inputdgt";
-            var isInput = !isSwitch && !isAction && !isSlider &&
-                          (type == "input" || type == "inputtext" || type == "text" || type == "inputstr" || type == "inputstring");
+            var isRange = definition == "range" || definition == "rangeservo" || type == "range" || type == "rangeservo";
+            var isSlider = isRange || type == "slider";
+            var isNumericInput = definition == "inputdgt" || type == "inputdgt" || type == "inputint" || type == "inputfloat" || type == "number";
+            var isDateInput = definition == "inputdate" || type == "inputdate";
+            var isTimeInput = definition == "inputtm" || type == "inputtm";
+            var isSelect = definition == "select" || type == "select";
+            var isProgress = definition == "progressline" || definition == "progressround" || definition == "fillgauge" || type == "progress";
+            var isChart = definition.StartsWith("chart", StringComparison.Ordinal) || type == "chart";
+            var isInput = !isSwitch && !isAction && !isSlider && !isNumericInput && !isDateInput && !isTimeInput && !isSelect && !isProgress && !isChart &&
+                          (type == "input" || type == "inputtext" || type == "text" || type == "inputtxt" || type == "inputstr" || type == "inputstring" || definition == "inputtxt");
 
             var shell = new Border
             {
@@ -531,7 +538,7 @@ namespace ESP32AIControl.WP81
 
             var icon = new TextBlock
             {
-                Text = isSwitch ? "◉" : (isAction ? "●" : "◆"),
+                Text = isSwitch ? "◉" : (isAction ? "●" : (isRange || isSlider ? "◌" : (isProgress ? "◍" : (isChart ? "▥" : "◆")))),
                 FontSize = 21,
                 Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 128, 101, 232)),
                 VerticalAlignment = VerticalAlignment.Center,
@@ -615,34 +622,37 @@ namespace ESP32AIControl.WP81
             else if (isSlider)
             {
                 var minimum = ReadWidgetNumber(state.Minimum, 0);
-                var maximum = ReadWidgetNumber(state.Maximum, 100);
+                var maximum = ReadWidgetNumber(state.Maximum, definition == "rangeservo" ? 180 : 100);
                 if (maximum <= minimum) maximum = minimum + 100;
                 var step = ReadWidgetNumber(state.Step, 1);
+                var scale = ReadWidgetNumber(state.ScaleFactor, 1);
                 if (step <= 0) step = 1;
+                if (scale == 0) scale = 1;
                 var slider = new Slider
                 {
                     Minimum = minimum, Maximum = maximum, StepFrequency = step,
                     Width = 280, HorizontalAlignment = HorizontalAlignment.Stretch,
                     Margin = new Thickness(34, 2, 0, 0)
                 };
-                slider.ValueChanged += async delegate(object s, RangeBaseValueChangedEventArgs ev)
+                slider.PointerReleased += async delegate
                 {
                     if (_syncingControls) return;
-                    await PublishControl(visual, ev.NewValue.ToString(CultureInfo.InvariantCulture));
+                    await PublishControl(visual, (slider.Value / scale).ToString("0.####", CultureInfo.InvariantCulture));
                 };
                 visual.Control = slider;
                 visual.SliderControl = slider;
                 visual.Container.Children.Add(slider);
                 visual.UnitText = new TextBlock
                 {
-                    Text = string.IsNullOrWhiteSpace(state.Unit) ? string.Empty : state.Unit,
+                    Text = "Диапазон " + FormatWidgetNumber(minimum) + " … " + FormatWidgetNumber(maximum) +
+                           (string.IsNullOrWhiteSpace(state.Unit) ? string.Empty : " " + state.Unit),
                     FontSize = 11,
                     Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 156, 163, 175)),
                     Margin = new Thickness(34, 0, 0, 0)
                 };
                 visual.Container.Children.Add(visual.UnitText);
             }
-            else if (isInput)
+            else if (isNumericInput || isInput)
             {
                 var inputRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(34, 4, 0, 0) };
                 var input = new TextBox { Text = state.Value ?? string.Empty, Width = 210, MinWidth = 100, FontSize = 16 };
@@ -657,6 +667,83 @@ namespace ESP32AIControl.WP81
                 inputRow.Children.Add(input);
                 inputRow.Children.Add(send);
                 visual.Container.Children.Add(inputRow);
+            }
+            else if (isDateInput)
+            {
+                var dateRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(34, 4, 0, 0) };
+                var date = new DatePicker { HorizontalAlignment = HorizontalAlignment.Left, Width = 210 };
+                DateTimeOffset parsedDate;
+                if (DateTimeOffset.TryParse(state.Value, CultureInfo.CurrentCulture, DateTimeStyles.None, out parsedDate)) date.Date = parsedDate;
+                var sendDate = new Button { Content = "Отправить", Margin = new Thickness(8, 0, 0, 0) };
+                sendDate.Click += async delegate { await PublishControl(visual, date.Date.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture)); };
+                visual.DateControl = date;
+                dateRow.Children.Add(date); dateRow.Children.Add(sendDate);
+                visual.Container.Children.Add(dateRow);
+            }
+            else if (isTimeInput)
+            {
+                var timeRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(34, 4, 0, 0) };
+                var time = new TimePicker { HorizontalAlignment = HorizontalAlignment.Left, Width = 210 };
+                TimeSpan parsedTime;
+                if (TimeSpan.TryParse(state.Value, out parsedTime)) time.Time = parsedTime;
+                var sendTime = new Button { Content = "Отправить", Margin = new Thickness(8, 0, 0, 0) };
+                sendTime.Click += async delegate { await PublishControl(visual, time.Time.ToString(@"hh\:mm", CultureInfo.InvariantCulture)); };
+                visual.TimeControl = time;
+                timeRow.Children.Add(time); timeRow.Children.Add(sendTime);
+                visual.Container.Children.Add(timeRow);
+            }
+            else if (isSelect)
+            {
+                var select = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(34, 4, 0, 0) };
+                var options = state.Options ?? new string[0];
+                if (options.Length == 0) options = new[] { "Выключен", "Включен" };
+                foreach (var option in options) select.Items.Add(option);
+                int selected;
+                if (!int.TryParse(state.Value, out selected)) selected = 0;
+                select.SelectedIndex = Math.Max(0, Math.Min(options.Length - 1, selected));
+                select.SelectionChanged += async delegate
+                {
+                    if (_syncingControls || select.SelectedIndex < 0) return;
+                    await PublishControl(visual, select.SelectedIndex.ToString(CultureInfo.InvariantCulture));
+                };
+                visual.SelectControl = select;
+                visual.Control = select;
+                visual.Container.Children.Add(select);
+            }
+            else if (isProgress)
+            {
+                var maximum = ReadWidgetNumber(state.Maximum, 100);
+                if (maximum <= 0) maximum = 100;
+                var progress = new ProgressBar
+                {
+                    Minimum = 0, Maximum = maximum,
+                    Value = Math.Max(0, Math.Min(maximum, ReadWidgetNumber(state.Value, 0))),
+                    Height = 12, Margin = new Thickness(34, 8, 8, 4)
+                };
+                visual.ProgressControl = progress;
+                visual.Container.Children.Add(progress);
+                visual.UnitText = new TextBlock
+                {
+                    Text = (state.Value ?? "0") + " / " + FormatWidgetNumber(maximum) +
+                           (string.IsNullOrWhiteSpace(state.Unit) ? string.Empty : " " + state.Unit),
+                    FontSize = 11, Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 156, 163, 175)),
+                    Margin = new Thickness(34, 0, 0, 0)
+                };
+                visual.Container.Children.Add(visual.UnitText);
+            }
+            else if (isChart)
+            {
+                var chartInfo = new TextBlock
+                {
+                    Text = "История измерений и график доступны в разделе «История»",
+                    FontSize = 12, TextWrapping = TextWrapping.Wrap,
+                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 156, 163, 175)),
+                    Margin = new Thickness(34, 4, 0, 0)
+                };
+                var openChart = new Button { Content = "Открыть график", HorizontalAlignment = HorizontalAlignment.Right };
+                openChart.Click += delegate { OpenWidgetHistory(visual.State); };
+                visual.Container.Children.Add(chartInfo);
+                visual.Container.Children.Add(openChart);
             }
             else if (!isSwitch)
             {
@@ -696,7 +783,9 @@ namespace ESP32AIControl.WP81
                      !string.Equals(visual.State.Minimum, state.Minimum, StringComparison.Ordinal) ||
                      !string.Equals(visual.State.Maximum, state.Maximum, StringComparison.Ordinal) ||
                      !string.Equals(visual.State.Step, state.Step, StringComparison.Ordinal) ||
-                     !string.Equals(visual.State.Unit, state.Unit, StringComparison.Ordinal));
+                     !string.Equals(visual.State.Unit, state.Unit, StringComparison.Ordinal) ||
+                     !string.Equals(visual.State.WarningMinimum, state.WarningMinimum, StringComparison.Ordinal) ||
+                     !string.Equals(visual.State.WarningMaximum, state.WarningMaximum, StringComparison.Ordinal));
                 if (configurationChanged)
                 {
                     PageVisual oldPage;
@@ -847,6 +936,27 @@ namespace ESP32AIControl.WP81
 
             if (visual.InputControl != null && visual.InputControl.FocusState == FocusState.Unfocused)
                 visual.InputControl.Text = value ?? string.Empty;
+            if (visual.SelectControl != null)
+            {
+                int selected;
+                if (int.TryParse(value, out selected) && selected >= 0 && selected < visual.SelectControl.Items.Count)
+                    visual.SelectControl.SelectedIndex = selected;
+            }
+            if (visual.ProgressControl != null)
+                visual.ProgressControl.Value = Math.Max(0, Math.Min(visual.ProgressControl.Maximum, ReadWidgetNumber(value, 0)));
+        }
+
+        private static string FormatWidgetNumber(double value)
+        {
+            return value.ToString("0.##", CultureInfo.InvariantCulture);
+        }
+
+        private void OpenWidgetHistory(WidgetState state)
+        {
+            if (state == null) return;
+            if (ContainsComboValue(GraphWidgetBox, state.Key)) GraphWidgetBox.SelectedItem = state.Key;
+            ShowSection(2);
+            BuildGraphButton_Click(this, new RoutedEventArgs());
         }
 
         private static double ReadWidgetNumber(string value, double fallback)
@@ -1359,6 +1469,10 @@ namespace ESP32AIControl.WP81
             public CheckBox SwitchControl { get; set; }
             public TextBox InputControl { get; set; }
             public TextBlock UnitText { get; set; }
+            public ComboBox SelectControl { get; set; }
+            public ProgressBar ProgressControl { get; set; }
+            public DatePicker DateControl { get; set; }
+            public TimePicker TimeControl { get; set; }
             public FrameworkElement Control { get; set; }
         }
 
