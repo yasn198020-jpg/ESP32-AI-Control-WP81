@@ -24,6 +24,7 @@ namespace ESP32AIControl.WP81.Core.Voice
         private readonly NaturalVoiceTargetResolver _naturalResolver;
 
         public string LastReason { get; private set; }
+        public IList<VoiceTargetOption> LastAmbiguousOptions { get; private set; }
 
         public VoiceCommandParser(
             string openCommand,
@@ -37,7 +38,13 @@ namespace ESP32AIControl.WP81.Core.Voice
 
         public ParsedVoiceCommand Parse(string text)
         {
+            return Parse(text, null);
+        }
+
+        public ParsedVoiceCommand Parse(string text, IList<string> selectedAmbiguousCommands)
+        {
             LastReason = null;
+            LastAmbiguousOptions = new List<VoiceTargetOption>();
             if (string.IsNullOrWhiteSpace(text))
             {
                 LastReason = "Пустая голосовая команда.";
@@ -93,7 +100,10 @@ namespace ESP32AIControl.WP81.Core.Voice
                 if (commands.Count == 0 && _naturalResolver != null)
                 {
                     string reason;
-                    var resolved = _naturalResolver.ResolveCommands(original, out reason);
+                    IList<VoiceTargetOption> ambiguousOptions;
+                    var resolved = _naturalResolver.ResolveCommands(
+                        original, selectedAmbiguousCommands, out reason, out ambiguousOptions);
+                    LastAmbiguousOptions = ambiguousOptions ?? new List<VoiceTargetOption>();
                     if (!string.IsNullOrWhiteSpace(reason))
                         LastReason = reason;
                     if (resolved != null)
