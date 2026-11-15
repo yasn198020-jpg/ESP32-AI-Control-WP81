@@ -1418,15 +1418,31 @@ namespace ESP32AIControl.WP81
         {
             try
             {
-                var points = await _measurementStore.ReadAsync(
-                    state.DeviceId, state.Id, DateTimeOffset.Now.AddDays(-7), DateTimeOffset.Now);
+                var chartSamples = ParseInlineChartPayload(state.StatusPayload);
+                if (chartSamples.Count == 0)
+                {
+                    var points = await _measurementStore.ReadAsync(
+                        state.DeviceId, state.Id, DateTimeOffset.Now.AddDays(-7), DateTimeOffset.Now);
+                    chartSamples = new List<Tuple<double?, double?, double?>>();
+                    foreach (var point in points)
+                    {
+                        double number;
+                        if (double.TryParse((point.Value ?? string.Empty).Replace(',', '.'),
+                            NumberStyles.Float, CultureInfo.InvariantCulture, out number) &&
+                            !double.IsNaN(number) && !double.IsInfinity(number))
+                            chartSamples.Add(Tuple.Create((double?)number, (double?)null, (double?)null));
+                    }
+                }
+
+                if (chartSamples.Count > 48)
+                    chartSamples = chartSamples.Skip(chartSamples.Count - 48).ToList();
 
                 await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, delegate
                 {
                     WidgetVisual current;
                     if (_visuals.TryGetValue(state.Key, out current) && object.ReferenceEquals(current, visual))
                     {
-                        visual.InlineChartPoints = points;
+                        visual.InlineChartSamples = chartSamples;
                         DrawInlineChart(visual);
                     }
                     visual.InlineChartLoading = false;
@@ -1442,6 +1458,56 @@ namespace ESP32AIControl.WP81
             }
         }
 
+        private static IList<Tuple<double?, double?, double?>> ParseInlineChartPayload(string payload)
+        {
+            var result = new List<Tuple<double?, double?, double?>>();
+            if (string.IsNullOrWhiteSpace(payload))
+                return result;
+
+            var status = System.Text.RegularExpressions.Regex.Match(
+                payload, "\\\"status\\\"\\s*:\\s*\\[(.*?)\\]",
+                System.Text.RegularExpressions.RegexOptions.Singleline);
+            if (!status.Success)
+                return result;
+
+            var objects = System.Text.RegularExpressions.Regex.Matches(status.Groups[1].Value, "\\{[^{}]*\\}");
+            foreach (System.Text.RegularExpressions.Match item in objects)
+            {
+                var first = ReadJsonNumber(item.Value, "y1");
+                var second = ReadJsonNumber(item.Value, "y2");
+                var third = ReadJsonNumber(item.Value, "y3");
+
+                if (!first.HasValue && !second.HasValue && !third.HasValue)
+                {
+                    first = ReadJsonNumber(item.Value, "y");
+                    if (!first.HasValue) first = ReadJsonNumber(item.Value, "value");
+                }
+
+                if (first.HasValue || second.HasValue || third.HasValue)
+                    result.Add(Tuple.Create(first, second, third));
+            }
+
+            return result;
+        }
+
+        private static double? ReadJsonNumber(string json, string name)
+        {
+            var pattern = "\\\"" + System.Text.RegularExpressions.Regex.Escape(name) +
+                "\\\"\\s*:\\s*(-?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?)";
+            var match = System.Text.RegularExpressions.Regex.Match(
+                json ?? string.Empty, pattern,
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (!match.Success)
+                return null;
+
+            double value;
+            if (!double.TryParse(match.Groups[1].Value, NumberStyles.Float,
+                CultureInfo.InvariantCulture, out value) ||
+                double.IsNaN(value) || double.IsInfinity(value))
+                return null;
+            return value;
+        }
+
         private void DrawInlineChart(WidgetVisual visual)
         {
             if (visual == null || visual.InlineChartCanvas == null)
@@ -1451,33 +1517,19 @@ namespace ESP32AIControl.WP81
             canvas.Children.Clear();
             var width = canvas.ActualWidth >= 120 ? canvas.ActualWidth : 300.0;
             var height = canvas.ActualHeight >= 40 ? canvas.ActualHeight : 92.0;
-            const double left = 28.0;
+            const double left = 30.0;
             const double rightPadding = 8.0;
             const double top = 10.0;
             const double bottomPadding = 12.0;
             var plotWidth = Math.Max(1.0, width - left - rightPadding);
             var plotHeight = Math.Max(1.0, height - top - bottomPadding);
+            var samples = visual.InlineChartSamples ?? new List<Tuple<double?, double?, double?>>();
 
-            var numeric = new List<double>();
-            var source = visual.InlineChartPoints;
-            if (source != null)
-            {
-                var start = Math.Max(0, source.Count - 48);
-                for (var i = start; i < source.Count; i++)
-                {
-                    double value;
-                    if (double.TryParse((source[i].Value ?? string.Empty).Replace(',', '.'),
-                        NumberStyles.Float, CultureInfo.InvariantCulture, out value) &&
-                        !double.IsNaN(value) && !double.IsInfinity(value))
-                        numeric.Add(value);
-                }
-            }
-
-            if (numeric.Count == 0)
+            if (samples.Count == 0)
             {
                 var empty = new TextBlock
                 {
-                    Text = visual.InlineChartLoading ? "Загрузка истории…" : "Ожидание измерений",
+                    Text = visual.InlineChartLoading ? "Загрузка истории…" : "Нет данных графика",
                     FontSize = 11,
                     Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 156, 163, 175))
                 };
@@ -1487,8 +1539,39 @@ namespace ESP32AIControl.WP81
                 return;
             }
 
-            var min = numeric.Min();
-            var max = numeric.Max();
+            var definition = NormalizeType(visual.State.DefinitionName);
+            var isBar = definition == "chart3" || definition == "chart4" ||
+                System.Text.RegularExpressions.Regex.IsMatch(
+                    visual.State.ConfigJson ?? string.Empty,
+                    "\\\"type\\\"\\s*:\\s*\\\"bar\\\"",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            var showPoints = definition == "chart2" ||
+                (definition != "chart1" && !System.Text.RegularExpressions.Regex.IsMatch(
+                    visual.State.ConfigJson ?? string.Empty,
+                    "\\\"pointRadius\\\"\\s*:\\s*0(?:\\D|$)",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase));
+
+            var seriesValues = new List<List<double>>();
+            for (var seriesIndex = 0; seriesIndex < 3; seriesIndex++)
+            {
+                var values = new List<double>();
+                foreach (var sample in samples)
+                {
+                    var value = seriesIndex == 0 ? sample.Item1 :
+                        (seriesIndex == 1 ? sample.Item2 : sample.Item3);
+                    if (value.HasValue)
+                        values.Add(value.Value);
+                }
+                if (values.Count > 0)
+                    seriesValues.Add(values);
+            }
+
+            if (seriesValues.Count == 0)
+                return;
+
+            var allValues = seriesValues.SelectMany(delegate(List<double> values) { return values; }).ToList();
+            var min = allValues.Min();
+            var max = allValues.Max();
             if (Math.Abs(max - min) < 0.000001) max = min + 1.0;
 
             for (var grid = 0; grid < 3; grid++)
@@ -1496,39 +1579,99 @@ namespace ESP32AIControl.WP81
                 var y = top + plotHeight * grid / 2.0;
                 canvas.Children.Add(new Line
                 {
-                    X1 = left,
-                    Y1 = y,
-                    X2 = width - rightPadding,
-                    Y2 = y,
+                    X1 = left, Y1 = y, X2 = width - rightPadding, Y2 = y,
                     Stroke = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 63, 66, 74)),
                     StrokeThickness = 1
                 });
             }
 
-            var line = new Polyline
+            var colors = new[]
             {
-                Stroke = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 105, 145, 245)),
-                StrokeThickness = 2
+                Windows.UI.Color.FromArgb(255, 105, 145, 245),
+                Windows.UI.Color.FromArgb(255, 102, 187, 106),
+                Windows.UI.Color.FromArgb(255, 255, 179, 0)
             };
-            var points = new PointCollection();
-            for (var i = 0; i < numeric.Count; i++)
+
+            for (var seriesIndex = 0; seriesIndex < seriesValues.Count; seriesIndex++)
             {
-                var x = left + (numeric.Count == 1 ? plotWidth / 2.0 : plotWidth * i / (numeric.Count - 1));
-                var y = top + (1.0 - (numeric[i] - min) / (max - min)) * plotHeight;
-                points.Add(new Windows.Foundation.Point(x, y));
+                var values = seriesValues[seriesIndex];
+                var color = colors[seriesIndex % colors.Length];
+                if (isBar)
+                {
+                    var groupWidth = plotWidth / Math.Max(1, samples.Count);
+                    var barWidth = Math.Max(1.0, groupWidth / seriesValues.Count - 1.0);
+                    var valueIndex = 0;
+                    for (var sampleIndex = 0; sampleIndex < samples.Count; sampleIndex++)
+                    {
+                        var sample = samples[sampleIndex];
+                        var value = seriesIndex == 0 ? sample.Item1 :
+                            (seriesIndex == 1 ? sample.Item2 : sample.Item3);
+                        if (!value.HasValue) continue;
+                        var x = left + sampleIndex * groupWidth + seriesIndex * barWidth;
+                        var normalized = (value.Value - min) / (max - min);
+                        var barHeight = Math.Max(1.0, normalized * plotHeight);
+                        var bar = new Rectangle
+                        {
+                            Width = barWidth,
+                            Height = barHeight,
+                            Fill = new SolidColorBrush(color)
+                        };
+                        Canvas.SetLeft(bar, x);
+                        Canvas.SetTop(bar, top + plotHeight - barHeight);
+                        canvas.Children.Add(bar);
+                        valueIndex++;
+                    }
+                }
+                else
+                {
+                    var line = new Polyline
+                    {
+                        Stroke = new SolidColorBrush(color),
+                        StrokeThickness = 2
+                    };
+                    var points = new PointCollection();
+                    var pointIndex = 0;
+                    foreach (var sample in samples)
+                    {
+                        var value = seriesIndex == 0 ? sample.Item1 :
+                            (seriesIndex == 1 ? sample.Item2 : sample.Item3);
+                        if (!value.HasValue) continue;
+                        var x = left + (samples.Count == 1 ? plotWidth / 2.0 :
+                            plotWidth * pointIndex / Math.Max(1, values.Count - 1));
+                        var y = top + (1.0 - (value.Value - min) / (max - min)) * plotHeight;
+                        points.Add(new Windows.Foundation.Point(x, y));
+                        pointIndex++;
+                    }
+                    line.Points = points;
+                    canvas.Children.Add(line);
+
+                    if (showPoints)
+                    {
+                        foreach (var point in points)
+                        {
+                            var dot = new Ellipse
+                            {
+                                Width = 5,
+                                Height = 5,
+                                Fill = new SolidColorBrush(color)
+                            };
+                            Canvas.SetLeft(dot, point.X - 2.5);
+                            Canvas.SetTop(dot, point.Y - 2.5);
+                            canvas.Children.Add(dot);
+                        }
+                    }
+                }
             }
-            line.Points = points;
-            canvas.Children.Add(line);
 
             var high = new TextBlock
             {
-                Text = FormatWidgetNumber(numeric.Max()),
+                Text = FormatWidgetNumber(allValues.Max()),
                 FontSize = 9,
                 Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 156, 163, 175))
             };
             var low = new TextBlock
             {
-                Text = FormatWidgetNumber(numeric.Min()),
+                Text = FormatWidgetNumber(allValues.Min()),
                 FontSize = 9,
                 Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 156, 163, 175))
             };
@@ -2182,7 +2325,7 @@ namespace ESP32AIControl.WP81
             public Canvas GaugeCanvas { get; set; }
             public bool IsFillGauge { get; set; }
             public Canvas InlineChartCanvas { get; set; }
-            public IList<MeasurementPoint> InlineChartPoints { get; set; }
+            public IList<Tuple<double?, double?, double?>> InlineChartSamples { get; set; }
             public bool InlineChartLoading { get; set; }
             public DateTimeOffset LastInlineChartRefresh { get; set; }
             public DatePicker DateControl { get; set; }
