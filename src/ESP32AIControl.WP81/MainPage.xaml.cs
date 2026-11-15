@@ -110,6 +110,7 @@ namespace ESP32AIControl.WP81
                 await CleanupHistoryAsync();
                 await RefreshScheduleAsync();
                 RefreshGraphWidgets();
+                UpdateNavigationChrome();
                 Log("Приложение и локальное хранилище готовы.");
             }
             catch (Exception ex)
@@ -130,13 +131,77 @@ namespace ESP32AIControl.WP81
 
         private void ShowSection(int index)
         {
+            if (index < 0 || index >= MainPivot.Items.Count)
+                return;
+
+            NavigationPopup.IsOpen = false;
             MainPivot.SelectedIndex = index;
+            UpdateNavigationChrome();
         }
 
+        private void MainPivot_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            UpdateNavigationChrome();
+        }
+
+        private void UpdateNavigationChrome()
+        {
+            switch (MainPivot.SelectedIndex)
+            {
+                case 0: PageTitleText.Text = "Главная"; break;
+                case 1: PageTitleText.Text = "Команды"; break;
+                case 2: PageTitleText.Text = "История и графики"; break;
+                case 3: PageTitleText.Text = "Отложенные команды"; break;
+                case 4: PageTitleText.Text = "Настройки"; break;
+                case 5: PageTitleText.Text = "Сценарии"; break;
+                case 6: PageTitleText.Text = "Журнал"; break;
+                default: PageTitleText.Text = "ESP32 AI Control"; break;
+            }
+
+            SetNavigationButtonState(NavHomeButton, MainPivot.SelectedIndex == 0);
+            SetNavigationButtonState(NavCommandsButton, MainPivot.SelectedIndex == 1);
+            SetNavigationButtonState(NavHistoryButton, MainPivot.SelectedIndex == 2);
+            SetNavigationButtonState(NavPendingButton, MainPivot.SelectedIndex == 3);
+            SetNavigationButtonState(NavMarfaButton, false);
+        }
+
+        private void SetNavigationButtonState(Button button, bool selected)
+        {
+            button.Background = new SolidColorBrush(
+                selected
+                    ? Windows.UI.Color.FromArgb(255, 55, 58, 66)
+                    : Windows.UI.Color.FromArgb(0, 0, 0, 0));
+            button.Foreground = new SolidColorBrush(
+                selected
+                    ? Windows.UI.Color.FromArgb(255, 255, 255, 255)
+                    : Windows.UI.Color.FromArgb(255, 189, 189, 189));
+        }
+
+        private void MenuButton_Click(object sender, RoutedEventArgs e)
+        {
+            NavigationPopup.IsOpen = !NavigationPopup.IsOpen;
+        }
+
+        private void MenuScenarios_Click(object sender, RoutedEventArgs e) { ShowSection(5); }
+        private void MenuJournal_Click(object sender, RoutedEventArgs e) { ShowSection(6); }
+        private void MenuSettings_Click(object sender, RoutedEventArgs e) { ShowSection(4); }
+        private void MenuHistory_Click(object sender, RoutedEventArgs e) { ShowSection(2); }
+        private void MenuPending_Click(object sender, RoutedEventArgs e) { ShowSection(3); }
+
+        private void CommandsNavigation_Click(object sender, RoutedEventArgs e) { ShowSection(1); }
+        private void HistoryNavigation_Click(object sender, RoutedEventArgs e) { ShowSection(2); }
+        private void PendingNavigation_Click(object sender, RoutedEventArgs e) { ShowSection(3); }
+        private void MarfaNavigation_Click(object sender, RoutedEventArgs e) { VoiceButton_Click(sender, e); }
+
         private void NavigateHome_Click(object sender, RoutedEventArgs e) { ShowSection(0); }
-        private void NavigateGraphs_Click(object sender, RoutedEventArgs e) { ShowSection(1); }
-        private void NavigateTasks_Click(object sender, RoutedEventArgs e) { ShowSection(2); }
-        private void NavigateSettings_Click(object sender, RoutedEventArgs e) { ShowSection(3); }
+        private void NavigateGraphs_Click(object sender, RoutedEventArgs e) { ShowSection(2); }
+        private void NavigateTasks_Click(object sender, RoutedEventArgs e) { ShowSection(3); }
+        private void NavigateSettings_Click(object sender, RoutedEventArgs e) { ShowSection(4); }
+
+        private void ClearLogButton_Click(object sender, RoutedEventArgs e)
+        {
+            LogText.Text = string.Empty;
+        }
 
         private async void ConnectButton_Click(object sender, RoutedEventArgs e)
         {
@@ -201,7 +266,6 @@ namespace ESP32AIControl.WP81
                 _appSettings.AutoExportPeriod = GetAutoExportTag();
                 _appSettings.VoiceOpenCommand = VoiceOpenCommandBox.Text.Trim();
                 _appSettings.VoiceCloseCommand = VoiceCloseCommandBox.Text.Trim();
-                _appSettings.IoTManagerScenario = ScenarioTextBox.Text ?? string.Empty;
 
                 _voiceParser = new VoiceCommandParser(
                     _appSettings.VoiceOpenCommand,
@@ -247,6 +311,12 @@ namespace ESP32AIControl.WP81
             RetentionDaysBox.Text = _appSettings.RetentionDays.ToString(CultureInfo.InvariantCulture);
             VoiceOpenCommandBox.Text = _appSettings.VoiceOpenCommand;
             VoiceCloseCommandBox.Text = _appSettings.VoiceCloseCommand;
+            OpenCommandSummary.Text = string.IsNullOrWhiteSpace(_appSettings.VoiceOpenCommand)
+                ? "Команда не настроена. Укажите MQTT-цель в настройках."
+                : _appSettings.VoiceOpenCommand;
+            CloseCommandSummary.Text = string.IsNullOrWhiteSpace(_appSettings.VoiceCloseCommand)
+                ? "Команда не настроена. Укажите MQTT-цель в настройках."
+                : _appSettings.VoiceCloseCommand;
             ScenarioTextBox.Text = _appSettings.IoTManagerScenario;
 
             foreach (var item in AutoExportBox.Items)
@@ -289,12 +359,12 @@ namespace ESP32AIControl.WP81
                 _commandExecutor.SetScenarioScript(scenario);
                 await _settingsStore.SaveAsync(_appSettings);
 
-                SettingsStatus.Text = "Сценарий IoTManager загружен.";
+                ScenarioStatus.Text = "Сценарий IoTManager загружен.";
                 Log("SCENARIO IMPORT: " + file.Name);
             }
             catch (Exception ex)
             {
-                SettingsStatus.Text = "Ошибка импорта сценария: " + ex.Message;
+                ScenarioStatus.Text = "Ошибка импорта сценария: " + ex.Message;
                 Log("SCENARIO IMPORT ERROR: " + ex.Message);
             }
         }
@@ -320,12 +390,30 @@ namespace ESP32AIControl.WP81
                 if (!string.IsNullOrEmpty(close))
                     LogScenarioPlan("CLOSE", close);
 
-                SettingsStatus.Text = "План проверен. См. диагностику MQTT.";
+                ScenarioStatus.Text = "План проверен. Подробности — в журнале.";
             }
             catch (Exception ex)
             {
-                SettingsStatus.Text = "Ошибка проверки: " + ex.Message;
+                ScenarioStatus.Text = "Ошибка проверки: " + ex.Message;
                 Log("SCENARIO TEST ERROR: " + ex.Message);
+            }
+        }
+
+        private async void SaveScenarioButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                _appSettings.IoTManagerScenario = ScenarioTextBox.Text ?? string.Empty;
+                _commandExecutor.SetScenarioScript(_appSettings.IoTManagerScenario);
+                await _settingsStore.SaveAsync(_appSettings);
+                ScenarioStatus.Text = "Сценарий сохранён.";
+                Log("SCENARIO SAVED. Rules: " +
+                    _commandExecutor.GetScenarioRuleCount().ToString(CultureInfo.InvariantCulture));
+            }
+            catch (Exception ex)
+            {
+                ScenarioStatus.Text = "Ошибка сохранения: " + ex.Message;
+                Log("SCENARIO SAVE ERROR: " + ex.Message);
             }
         }
 
@@ -381,6 +469,10 @@ namespace ESP32AIControl.WP81
             await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, delegate
             {
                 ConnectionText.Text = "MQTT: " + e.State;
+                var isConnected = e.State == MqttConnectionState.Connected;
+                TopConnectionText.Text = isConnected ? "ON" : "OFF";
+                ConnectionIndicator.Fill = new SolidColorBrush(
+                    isConnected ? Windows.UI.Colors.LimeGreen : Windows.UI.Colors.IndianRed);
             });
         }
 
@@ -407,10 +499,11 @@ namespace ESP32AIControl.WP81
 
             var shell = new Border
             {
-                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 27, 29, 36)),
-                Padding = new Thickness(10, 9, 10, 9),
-                BorderThickness = new Thickness(0, 0, 0, 1),
-                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 47, 49, 59))
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 43, 43, 43)),
+                Padding = new Thickness(12, 10, 12, 10),
+                BorderThickness = new Thickness(1),
+                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 57, 59, 68)),
+                CornerRadius = new CornerRadius(12)
             };
 
             var row = new Grid();
@@ -422,7 +515,7 @@ namespace ESP32AIControl.WP81
             {
                 Text = isSwitch ? "◉" : (isAction ? "●" : "◆"),
                 FontSize = 21,
-                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 177, 92, 255)),
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 128, 101, 232)),
                 VerticalAlignment = VerticalAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Left
             };
@@ -473,7 +566,7 @@ namespace ESP32AIControl.WP81
             {
                 var valueBadge = new Border
                 {
-                    Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 25, 118, 210)),
+                    Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 48, 54, 64)),
                     Child = visual.ValueText,
                     Padding = new Thickness(5, 5, 5, 5),
                     MinWidth = 76,
