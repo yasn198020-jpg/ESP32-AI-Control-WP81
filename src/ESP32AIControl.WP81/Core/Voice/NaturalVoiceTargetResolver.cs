@@ -334,7 +334,7 @@ namespace ESP32AIControl.WP81.Core.Voice
                 {
                     var requested = _selectedAmbiguousCommands[_selectionIndex];
                     var chosen = options.FirstOrDefault(x =>
-                        string.Equals(x.Command, requested, StringComparison.OrdinalIgnoreCase));
+                        string.Equals(x.Command, requested, StringComparison.Ordinal));
                     if (chosen != null)
                     {
                         _selectionIndex++;
@@ -343,7 +343,7 @@ namespace ESP32AIControl.WP81.Core.Voice
                                           (x.Widget.Id ?? string.Empty) + "=" +
                                           (x.IsMomentaryButton ? "1" :
                                               (intent == "open" || intent == "on" || intent == "start" ? "1" : "0")),
-                                chosen.Command, StringComparison.OrdinalIgnoreCase));
+                                chosen.Command, StringComparison.Ordinal));
                     }
                     else
                     {
