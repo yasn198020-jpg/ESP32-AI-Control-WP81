@@ -601,6 +601,7 @@ namespace ESP32AIControl.WP81
                     HorizontalAlignment = HorizontalAlignment.Right,
                     VerticalAlignment = VerticalAlignment.Center
                 };
+                visual.ValueBadge = valueBadge;
                 Grid.SetColumn(valueBadge, 2);
                 row.Children.Add(valueBadge);
             }
@@ -931,9 +932,10 @@ namespace ESP32AIControl.WP81
             if (slider != null)
             {
                 double number;
-                if (double.TryParse((value ?? string.Empty).Replace(',', '.'),
-                    NumberStyles.Float, CultureInfo.InvariantCulture, out number))
-                    slider.Value = Math.Max(slider.Minimum, Math.Min(slider.Maximum, number));
+                var scale = ReadWidgetNumber(visual.State.ScaleFactor, 1);
+                if (scale == 0) scale = 1;
+                if (double.TryParse((value ?? string.Empty).Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out number))
+                    slider.Value = Math.Max(slider.Minimum, Math.Min(slider.Maximum, number * scale));
             }
 
             if (visual.InputControl != null && visual.InputControl.FocusState == FocusState.Unfocused)
@@ -946,6 +948,59 @@ namespace ESP32AIControl.WP81
             }
             if (visual.ProgressControl != null)
                 visual.ProgressControl.Value = Math.Max(0, Math.Min(visual.ProgressControl.Maximum, ReadWidgetNumber(value, 0)));
+            if (visual.DateControl != null)
+            {
+                DateTimeOffset date;
+                if (DateTimeOffset.TryParse(value, CultureInfo.CurrentCulture, DateTimeStyles.None, out date)) visual.DateControl.Date = date;
+            }
+            if (visual.TimeControl != null)
+            {
+                TimeSpan time;
+                if (TimeSpan.TryParse(value, out time)) visual.TimeControl.Time = time;
+            }
+        }
+
+        private static Windows.UI.Color ResolveWidgetColor(string raw, double value)
+        {
+            var fallback = Windows.UI.Color.FromArgb(255, 144, 202, 249);
+            if (double.IsNaN(value) || string.IsNullOrWhiteSpace(raw)) return fallback;
+            var text = raw.Trim();
+            if (text.StartsWith("[", StringComparison.Ordinal))
+            {
+                var matches = System.Text.RegularExpressions.Regex.Matches(text,
+                    "\\{[^}]*\\\"level\\\"\\s*:\\s*(-?[0-9]+(?:\\.[0-9]+)?)[^}]*\\\"value\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"[^}]*\\}");
+                var selectedLevel = double.NegativeInfinity;
+                var selectedColor = string.Empty;
+                foreach (System.Text.RegularExpressions.Match match in matches)
+                {
+                    double level;
+                    if (double.TryParse(match.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out level) && level <= value && level >= selectedLevel)
+                    { selectedLevel = level; selectedColor = match.Groups[2].Value; }
+                }
+                text = selectedColor;
+            }
+            if (text.Length == 7 && text[0] == '#')
+            {
+                byte r, g, b;
+                if (byte.TryParse(text.Substring(1, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out r) &&
+                    byte.TryParse(text.Substring(3, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out g) &&
+                    byte.TryParse(text.Substring(5, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out b))
+                    return Windows.UI.Color.FromArgb(255, r, g, b);
+            }
+            switch (text.ToLowerInvariant())
+            {
+                case "red": return Windows.UI.Colors.Red;
+                case "green": return Windows.UI.Colors.Green;
+                case "blue": return Windows.UI.Colors.Blue;
+                case "orange": return Windows.UI.Colors.Orange;
+                case "yellow": return Windows.UI.Colors.Yellow;
+                case "white": return Windows.UI.Colors.White;
+                case "gray": case "grey": return Windows.UI.Colors.Gray;
+                case "lime": return Windows.UI.Colors.Lime;
+                case "cyan": return Windows.UI.Colors.Cyan;
+                case "magenta": return Windows.UI.Colors.Magenta;
+            }
+            return fallback;
         }
 
         private static string FormatWidgetNumber(double value)
@@ -983,10 +1038,13 @@ namespace ESP32AIControl.WP81
             visual.Shell.BorderBrush = new SolidColorBrush(warning
                 ? Windows.UI.Color.FromArgb(255, 190, 95, 65)
                 : Windows.UI.Color.FromArgb(255, 57, 59, 68));
+            var accent = warning
+                ? Windows.UI.Color.FromArgb(255, 255, 190, 150)
+                : ResolveWidgetColor(state.ColorConfig, number);
             if (visual.ValueText != null)
-                visual.ValueText.Foreground = new SolidColorBrush(warning
-                    ? Windows.UI.Color.FromArgb(255, 255, 190, 150)
-                    : Windows.UI.Colors.White);
+                visual.ValueText.Foreground = new SolidColorBrush(accent);
+            if (visual.ValueBadge != null)
+                visual.ValueBadge.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(42, accent.R, accent.G, accent.B));
             if (visual.UnitText != null)
                 visual.UnitText.Text = (visual.SliderControl == null ? string.Empty :
                     visual.SliderControl.Minimum.ToString(CultureInfo.InvariantCulture) + "–" +
@@ -1472,6 +1530,7 @@ namespace ESP32AIControl.WP81
             public TextBlock Title { get; set; }
             public TextBlock ValueText { get; set; }
             public Border Shell { get; set; }
+            public Border ValueBadge { get; set; }
             public Slider SliderControl { get; set; }
             public CheckBox SwitchControl { get; set; }
             public TextBox InputControl { get; set; }
