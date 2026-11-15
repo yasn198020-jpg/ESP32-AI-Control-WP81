@@ -94,14 +94,14 @@ namespace ESP32AIControl.WP81.Core.Voice
                     clause = Regex.Replace(clause, @"\s+(?:и|а|затем|после этого|далее|and|then)\s*$", string.Empty,
                         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
                     string clauseReason;
-                    var command = ResolveSingleCommand(clause, out clauseReason);
-                    if (string.IsNullOrWhiteSpace(command))
+                    var clauseCommands = ResolveCommands(clause, out clauseReason);
+                    if (clauseCommands == null || clauseCommands.Count == 0)
                     {
                         reason = "Не удалось безопасно разобрать всю фразу. " +
                             (string.IsNullOrWhiteSpace(clauseReason) ? "Уточните каждое действие отдельно." : clauseReason);
                         return new List<string>();
                     }
-                    result.Add(command);
+                    result.AddRange(clauseCommands);
                     if (result.Count > 5)
                     {
                         reason = "За одну фразу можно выполнить не более пяти действий.";
