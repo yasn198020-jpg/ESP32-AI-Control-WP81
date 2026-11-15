@@ -72,6 +72,7 @@ namespace ESP32AIControl.WP81
         public MainPage()
         {
             InitializeComponent();
+            ScenarioEnabledCheckBox.IsChecked = true;
 
             _settingsStore = new AppSettingsStore();
             _appSettings = new AppSettings();
