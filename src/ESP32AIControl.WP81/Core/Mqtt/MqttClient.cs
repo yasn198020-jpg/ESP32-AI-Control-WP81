@@ -34,6 +34,8 @@ namespace ESP32AIControl.WP81.Core.Mqtt
         {
             if (_running)
                 return;
+            if (State == MqttConnectionState.Connecting)
+                throw new InvalidOperationException("MQTT connection is already being established.");
 
             SetState(MqttConnectionState.Connecting);
             _socket = new StreamSocket();
@@ -79,7 +81,11 @@ namespace ESP32AIControl.WP81.Core.Mqtt
             try
             {
                 await WriteAsync(MqttPacketWriter.SubscribePacket(id, topicFilter, qos));
-                var success = await _subscribeCompletion.Task;
+                var completion = _subscribeCompletion.Task;
+                var completed = await Task.WhenAny(completion, Task.Delay(TimeSpan.FromSeconds(15)));
+                if (!object.ReferenceEquals(completed, completion))
+                    throw new TimeoutException("MQTT SUBACK was not received within 15 seconds.");
+                var success = await completion;
                 if (!success)
                     throw new InvalidOperationException("MQTT SUBSCRIBE was rejected.");
             }
