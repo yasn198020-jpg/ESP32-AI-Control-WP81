@@ -11,6 +11,13 @@ namespace ESP32AIControl.WP81.Models
         public string Page { get; set; }
         public int Order { get; set; }
         public string Value { get; set; }
+        public string Unit { get; set; }
+        public string Minimum { get; set; }
+        public string Maximum { get; set; }
+        public string Step { get; set; }
+        public string WarningMinimum { get; set; }
+        public string WarningMaximum { get; set; }
+        public string DefinitionName { get; set; }
         public DateTimeOffset UpdatedAt { get; set; }
 
         public string Key
@@ -29,6 +36,13 @@ namespace ESP32AIControl.WP81.Models
                 Page = Page,
                 Order = Order,
                 Value = Value,
+                Unit = Unit,
+                Minimum = Minimum,
+                Maximum = Maximum,
+                Step = Step,
+                WarningMinimum = WarningMinimum,
+                WarningMaximum = WarningMaximum,
+                DefinitionName = DefinitionName,
                 UpdatedAt = UpdatedAt
             };
         }
