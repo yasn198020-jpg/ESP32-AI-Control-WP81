@@ -50,25 +50,25 @@ namespace ESP32AIControl.WP81.Core.Scenarios
 
         public async Task SaveAsync(IList<ScenarioProfile> profiles)
         {
-            var snapshot = new List<ScenarioProfile>();
-            if (profiles != null)
-            {
-                for (var i = 0; i < profiles.Count; i++)
-                    if (profiles[i] != null)
-                        snapshot.Add(profiles[i].Clone());
-            }
-
-            string json;
-            using (var stream = new MemoryStream())
-            {
-                var serializer = new DataContractJsonSerializer(typeof(List<ScenarioProfile>));
-                serializer.WriteObject(stream, snapshot);
-                json = Encoding.UTF8.GetString(stream.ToArray(), 0, (int)stream.Length);
-            }
-
             await _ioGate.WaitAsync();
             try
             {
+                var snapshot = new List<ScenarioProfile>();
+                if (profiles != null)
+                {
+                    for (var i = 0; i < profiles.Count; i++)
+                        if (profiles[i] != null)
+                            snapshot.Add(profiles[i].Clone());
+                }
+
+                string json;
+                using (var stream = new MemoryStream())
+                {
+                    var serializer = new DataContractJsonSerializer(typeof(List<ScenarioProfile>));
+                    serializer.WriteObject(stream, snapshot);
+                    json = Encoding.UTF8.GetString(stream.ToArray(), 0, (int)stream.Length);
+                }
+
                 var folder = ApplicationData.Current.LocalFolder;
                 var temporary = await folder.CreateFileAsync(
                     TemporaryFileName, CreationCollisionOption.ReplaceExisting);
