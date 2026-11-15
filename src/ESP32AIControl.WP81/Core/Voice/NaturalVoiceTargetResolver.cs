@@ -7,6 +7,25 @@ using ESP32AIControl.WP81.Models;
 
 namespace ESP32AIControl.WP81.Core.Voice
 {
+    public sealed class VoiceTargetOption
+    {
+        public string Command { get; set; }
+        public string Title { get; set; }
+        public string Page { get; set; }
+        public string DeviceId { get; set; }
+        public string WidgetId { get; set; }
+
+        public string DisplayText
+        {
+            get
+            {
+                var title = string.IsNullOrWhiteSpace(Title) ? WidgetId : Title;
+                var page = string.IsNullOrWhiteSpace(Page) ? "без страницы" : Page;
+                return title + " — " + page + " [" + DeviceId + "/" + WidgetId + "]";
+            }
+        }
+    }
+
     public sealed class NaturalVoiceTargetResolver
     {
         private sealed class Candidate
@@ -36,6 +55,10 @@ namespace ESP32AIControl.WP81.Core.Voice
         };
 
         private readonly DeviceRepository _devices;
+        private IList<string> _selectedAmbiguousCommands = new List<string>();
+        private int _selectionIndex;
+
+        public IList<VoiceTargetOption> LastAmbiguousOptions { get; private set; }
 
         public NaturalVoiceTargetResolver(DeviceRepository devices)
         {
@@ -49,6 +72,26 @@ namespace ESP32AIControl.WP81.Core.Voice
         }
 
         public IList<string> ResolveCommands(string phrase, out string reason)
+        {
+            IList<VoiceTargetOption> ignored;
+            return ResolveCommands(phrase, null, out reason, out ignored);
+        }
+
+        public IList<string> ResolveCommands(
+            string phrase,
+            IList<string> selectedAmbiguousCommands,
+            out string reason,
+            out IList<VoiceTargetOption> ambiguousOptions)
+        {
+            _selectedAmbiguousCommands = selectedAmbiguousCommands ?? new List<string>();
+            _selectionIndex = 0;
+            LastAmbiguousOptions = new List<VoiceTargetOption>();
+            var result = ResolveCommandsInternal(phrase, out reason);
+            ambiguousOptions = LastAmbiguousOptions;
+            return result;
+        }
+
+        private IList<string> ResolveCommandsInternal(string phrase, out string reason)
         {
             reason = null;
             var result = new List<string>();
@@ -94,7 +137,7 @@ namespace ESP32AIControl.WP81.Core.Voice
                     clause = Regex.Replace(clause, @"\s+(?:и|а|затем|после этого|далее|and|then)\s*$", string.Empty,
                         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
                     string clauseReason;
-                    var clauseCommands = ResolveCommands(clause, out clauseReason);
+                    var clauseCommands = ResolveCommandsInternal(clause, out clauseReason);
                     if (clauseCommands == null || clauseCommands.Count == 0)
                     {
                         reason = "Не удалось безопасно разобрать всю фразу. " +
@@ -263,18 +306,60 @@ namespace ESP32AIControl.WP81.Core.Voice
                 return b.Score.CompareTo(a.Score);
             });
 
+            Candidate selected;
             if (candidates.Count > 1 && candidates[0].Score == candidates[1].Score)
             {
-                var first = candidates[0].Widget;
-                var second = candidates[1].Widget;
-                reason = "Нашла несколько подходящих элементов: «" +
-                         (first.Description ?? first.Id) + "» (" + first.Page + ") и «" +
-                         (second.Description ?? second.Id) + "» (" + second.Page +
-                         "). Добавьте название страницы или уточните устройство.";
-                return null;
-            }
+                var bestScore = candidates[0].Score;
+                var tied = candidates.Where(x => x.Score == bestScore).ToList();
+                var options = new List<VoiceTargetOption>();
+                foreach (var candidate in tied)
+                {
+                    var optionValue = candidate.IsMomentaryButton ? "1" :
+                        (intent == "open" || intent == "on" || intent == "start" ? "1" : "0");
+                    options.Add(new VoiceTargetOption
+                    {
+                        Command = (candidate.Widget.DeviceId ?? string.Empty) + "/" +
+                                  (candidate.Widget.Id ?? string.Empty) + "=" + optionValue,
+                        Title = candidate.Widget.Description ?? candidate.Widget.Id,
+                        Page = candidate.Widget.Page,
+                        DeviceId = candidate.Widget.DeviceId,
+                        WidgetId = candidate.Widget.Id
+                    });
+                }
 
-            var selected = candidates[0];
+                if (_selectionIndex < _selectedAmbiguousCommands.Count)
+                {
+                    var requested = _selectedAmbiguousCommands[_selectionIndex];
+                    var chosen = options.FirstOrDefault(x =>
+                        string.Equals(x.Command, requested, StringComparison.OrdinalIgnoreCase));
+                    if (chosen != null)
+                    {
+                        _selectionIndex++;
+                        selected = tied.First(x =>
+                            string.Equals((x.Widget.DeviceId ?? string.Empty) + "/" +
+                                          (x.Widget.Id ?? string.Empty) + "=" +
+                                          (x.IsMomentaryButton ? "1" :
+                                              (intent == "open" || intent == "on" || intent == "start" ? "1" : "0")),
+                                chosen.Command, StringComparison.OrdinalIgnoreCase));
+                    }
+                    else
+                    {
+                        LastAmbiguousOptions = options;
+                        reason = "Выбранный вариант больше не доступен. Уточните устройство ещё раз.";
+                        return null;
+                    }
+                }
+                else
+                {
+                    LastAmbiguousOptions = options;
+                    reason = "Нашла несколько подходящих элементов. Выберите нужное устройство или страницу.";
+                    return null;
+                }
+            }
+            else
+            {
+                selected = candidates[0];
+            }
             var value = selected.IsMomentaryButton ? "1" :
                 (intent == "open" || intent == "on" || intent == "start" ? "1" : "0");
 
