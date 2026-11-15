@@ -142,7 +142,16 @@ namespace ESP32AIControl.WP81.Core.Voice
                 }
 
                 targetValues[target] = value;
-                if (!uniqueCommands.Contains(item, StringComparer.OrdinalIgnoreCase))
+                var duplicate = false;
+                for (var i = 0; i < uniqueCommands.Count; i++)
+                {
+                    if (string.Equals(uniqueCommands[i], item, StringComparison.OrdinalIgnoreCase))
+                    {
+                        duplicate = true;
+                        break;
+                    }
+                }
+                if (!duplicate)
                     uniqueCommands.Add(item);
             }
             commands = uniqueCommands;
