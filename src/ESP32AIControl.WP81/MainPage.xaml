@@ -300,12 +300,21 @@
                             <DatePicker x:Name="ScheduleDate" Header="Дата" Width="210" Margin="0,4,8,4"/>
                             <TimePicker x:Name="ScheduleTime" Header="Время" Width="210" Margin="8,4,0,4"/>
                         </StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0,4,0,10">
+                        <StackPanel Orientation="Horizontal" Margin="0,4,0,4">
                             <Button Content="Добавить" Click="AddScheduleButton_Click" Margin="0,0,6,0"/>
                             <Button Content="Изменить" Click="UpdateScheduleButton_Click" Margin="6,0"/>
                             <Button Content="Отменить" Click="CancelScheduleButton_Click" Margin="6,0"/>
                             <Button Content="Обновить" Click="RefreshScheduleButton_Click" Margin="6,0"/>
                         </StackPanel>
+                        <Button Content="Повторить ошибочную задачу"
+                                Click="RetryScheduleButton_Click"
+                                HorizontalAlignment="Stretch"
+                                Margin="0,2,0,4"/>
+                        <TextBlock x:Name="ScheduleStatusText"
+                                   Text="Выберите задачу для просмотра состояния."
+                                   TextWrapping="Wrap"
+                                   Foreground="#FFBDBDBD"
+                                   Margin="0,4,0,6"/>
                         <ListView x:Name="ScheduleList"
                                   Height="420"
                                   SelectionChanged="ScheduleList_SelectionChanged"/>
