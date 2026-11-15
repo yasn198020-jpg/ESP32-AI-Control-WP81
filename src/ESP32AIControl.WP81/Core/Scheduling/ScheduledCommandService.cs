@@ -424,27 +424,18 @@ namespace ESP32AIControl.WP81.Core.Scheduling
                 if (_loaded) return;
 
                 var folder = ApplicationData.Current.LocalFolder;
-                StorageFile file = null;
-                var recoveredTemporarySnapshot = false;
+                StorageFile file;
                 try
                 {
                     file = await folder.GetFileAsync(FileName);
                 }
                 catch (FileNotFoundException)
                 {
-                    try
-                    {
-                        // A process interruption between deleting the previous
-                        // snapshot and renaming the completed temporary snapshot
-                        // is recoverable on the next launch.
-                        file = await folder.GetFileAsync(FileName + ".tmp");
-                        recoveredTemporarySnapshot = true;
-                    }
-                    catch (FileNotFoundException)
-                    {
-                        _loaded = true;
-                        return;
-                    }
+                    // A temporary file is never treated as committed state.
+                    // If the atomic rename did not complete, the previous snapshot
+                    // remains authoritative (or the queue was not yet committed).
+                    _loaded = true;
+                    return;
                 }
 
                 var json = await FileIO.ReadTextAsync(file);
@@ -479,7 +470,7 @@ namespace ESP32AIControl.WP81.Core.Scheduling
                 }
 
                 _loaded = true;
-                if (recoveredInterruptedExecution || recoveredTemporarySnapshot)
+                if (recoveredInterruptedExecution)
                     await SaveAsync();
             }
             finally
@@ -511,21 +502,9 @@ namespace ESP32AIControl.WP81.Core.Scheduling
                         FileName + ".tmp", CreationCollisionOption.ReplaceExisting);
                     await FileIO.WriteTextAsync(temporaryFile, json);
 
-                    StorageFile currentFile = null;
-                    try
-                    {
-                        currentFile = await folder.GetFileAsync(FileName);
-                    }
-                    catch (FileNotFoundException)
-                    {
-                    }
-
-                    if (currentFile != null)
-                        await currentFile.DeleteAsync();
-
-                    // Rename only after the complete temporary snapshot has been
-                    // written. If the app stops between delete and rename, LoadAsync
-                    // can recover the still-present temporary file on next launch.
+                    // Replace the committed snapshot only after the complete
+                    // temporary file has been written. If rename fails, the previous
+                    // snapshot remains intact and the uncommitted temp file is ignored.
                     await temporaryFile.RenameAsync(FileName, NameCollisionOption.ReplaceExisting);
                 }
             }
