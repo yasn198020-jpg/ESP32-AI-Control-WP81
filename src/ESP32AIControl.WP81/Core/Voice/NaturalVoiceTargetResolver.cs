@@ -112,8 +112,21 @@ namespace ESP32AIControl.WP81.Core.Voice
             else
             {
                 var action = actionSpans[0];
-                var prefix = text.Substring(action.Index, action.Length);
-                var tail = text.Substring(action.Index + action.Length);
+                var prefixEnd = action.Index + action.Length;
+                if (string.Equals(action.Value, "turn", StringComparison.OrdinalIgnoreCase))
+                {
+                    for (var i = 0; i < matches.Count; i++)
+                    {
+                        if (matches[i].Index < prefixEnd)
+                            continue;
+                        if (string.Equals(matches[i].Value, "on", StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(matches[i].Value, "off", StringComparison.OrdinalIgnoreCase))
+                            prefixEnd = matches[i].Index + matches[i].Length;
+                        break;
+                    }
+                }
+                var prefix = text.Substring(action.Index, prefixEnd - action.Index);
+                var tail = text.Substring(prefixEnd);
                 var targets = Regex.Split(tail, @"(?:\s+и\s+|\s*,\s*|\s+плюс\s+|\s+а также\s+|\s+and\s+)",
                     RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
