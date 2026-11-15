@@ -53,8 +53,7 @@
             <StackPanel Grid.Column="2"
                         Orientation="Horizontal"
                         HorizontalAlignment="Right"
-                        VerticalAlignment="Center"
-                        >
+                        VerticalAlignment="Center">
                 <Ellipse x:Name="ConnectionIndicator"
                          Width="10"
                          Height="10"
