@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using Windows.UI.Core;
 using Windows.UI.Xaml;
@@ -49,6 +50,7 @@ namespace ESP32AIControl.WP81
             new List<VoiceTargetOption>();
         private string _selectedScenarioProfileId;
         private bool _refreshingScenarioList;
+        private readonly SemaphoreSlim _scenarioMutationGate = new SemaphoreSlim(1, 1);
 
         private readonly Dictionary<string, WidgetVisual> _visuals =
             new Dictionary<string, WidgetVisual>();
@@ -487,6 +489,7 @@ namespace ESP32AIControl.WP81
 
         private async void SaveScenarioButton_Click(object sender, RoutedEventArgs e)
         {
+            await _scenarioMutationGate.WaitAsync();
             try
             {
                 var source = ScenarioTextBox.Text ?? string.Empty;
@@ -504,9 +507,12 @@ namespace ESP32AIControl.WP81
                 if (string.IsNullOrWhiteSpace(title))
                     title = "Сценарий " + (_scenarioProfiles.Count + 1).ToString(CultureInfo.InvariantCulture);
 
+                // Edit a detached candidate. The live list and active engine are
+                // changed only after the profile file has been committed.
+                var candidateProfiles = _scenarioProfiles.Select(item => item.Clone()).ToList();
                 ScenarioProfile profile = null;
                 if (!string.IsNullOrEmpty(_selectedScenarioProfileId))
-                    profile = _scenarioProfiles.FirstOrDefault(delegate(ScenarioProfile item)
+                    profile = candidateProfiles.FirstOrDefault(delegate(ScenarioProfile item)
                     {
                         return string.Equals(item.Id, _selectedScenarioProfileId, StringComparison.Ordinal);
                     });
@@ -519,21 +525,35 @@ namespace ESP32AIControl.WP81
                         Id = Guid.NewGuid().ToString("N"),
                         Enabled = true
                     };
-                    _scenarioProfiles.Add(profile);
+                    candidateProfiles.Add(profile);
                 }
 
                 profile.Title = title;
                 profile.Source = source;
                 profile.Enabled = ScenarioEnabledCheckBox.IsChecked == true;
+
+                await _scenarioStore.SaveAsync(candidateProfiles);
+
+                _scenarioProfiles.Clear();
+                _scenarioProfiles.AddRange(candidateProfiles);
                 _selectedScenarioProfileId = profile.Id;
-
-                await _scenarioStore.SaveAsync(_scenarioProfiles);
                 ApplyScenarioProfilesToEngine();
-                await _settingsStore.SaveAsync(_appSettings);
-                RefreshScenarioProfilesUi();
 
+                var settingsWarning = string.Empty;
+                try
+                {
+                    await _settingsStore.SaveAsync(_appSettings);
+                }
+                catch (Exception settingsError)
+                {
+                    settingsWarning = " Список сценариев сохранён, но резервная настройка не обновлена: " +
+                        settingsError.Message;
+                    Log("SCENARIO SETTINGS SAVE ERROR: " + settingsError.Message);
+                }
+
+                RefreshScenarioProfilesUi();
                 ScenarioStatus.Text = (isNew ? "Сценарий добавлен: " : "Сценарий обновлён: ") + title +
-                    (profile.Enabled ? " (активен)." : " (выключен).");
+                    (profile.Enabled ? " (активен)." : " (выключен).") + settingsWarning;
                 Log("SCENARIO " + (isNew ? "ADDED: " : "UPDATED: ") + title +
                     "; active rules=" + _commandExecutor.GetScenarioRuleCount().ToString(CultureInfo.InvariantCulture));
             }
@@ -542,18 +562,24 @@ namespace ESP32AIControl.WP81
                 ScenarioStatus.Text = "Ошибка сохранения: " + ex.Message;
                 Log("SCENARIO SAVE ERROR: " + ex.Message);
             }
+            finally
+            {
+                _scenarioMutationGate.Release();
+            }
         }
 
         private async void DeleteScenarioButton_Click(object sender, RoutedEventArgs e)
         {
+            await _scenarioMutationGate.WaitAsync();
             try
             {
                 if (string.IsNullOrEmpty(_selectedScenarioProfileId))
                     throw new InvalidOperationException("Сначала выберите сохранённый сценарий.");
 
+                var selectedId = _selectedScenarioProfileId;
                 var profile = _scenarioProfiles.FirstOrDefault(delegate(ScenarioProfile item)
                 {
-                    return string.Equals(item.Id, _selectedScenarioProfileId, StringComparison.Ordinal);
+                    return string.Equals(item.Id, selectedId, StringComparison.Ordinal);
                 });
                 if (profile == null)
                     throw new InvalidOperationException("Сценарий уже удалён.");
@@ -568,20 +594,49 @@ namespace ESP32AIControl.WP81
                 if (answer == null || answer.Label != "Удалить")
                     return;
 
-                _scenarioProfiles.Remove(profile);
+                var candidateProfiles = _scenarioProfiles
+                    .Select(item => item.Clone())
+                    .ToList();
+                var candidate = candidateProfiles.FirstOrDefault(delegate(ScenarioProfile item)
+                {
+                    return string.Equals(item.Id, selectedId, StringComparison.Ordinal);
+                });
+                if (candidate == null)
+                    throw new InvalidOperationException("Сценарий уже удалён.");
+
+                candidateProfiles.Remove(candidate);
+                await _scenarioStore.SaveAsync(candidateProfiles);
+
+                _scenarioProfiles.Clear();
+                _scenarioProfiles.AddRange(candidateProfiles);
                 _selectedScenarioProfileId = null;
-                await _scenarioStore.SaveAsync(_scenarioProfiles);
                 ApplyScenarioProfilesToEngine();
-                await _settingsStore.SaveAsync(_appSettings);
+
+                var settingsWarning = string.Empty;
+                try
+                {
+                    await _settingsStore.SaveAsync(_appSettings);
+                }
+                catch (Exception settingsError)
+                {
+                    settingsWarning = " Список сохранён, но резервная настройка не обновлена: " +
+                        settingsError.Message;
+                    Log("SCENARIO SETTINGS SAVE ERROR: " + settingsError.Message);
+                }
+
                 RefreshScenarioProfilesUi();
                 ClearScenarioEditor();
-                ScenarioStatus.Text = "Сценарий удалён.";
+                ScenarioStatus.Text = "Сценарий удалён." + settingsWarning;
                 Log("SCENARIO DELETED: " + profile.Title);
             }
             catch (Exception ex)
             {
                 ScenarioStatus.Text = "Не удалось удалить сценарий: " + ex.Message;
                 Log("SCENARIO DELETE ERROR: " + ex.Message);
+            }
+            finally
+            {
+                _scenarioMutationGate.Release();
             }
         }
 
