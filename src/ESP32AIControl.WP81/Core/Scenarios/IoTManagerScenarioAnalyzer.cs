@@ -663,6 +663,16 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                     continue;
                 }
 
+                if (state != null)
+                {
+                    // A sensor/read-only condition cannot be made true by a
+                    // control dependency. It is safe only when the current
+                    // snapshot already satisfies the scenario condition.
+                    if (!ConditionMatchesValue(condition, state.Value))
+                        analysis.IsComplete = false;
+                    continue;
+                }
+
                 BuildDependenciesForAssignment(
                     analysis,
                     condition.Variable,
