@@ -424,7 +424,6 @@
                                  Margin="0,2,0,4"/>
                         <CheckBox x:Name="ScenarioEnabledCheckBox"
                                   Content="Сценарий активен"
-                                  IsChecked="True"
                                   Margin="0,4,0,8"/>
                         <TextBlock Text="Код IoTManager"
                                    FontSize="18"
