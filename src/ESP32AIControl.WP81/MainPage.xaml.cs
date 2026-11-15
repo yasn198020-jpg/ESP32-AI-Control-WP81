@@ -2385,6 +2385,92 @@ namespace ESP32AIControl.WP81
             }
         }
 
+        private async Task<string> ShowVoiceTargetChoiceAsync(IList<VoiceTargetOption> options)
+        {
+            if (options == null || options.Count == 0)
+                return null;
+
+            var completion = new TaskCompletionSource<string>();
+            var popup = new Popup();
+            popup.HorizontalOffset = 8;
+            popup.VerticalOffset = 58;
+
+            var panel = new StackPanel();
+            panel.Width = 328;
+
+            panel.Children.Add(new TextBlock
+            {
+                Text = "Марфа нашла несколько устройств. Выберите нужное:",
+                TextWrapping = TextWrapping.Wrap,
+                FontSize = 17,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 245, 245, 245)),
+                Margin = new Thickness(0, 0, 0, 10)
+            });
+
+            var choices = new ListView
+            {
+                Height = 244,
+                SelectionMode = ListViewSelectionMode.Single,
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 37, 38, 44))
+            };
+            foreach (var option in options)
+                choices.Items.Add(option.DisplayText);
+            panel.Children.Add(choices);
+
+            var buttons = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 10, 0, 0)
+            };
+            var chooseButton = new Button
+            {
+                Content = "Выбрать",
+                IsEnabled = false,
+                Margin = new Thickness(0, 0, 8, 0)
+            };
+            var cancelButton = new Button { Content = "Отмена" };
+
+            choices.SelectionChanged += delegate
+            {
+                chooseButton.IsEnabled = choices.SelectedIndex >= 0;
+            };
+            chooseButton.Click += delegate
+            {
+                var index = choices.SelectedIndex;
+                if (index < 0 || index >= options.Count)
+                    return;
+                completion.TrySetResult(options[index].Command);
+                popup.IsOpen = false;
+            };
+            cancelButton.Click += delegate
+            {
+                completion.TrySetResult(null);
+                popup.IsOpen = false;
+            };
+
+            buttons.Children.Add(chooseButton);
+            buttons.Children.Add(cancelButton);
+            panel.Children.Add(buttons);
+
+            popup.Child = new Border
+            {
+                Width = 352,
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 43, 44, 51)),
+                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 91, 94, 106)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(10),
+                Padding = new Thickness(12),
+                Child = panel
+            };
+            popup.Closed += delegate
+            {
+                completion.TrySetResult(null);
+            };
+            popup.IsOpen = true;
+            return await completion.Task;
+        }
+
         private async void Voice_CommandRecognized(object sender, string text)
         {
             await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, async delegate
@@ -2394,17 +2480,48 @@ namespace ESP32AIControl.WP81
                 MarfaVoiceResultText.Text = VoiceResultText.Text;
                 try
                 {
-                    var parsed = _voiceParser.Parse(text);
-                    if (parsed == null)
+                    var selectedAmbiguousCommands = new List<string>();
+                    ParsedVoiceCommand parsed;
+                    while (true)
                     {
-                        var reason = string.IsNullOrWhiteSpace(_voiceParser.LastReason)
-                            ? "Команда не распознана или элемент не найден."
-                            : _voiceParser.LastReason;
-                        VoiceStatusText.Text = reason;
-                        MarfaVoiceResultText.Text = reason;
-                        VoiceResultText.Text = reason;
-                        Log("VOICE: " + reason);
-                        return;
+                        parsed = _voiceParser.Parse(text, selectedAmbiguousCommands);
+                        if (parsed != null)
+                            break;
+
+                        var options = _voiceParser.LastAmbiguousOptions;
+                        if (options == null || options.Count == 0)
+                        {
+                            var reason = string.IsNullOrWhiteSpace(_voiceParser.LastReason)
+                                ? "Команда не распознана или элемент не найден."
+                                : _voiceParser.LastReason;
+                            VoiceStatusText.Text = reason;
+                            MarfaVoiceResultText.Text = reason;
+                            VoiceResultText.Text = reason;
+                            Log("VOICE: " + reason);
+                            return;
+                        }
+
+                        VoiceStatusText.Text = "Марфа уточняет устройство…";
+                        MarfaVoiceResultText.Text = VoiceStatusText.Text;
+                        var selectedCommand = await ShowVoiceTargetChoiceAsync(options);
+                        if (string.IsNullOrWhiteSpace(selectedCommand))
+                        {
+                            VoiceStatusText.Text = "Уточнение отменено. Ничего не отправлено.";
+                            MarfaVoiceResultText.Text = VoiceStatusText.Text;
+                            VoiceResultText.Text = VoiceStatusText.Text;
+                            Log("VOICE: пользователь отменил уточнение устройства; команды не отправлены.");
+                            return;
+                        }
+
+                        selectedAmbiguousCommands.Add(selectedCommand);
+                        if (selectedAmbiguousCommands.Count > 5)
+                        {
+                            VoiceStatusText.Text = "Слишком много неоднозначных действий. Ничего не отправлено.";
+                            MarfaVoiceResultText.Text = VoiceStatusText.Text;
+                            VoiceResultText.Text = VoiceStatusText.Text;
+                            Log("VOICE: превышен лимит уточнений; команды не отправлены.");
+                            return;
+                        }
                     }
 
                     var commands = parsed.Commands != null && parsed.Commands.Count > 0
