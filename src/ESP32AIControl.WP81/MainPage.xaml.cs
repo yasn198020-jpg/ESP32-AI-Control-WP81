@@ -526,7 +526,10 @@ namespace ESP32AIControl.WP81
             var isDateInput = definition == "inputdate" || type == "inputdate";
             var isTimeInput = definition == "inputtm" || type == "inputtm";
             var isSelect = definition == "select" || type == "select";
-            var isProgress = definition == "progressline" || definition == "progressround" || definition == "fillgauge" || type == "progress";
+            var isCircularProgress = definition == "progressround" || type == "progressround";
+            var isFillGauge = definition == "fillgauge" || type == "fillgauge";
+            var isProgressLine = definition == "progressline" || type == "progress";
+            var isProgress = isCircularProgress || isFillGauge || isProgressLine;
             var isChart = definition.StartsWith("chart", StringComparison.Ordinal) || type == "chart";
             var isInput = !isSwitch && !isAction && !isSlider && !isNumericInput && !isDateInput && !isTimeInput && !isSelect && !isProgress && !isChart &&
                           (type == "input" || type == "inputtext" || type == "text" || type == "inputtxt" || type == "inputstr" || type == "inputstring" || definition == "inputtxt");
@@ -723,37 +726,72 @@ namespace ESP32AIControl.WP81
             }
             else if (isProgress)
             {
+                var minimum = ReadWidgetNumber(state.Minimum, 0);
                 var maximum = ReadWidgetNumber(state.Maximum, 100);
-                if (maximum <= 0) maximum = 100;
-                var progress = new ProgressBar
+                if (maximum <= minimum) maximum = minimum + 100;
+
+                if (isCircularProgress || isFillGauge)
                 {
-                    Minimum = 0, Maximum = maximum,
-                    Value = Math.Max(0, Math.Min(maximum, ReadWidgetNumber(state.Value, 0))),
-                    Height = 12, Margin = new Thickness(34, 8, 8, 4)
-                };
-                visual.ProgressControl = progress;
-                visual.Container.Children.Add(progress);
-                visual.UnitText = new TextBlock
+                    visual.IsFillGauge = isFillGauge;
+                    visual.GaugeCanvas = new Canvas
+                    {
+                        Width = 112,
+                        Height = 112,
+                        Margin = new Thickness(34, 5, 0, 0)
+                    };
+                    visual.Container.Children.Add(visual.GaugeCanvas);
+                    visual.UnitText = new TextBlock
+                    {
+                        Text = "Максимум " + FormatWidgetNumber(maximum) +
+                               (string.IsNullOrWhiteSpace(state.Unit) ? string.Empty : " " + state.Unit),
+                        FontSize = 11,
+                        Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 156, 163, 175)),
+                        Margin = new Thickness(34, 0, 0, 0)
+                    };
+                    visual.Container.Children.Add(visual.UnitText);
+                }
+                else
                 {
-                    Text = (state.Value ?? "0") + " / " + FormatWidgetNumber(maximum) +
-                           (string.IsNullOrWhiteSpace(state.Unit) ? string.Empty : " " + state.Unit),
-                    FontSize = 11, Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 156, 163, 175)),
-                    Margin = new Thickness(34, 0, 0, 0)
-                };
-                visual.Container.Children.Add(visual.UnitText);
+                    var progress = new ProgressBar
+                    {
+                        Minimum = minimum,
+                        Maximum = maximum,
+                        Value = Math.Max(minimum, Math.Min(maximum, ReadWidgetNumber(state.Value, minimum))),
+                        Height = 12,
+                        Margin = new Thickness(34, 8, 8, 4)
+                    };
+                    visual.ProgressControl = progress;
+                    visual.Container.Children.Add(progress);
+                    visual.UnitText = new TextBlock
+                    {
+                        Text = (state.Value ?? "0") + " / " + FormatWidgetNumber(maximum) +
+                               (string.IsNullOrWhiteSpace(state.Unit) ? string.Empty : " " + state.Unit),
+                        FontSize = 11,
+                        Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 156, 163, 175)),
+                        Margin = new Thickness(34, 0, 0, 0)
+                    };
+                    visual.Container.Children.Add(visual.UnitText);
+                }
             }
             else if (isChart)
             {
-                var chartInfo = new TextBlock
+                visual.InlineChartCanvas = new Canvas
                 {
-                    Text = "История измерений и график доступны в разделе «История»",
-                    FontSize = 12, TextWrapping = TextWrapping.Wrap,
-                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 156, 163, 175)),
-                    Margin = new Thickness(34, 4, 0, 0)
+                    Height = 92,
+                    Width = 300,
+                    MinWidth = 240,
+                    Margin = new Thickness(34, 5, 0, 0)
                 };
-                var openChart = new Button { Content = "Открыть график", HorizontalAlignment = HorizontalAlignment.Right };
+                visual.InlineChartCanvas.SizeChanged += delegate { DrawInlineChart(visual); };
+                visual.Container.Children.Add(visual.InlineChartCanvas);
+
+                var openChart = new Button
+                {
+                    Content = "Открыть историю",
+                    HorizontalAlignment = HorizontalAlignment.Right,
+                    Margin = new Thickness(34, 2, 0, 0)
+                };
                 openChart.Click += delegate { OpenWidgetHistory(visual.State); };
-                visual.Container.Children.Add(chartInfo);
                 visual.Container.Children.Add(openChart);
             }
             else if (!isSwitch)
@@ -828,6 +866,9 @@ namespace ESP32AIControl.WP81
                 ApplyWidgetThresholdStyle(visual, state);
             }
             finally { _syncingControls = false; }
+
+            if (visual.InlineChartCanvas != null)
+                RefreshInlineChart(visual);
         }
 
         private void InsertWidgetVisual(WidgetVisual visual)
@@ -959,7 +1000,15 @@ namespace ESP32AIControl.WP81
                     visual.SelectControl.SelectedIndex = selected;
             }
             if (visual.ProgressControl != null)
-                visual.ProgressControl.Value = Math.Max(0, Math.Min(visual.ProgressControl.Maximum, ReadWidgetNumber(value, 0)));
+            {
+                var progressValue = ReadWidgetNumber(value, visual.ProgressControl.Minimum);
+                visual.ProgressControl.Value = Math.Max(visual.ProgressControl.Minimum,
+                    Math.Min(visual.ProgressControl.Maximum, progressValue));
+                if (visual.UnitText != null)
+                    visual.UnitText.Text = FormatWidgetNumber(progressValue) + " / " +
+                        FormatWidgetNumber(visual.ProgressControl.Maximum) +
+                        (string.IsNullOrWhiteSpace(visual.State.Unit) ? string.Empty : " " + visual.State.Unit);
+            }
             if (visual.DateControl != null)
             {
                 DateTimeOffset date;
@@ -1021,6 +1070,231 @@ namespace ESP32AIControl.WP81
         private static string FormatWidgetNumber(double value)
         {
             return value.ToString("0.##", CultureInfo.InvariantCulture);
+        }
+
+        private void DrawCircularGauge(WidgetVisual visual, Windows.UI.Color accent)
+        {
+            if (visual == null || visual.GaugeCanvas == null || visual.State == null)
+                return;
+
+            var canvas = visual.GaugeCanvas;
+            canvas.Children.Clear();
+
+            var state = visual.State;
+            var minimum = ReadWidgetNumber(state.Minimum, 0);
+            var maximum = ReadWidgetNumber(state.Maximum, 100);
+            if (maximum <= minimum) maximum = minimum + 100;
+            var number = ReadWidgetNumber(state.Value, minimum);
+            var fraction = Math.Max(0.0, Math.Min(1.0, (number - minimum) / (maximum - minimum)));
+
+            if (visual.IsFillGauge)
+            {
+                var fill = new Ellipse
+                {
+                    Width = 64,
+                    Height = 64,
+                    Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(
+                        (byte)(24 + fraction * 82), accent.R, accent.G, accent.B))
+                };
+                Canvas.SetLeft(fill, 24);
+                Canvas.SetTop(fill, 24);
+                canvas.Children.Add(fill);
+            }
+
+            var track = new Ellipse
+            {
+                Width = 86,
+                Height = 86,
+                Stroke = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 77, 80, 88)),
+                StrokeThickness = 8,
+                Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0))
+            };
+            Canvas.SetLeft(track, 13);
+            Canvas.SetTop(track, 13);
+            canvas.Children.Add(track);
+
+            if (fraction > 0.001)
+            {
+                var arc = new Polyline
+                {
+                    Stroke = new SolidColorBrush(accent),
+                    StrokeThickness = 8
+                };
+                var points = new PointCollection();
+                var segments = Math.Max(2, (int)Math.Ceiling(64 * fraction));
+                for (var i = 0; i <= segments; i++)
+                {
+                    var angle = (-90.0 + 360.0 * fraction * i / segments) * Math.PI / 180.0;
+                    points.Add(new Windows.Foundation.Point(
+                        56 + 39 * Math.Cos(angle),
+                        56 + 39 * Math.Sin(angle)));
+                }
+                arc.Points = points;
+                canvas.Children.Add(arc);
+            }
+
+            var displayValue = visual.IsFillGauge
+                ? Math.Round(fraction * 100).ToString("0", CultureInfo.InvariantCulture) + "%"
+                : FormatWidgetNumber(number);
+            var valueText = new TextBlock
+            {
+                Text = displayValue,
+                Width = 86,
+                Height = 28,
+                FontSize = 18,
+                FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(Windows.UI.Colors.White),
+                TextAlignment = TextAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Canvas.SetLeft(valueText, 13);
+            Canvas.SetTop(valueText, 42);
+            canvas.Children.Add(valueText);
+        }
+
+        private void RefreshInlineChart(WidgetVisual visual)
+        {
+            if (visual == null || visual.InlineChartCanvas == null || visual.State == null ||
+                visual.InlineChartLoading)
+                return;
+
+            var now = DateTimeOffset.Now;
+            if (visual.LastInlineChartRefresh != DateTimeOffset.MinValue &&
+                (now - visual.LastInlineChartRefresh).TotalSeconds < 30)
+            {
+                DrawInlineChart(visual);
+                return;
+            }
+
+            visual.LastInlineChartRefresh = now;
+            visual.InlineChartLoading = true;
+            RefreshInlineChartAsync(visual, visual.State.Clone());
+        }
+
+        private async void RefreshInlineChartAsync(WidgetVisual visual, WidgetState state)
+        {
+            try
+            {
+                var points = await _measurementStore.ReadAsync(
+                    state.DeviceId, state.Id, DateTimeOffset.Now.AddDays(-7), DateTimeOffset.Now);
+
+                await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, delegate
+                {
+                    WidgetVisual current;
+                    if (_visuals.TryGetValue(state.Key, out current) && object.ReferenceEquals(current, visual))
+                    {
+                        visual.InlineChartPoints = points;
+                        DrawInlineChart(visual);
+                    }
+                    visual.InlineChartLoading = false;
+                });
+            }
+            catch (Exception ex)
+            {
+                await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, delegate
+                {
+                    visual.InlineChartLoading = false;
+                    Log("INLINE CHART ERROR: " + ex.Message);
+                });
+            }
+        }
+
+        private void DrawInlineChart(WidgetVisual visual)
+        {
+            if (visual == null || visual.InlineChartCanvas == null)
+                return;
+
+            var canvas = visual.InlineChartCanvas;
+            canvas.Children.Clear();
+            var width = canvas.ActualWidth >= 120 ? canvas.ActualWidth : 300.0;
+            var height = canvas.ActualHeight >= 40 ? canvas.ActualHeight : 92.0;
+            const double left = 28.0;
+            const double rightPadding = 8.0;
+            const double top = 10.0;
+            const double bottomPadding = 12.0;
+            var plotWidth = Math.Max(1.0, width - left - rightPadding);
+            var plotHeight = Math.Max(1.0, height - top - bottomPadding);
+
+            var numeric = new List<double>();
+            var source = visual.InlineChartPoints;
+            if (source != null)
+            {
+                var start = Math.Max(0, source.Count - 48);
+                for (var i = start; i < source.Count; i++)
+                {
+                    double value;
+                    if (double.TryParse((source[i].Value ?? string.Empty).Replace(',', '.'),
+                        NumberStyles.Float, CultureInfo.InvariantCulture, out value) &&
+                        !double.IsNaN(value) && !double.IsInfinity(value))
+                        numeric.Add(value);
+                }
+            }
+
+            if (numeric.Count == 0)
+            {
+                var empty = new TextBlock
+                {
+                    Text = visual.InlineChartLoading ? "Загрузка истории…" : "Ожидание измерений",
+                    FontSize = 11,
+                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 156, 163, 175))
+                };
+                Canvas.SetLeft(empty, left);
+                Canvas.SetTop(empty, 34);
+                canvas.Children.Add(empty);
+                return;
+            }
+
+            var min = numeric.Min();
+            var max = numeric.Max();
+            if (Math.Abs(max - min) < 0.000001) max = min + 1.0;
+
+            for (var grid = 0; grid < 3; grid++)
+            {
+                var y = top + plotHeight * grid / 2.0;
+                canvas.Children.Add(new Line
+                {
+                    X1 = left,
+                    Y1 = y,
+                    X2 = width - rightPadding,
+                    Y2 = y,
+                    Stroke = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 63, 66, 74)),
+                    StrokeThickness = 1
+                });
+            }
+
+            var line = new Polyline
+            {
+                Stroke = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 105, 145, 245)),
+                StrokeThickness = 2
+            };
+            var points = new PointCollection();
+            for (var i = 0; i < numeric.Count; i++)
+            {
+                var x = left + (numeric.Count == 1 ? plotWidth / 2.0 : plotWidth * i / (numeric.Count - 1));
+                var y = top + (1.0 - (numeric[i] - min) / (max - min)) * plotHeight;
+                points.Add(new Windows.Foundation.Point(x, y));
+            }
+            line.Points = points;
+            canvas.Children.Add(line);
+
+            var high = new TextBlock
+            {
+                Text = FormatWidgetNumber(numeric.Max()),
+                FontSize = 9,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 156, 163, 175))
+            };
+            var low = new TextBlock
+            {
+                Text = FormatWidgetNumber(numeric.Min()),
+                FontSize = 9,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 156, 163, 175))
+            };
+            Canvas.SetLeft(high, 0);
+            Canvas.SetTop(high, top - 3);
+            Canvas.SetLeft(low, 0);
+            Canvas.SetTop(low, top + plotHeight - 8);
+            canvas.Children.Add(high);
+            canvas.Children.Add(low);
         }
 
         private void OpenWidgetHistory(WidgetState state)
@@ -1103,11 +1377,14 @@ namespace ESP32AIControl.WP81
                 visual.ValueText.Foreground = new SolidColorBrush(accent);
             if (visual.ValueBadge != null)
                 visual.ValueBadge.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(42, accent.R, accent.G, accent.B));
-            if (visual.UnitText != null)
-                visual.UnitText.Text = (visual.SliderControl == null ? string.Empty :
-                    visual.SliderControl.Minimum.ToString(CultureInfo.InvariantCulture) + "–" +
-                    visual.SliderControl.Maximum.ToString(CultureInfo.InvariantCulture)) +
+            if (visual.UnitText != null && visual.SliderControl != null)
+                visual.UnitText.Text =
+                    FormatWidgetNumber(visual.SliderControl.Minimum) + "–" +
+                    FormatWidgetNumber(visual.SliderControl.Maximum) +
                     (string.IsNullOrWhiteSpace(state.Unit) ? string.Empty : " " + state.Unit);
+
+            if (visual.GaugeCanvas != null)
+                DrawCircularGauge(visual, accent);
         }
 
         private static bool ParseBoolean(string value)
@@ -1595,6 +1872,12 @@ namespace ESP32AIControl.WP81
             public TextBlock UnitText { get; set; }
             public ComboBox SelectControl { get; set; }
             public ProgressBar ProgressControl { get; set; }
+            public Canvas GaugeCanvas { get; set; }
+            public bool IsFillGauge { get; set; }
+            public Canvas InlineChartCanvas { get; set; }
+            public IList<MeasurementPoint> InlineChartPoints { get; set; }
+            public bool InlineChartLoading { get; set; }
+            public DateTimeOffset LastInlineChartRefresh { get; set; }
             public DatePicker DateControl { get; set; }
             public TimePicker TimeControl { get; set; }
             public FrameworkElement Control { get; set; }
