@@ -299,6 +299,7 @@ namespace ESP32AIControl.WP81
                 _appSettings.VoiceOpenCommand = VoiceOpenCommandBox.Text.Trim();
                 _appSettings.VoiceCloseCommand = VoiceCloseCommandBox.Text.Trim();
 
+                ClearPendingVoiceClarification();
                 _voiceParser = new VoiceCommandParser(
                     _appSettings.VoiceOpenCommand,
                     _appSettings.VoiceCloseCommand,
@@ -334,6 +335,7 @@ namespace ESP32AIControl.WP81
             _settings.ClientId = string.IsNullOrEmpty(_appSettings.ClientId)
                 ? "ESP32-AI-Control-WP81" : _appSettings.ClientId;
 
+            ClearPendingVoiceClarification();
             _voiceParser = new VoiceCommandParser(
                 _appSettings.VoiceOpenCommand,
                 _appSettings.VoiceCloseCommand,
