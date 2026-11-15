@@ -37,6 +37,14 @@ namespace ESP32AIControl.WP81.Core.Protocol
             [DataMember(Name="page")] public string Page { get; set; }
             [DataMember(Name="order")] public int Order { get; set; }
             [DataMember(Name="val")] public object Value { get; set; }
+            [DataMember(Name="unit")] public string Unit { get; set; }
+            [DataMember(Name="min")] public object Minimum { get; set; }
+            [DataMember(Name="max")] public object Maximum { get; set; }
+            [DataMember(Name="step")] public object Step { get; set; }
+            [DataMember(Name="minWarning")] public object WarningMinimum { get; set; }
+            [DataMember(Name="maxWarning")] public object WarningMaximum { get; set; }
+            [DataMember(Name="definition")] public string Definition { get; set; }
+            [DataMember(Name="definitionName")] public string DefinitionName { get; set; }
         }
 
         public static Esp32Message Parse(Esp32MessageKind kind, string topic, string payload, Esp32TopicParser topics)
@@ -96,6 +104,13 @@ namespace ESP32AIControl.WP81.Core.Protocol
                 Page = dto.Page,
                 Order = dto.Order,
                 Value = ValueToString(dto.Value),
+                Unit = dto.Unit,
+                Minimum = ValueToString(dto.Minimum),
+                Maximum = ValueToString(dto.Maximum),
+                Step = ValueToString(dto.Step),
+                WarningMinimum = ValueToString(dto.WarningMinimum),
+                WarningMaximum = ValueToString(dto.WarningMaximum),
+                DefinitionName = First(dto.DefinitionName, dto.Definition),
                 RawPayload = payload
             };
         }
