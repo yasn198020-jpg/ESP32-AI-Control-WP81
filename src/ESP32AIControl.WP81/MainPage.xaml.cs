@@ -690,11 +690,30 @@ namespace ESP32AIControl.WP81
             else
             {
                 var newPage = NormalizePage(state.Page);
-                if (!string.Equals(visual.PageName, newPage, StringComparison.Ordinal))
-                    MoveWidgetVisual(visual, newPage);
-
-                visual.State = state;
-                visual.Title.Text = GetTitle(state);
+                var configurationChanged = visual.State != null &&
+                    (!string.Equals(visual.State.WidgetType, state.WidgetType, StringComparison.OrdinalIgnoreCase) ||
+                     !string.Equals(visual.State.DefinitionName, state.DefinitionName, StringComparison.OrdinalIgnoreCase) ||
+                     !string.Equals(visual.State.Minimum, state.Minimum, StringComparison.Ordinal) ||
+                     !string.Equals(visual.State.Maximum, state.Maximum, StringComparison.Ordinal) ||
+                     !string.Equals(visual.State.Step, state.Step, StringComparison.Ordinal) ||
+                     !string.Equals(visual.State.Unit, state.Unit, StringComparison.Ordinal));
+                if (configurationChanged)
+                {
+                    PageVisual oldPage;
+                    if (_pages.TryGetValue(visual.PageName, out oldPage))
+                        oldPage.Content.Children.Remove(visual.Container);
+                    visual = CreateWidgetVisual(state);
+                    _visuals[state.Key] = visual;
+                    InsertWidgetVisual(visual);
+                    CleanupEmptyPages();
+                }
+                else
+                {
+                    if (!string.Equals(visual.PageName, newPage, StringComparison.Ordinal))
+                        MoveWidgetVisual(visual, newPage);
+                    visual.State = state;
+                    visual.Title.Text = GetTitle(state);
+                }
                 _widgetIndex[state.Key] = state;
             }
 
@@ -807,7 +826,8 @@ namespace ESP32AIControl.WP81
         private void ApplyValueToVisual(WidgetVisual visual, string value)
         {
             if (visual.ValueText != null)
-                visual.ValueText.Text = string.IsNullOrEmpty(value) ? "—" : value;
+                visual.ValueText.Text = string.IsNullOrEmpty(value) ? "—" :
+                    value + (string.IsNullOrWhiteSpace(visual.State.Unit) ? string.Empty : " " + visual.State.Unit);
 
             var check = visual.SwitchControl;
             if (check != null)
@@ -856,11 +876,10 @@ namespace ESP32AIControl.WP81
                     ? Windows.UI.Color.FromArgb(255, 255, 190, 150)
                     : Windows.UI.Colors.White);
             if (visual.UnitText != null)
-                visual.UnitText.Text = (state.Value ?? "—") +
-                    (string.IsNullOrWhiteSpace(state.Unit) ? string.Empty : " " + state.Unit) +
-                    (visual.SliderControl == null ? string.Empty : "  ·  " +
+                visual.UnitText.Text = (visual.SliderControl == null ? string.Empty :
                     visual.SliderControl.Minimum.ToString(CultureInfo.InvariantCulture) + "–" +
-                    visual.SliderControl.Maximum.ToString(CultureInfo.InvariantCulture));
+                    visual.SliderControl.Maximum.ToString(CultureInfo.InvariantCulture)) +
+                    (string.IsNullOrWhiteSpace(state.Unit) ? string.Empty : " " + state.Unit);
         }
 
         private static bool ParseBoolean(string value)
