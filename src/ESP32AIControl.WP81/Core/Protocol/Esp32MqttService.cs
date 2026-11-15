@@ -1,5 +1,7 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
+using Windows.System.Threading;
 using ESP32AIControl.WP81.Core.Mqtt;
 using ESP32AIControl.WP81.Core.State;
 using ESP32AIControl.WP81.Models;
@@ -12,6 +14,11 @@ namespace ESP32AIControl.WP81.Core.Protocol
         private Esp32Protocol _protocol;
         private readonly DeviceRepository _devices;
         private readonly MqttSettings _settings;
+        private readonly SemaphoreSlim _connectionGate = new SemaphoreSlim(1, 1);
+        private readonly object _reconnectSync = new object();
+        private ThreadPoolTimer _reconnectTimer;
+        private bool _reconnectEnabled;
+        private int _reconnectDelaySeconds = 5;
 
         public event EventHandler<Esp32Message> MessageReceived;
         public event EventHandler<WidgetState> WidgetChanged;
@@ -39,6 +46,38 @@ namespace ESP32AIControl.WP81.Core.Protocol
 
         public async Task ConnectAsync()
         {
+            await _connectionGate.WaitAsync();
+            try
+            {
+                if (_mqtt.State == MqttConnectionState.Connected)
+                    return;
+
+                lock (_reconnectSync)
+                {
+                    _reconnectEnabled = true;
+                    CancelReconnectTimerLocked();
+                }
+
+                await ConnectCoreAsync();
+                lock (_reconnectSync) _reconnectDelaySeconds = 5;
+            }
+            catch
+            {
+                lock (_reconnectSync)
+                {
+                    _reconnectEnabled = false;
+                    CancelReconnectTimerLocked();
+                }
+                throw;
+            }
+            finally
+            {
+                _connectionGate.Release();
+            }
+        }
+
+        private async Task ConnectCoreAsync()
+        {
             _settings.Prefix = (_settings.Prefix ?? string.Empty).Trim('/');
             _protocol = new Esp32Protocol(_settings.Prefix);
 
@@ -49,8 +88,16 @@ namespace ESP32AIControl.WP81.Core.Protocol
                 _settings.UserName,
                 _settings.Password);
 
-            await _mqtt.SubscribeAsync("/" + _settings.Prefix + "/#", 1);
-            await PublishHelloAsync();
+            try
+            {
+                await _mqtt.SubscribeAsync("/" + _settings.Prefix + "/#", 1);
+                await PublishHelloAsync();
+            }
+            catch
+            {
+                try { await _mqtt.DisconnectAsync(); } catch { }
+                throw;
+            }
         }
 
         public Task PublishHelloAsync()
@@ -58,9 +105,23 @@ namespace ESP32AIControl.WP81.Core.Protocol
             return _mqtt.PublishAsync("/" + _settings.Prefix, "HELLO", 1, false);
         }
 
-        public Task DisconnectAsync()
+        public async Task DisconnectAsync()
         {
-            return _mqtt.DisconnectAsync();
+            lock (_reconnectSync)
+            {
+                _reconnectEnabled = false;
+                CancelReconnectTimerLocked();
+            }
+
+            await _connectionGate.WaitAsync();
+            try
+            {
+                await _mqtt.DisconnectAsync();
+            }
+            finally
+            {
+                _connectionGate.Release();
+            }
         }
 
         public Task PublishControlAsync(string deviceId, string widgetId, string value)
@@ -107,6 +168,82 @@ namespace ESP32AIControl.WP81.Core.Protocol
             var handler = ConnectionStateChanged;
             if (handler != null)
                 handler(this, e);
+
+            if (e != null && e.State == MqttConnectionState.Disconnected)
+                ScheduleReconnect();
+        }
+
+        private void ScheduleReconnect()
+        {
+            lock (_reconnectSync)
+            {
+                if (!_reconnectEnabled || _reconnectTimer != null)
+                    return;
+
+                var delay = _reconnectDelaySeconds;
+                _reconnectDelaySeconds = Math.Min(60, Math.Max(5, delay * 2));
+                _reconnectTimer = ThreadPoolTimer.CreateTimer(
+                    ReconnectTimer_Tick,
+                    TimeSpan.FromSeconds(delay));
+            }
+        }
+
+        private async void ReconnectTimer_Tick(ThreadPoolTimer timer)
+        {
+            lock (_reconnectSync)
+            {
+                if (!object.ReferenceEquals(_reconnectTimer, timer))
+                    return;
+                _reconnectTimer = null;
+                if (!_reconnectEnabled)
+                    return;
+            }
+
+            var connected = false;
+            try
+            {
+                await _connectionGate.WaitAsync();
+                try
+                {
+                    lock (_reconnectSync)
+                    {
+                        if (!_reconnectEnabled)
+                            return;
+                    }
+
+                    if (_mqtt.State != MqttConnectionState.Connected)
+                        await ConnectCoreAsync();
+
+                    connected = _mqtt.State == MqttConnectionState.Connected;
+                }
+                finally
+                {
+                    _connectionGate.Release();
+                }
+            }
+            catch
+            {
+                // Connection state is already reflected in the UI. Retry below
+                // with capped exponential backoff instead of surfacing a popup.
+            }
+            finally
+            {
+                if (connected)
+                {
+                    lock (_reconnectSync) _reconnectDelaySeconds = 5;
+                }
+                else
+                {
+                    ScheduleReconnect();
+                }
+            }
+        }
+
+        private void CancelReconnectTimerLocked()
+        {
+            if (_reconnectTimer == null) return;
+            try { _reconnectTimer.Cancel(); } catch { }
+            _reconnectTimer = null;
         }
 
         private static string EscapeJson(string value)
