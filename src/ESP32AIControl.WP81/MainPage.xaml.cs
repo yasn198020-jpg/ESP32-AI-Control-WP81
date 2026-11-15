@@ -42,6 +42,10 @@ namespace ESP32AIControl.WP81
         private readonly List<ScenarioProfile> _scenarioProfiles = new List<ScenarioProfile>();
         private readonly Wp81VoiceCommandService _voice;
         private VoiceCommandParser _voiceParser;
+        private string _pendingVoiceClarificationPhrase;
+        private readonly List<string> _pendingVoiceClarificationSelections = new List<string>();
+        private IList<VoiceTargetOption> _pendingVoiceClarificationOptions =
+            new List<VoiceTargetOption>();
         private string _selectedScenarioProfileId;
         private bool _refreshingScenarioList;
 
@@ -2471,6 +2475,129 @@ namespace ESP32AIControl.WP81
             return await completion.Task;
         }
 
+        private static bool IsVoiceClarificationCancel(string text)
+        {
+            var value = (text ?? string.Empty).Trim().ToLowerInvariant();
+            return value == "отмена" || value == "отмени" || value == "не надо" ||
+                   value == "не нужно" || value == "cancel" || value == "stop";
+        }
+
+        private static string NormalizeClarificationWord(string value)
+        {
+            var word = (value ?? string.Empty).ToLowerInvariant().Trim();
+            if (word.Length > 5)
+            {
+                var endings = new[] { "иями", "ями", "ами", "ого", "ему", "ому",
+                    "ах", "ях", "ам", "ям", "ой", "ей", "ом", "ем", "а", "я", "е", "и", "ы", "у", "ю" };
+                for (var i = 0; i < endings.Length; i++)
+                {
+                    if (word.EndsWith(endings[i], StringComparison.Ordinal) &&
+                        word.Length - endings[i].Length >= 3)
+                    {
+                        word = word.Substring(0, word.Length - endings[i].Length);
+                        break;
+                    }
+                }
+            }
+            return word;
+        }
+
+        private static bool TrySelectVoiceClarification(
+            string reply,
+            IList<VoiceTargetOption> options,
+            out string command)
+        {
+            command = null;
+            if (options == null || options.Count == 0)
+                return false;
+
+            var normalized = Regex.Replace((reply ?? string.Empty).ToLowerInvariant(),
+                @"[^a-z0-9а-яё]+", " ").Trim();
+            var ordinal = Regex.Match(normalized,
+                @"(?:^|\s)(1|2|3|4|5|перв(?:ое|ый|ая|ую)|втор(?:ое|ой|ая|ую)|третье|третий|третья|четверт(?:ое|ый|ая)|пят(?:ое|ый|ая)|один|одна|два|две|три|четыре|пять)(?:$|\s)",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            if (ordinal.Success)
+            {
+                var token = ordinal.Groups[1].Value;
+                var index = 0;
+                if (token == "1" || token.StartsWith("перв", StringComparison.Ordinal) ||
+                    token == "один" || token == "одна") index = 0;
+                else if (token == "2" || token.StartsWith("втор", StringComparison.Ordinal) ||
+                    token == "два" || token == "две") index = 1;
+                else if (token == "3" || token.StartsWith("трет", StringComparison.Ordinal) ||
+                    token == "три") index = 2;
+                else if (token == "4" || token.StartsWith("четверт", StringComparison.Ordinal) ||
+                    token == "четыре") index = 3;
+                else if (token == "5" || token.StartsWith("пят", StringComparison.Ordinal) ||
+                    token == "пять") index = 4;
+
+                if (index >= 0 && index < options.Count)
+                {
+                    command = options[index].Command;
+                    return true;
+                }
+            }
+
+            var ignored = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "на", "в", "во", "у", "для", "по", "из", "с", "со", "мне",
+                "пожалуйста", "вариант", "устройство", "элемент", "странице"
+            };
+            var replyWords = Regex.Matches(normalized, @"[a-z0-9]+|[а-яё]+")
+                .Cast<Match>()
+                .Select(x => NormalizeClarificationWord(x.Value))
+                .Where(x => x.Length >= 2 && !ignored.Contains(x))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (replyWords.Count == 0)
+                return false;
+
+            var ranked = new List<Tuple<VoiceTargetOption, int>>();
+            foreach (var option in options)
+            {
+                var candidateWords = Regex.Matches(
+                    (option.Title ?? string.Empty) + " " + (option.Page ?? string.Empty) + " " +
+                    (option.DeviceId ?? string.Empty) + " " + (option.WidgetId ?? string.Empty),
+                    @"[a-z0-9]+|[а-яё]+")
+                    .Cast<Match>()
+                    .Select(x => NormalizeClarificationWord(x.Value))
+                    .Where(x => x.Length >= 2)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                var score = replyWords.Count(word => candidateWords.Contains(word, StringComparer.OrdinalIgnoreCase));
+                if (score > 0)
+                    ranked.Add(Tuple.Create(option, score));
+            }
+
+            if (ranked.Count == 0)
+                return false;
+            var best = ranked.Max(x => x.Item2);
+            var winners = ranked.Where(x => x.Item2 == best).ToList();
+            if (winners.Count != 1)
+                return false;
+            command = winners[0].Item1.Command;
+            return true;
+        }
+
+        private void ClearPendingVoiceClarification()
+        {
+            _pendingVoiceClarificationPhrase = null;
+            _pendingVoiceClarificationSelections.Clear();
+            _pendingVoiceClarificationOptions = new List<VoiceTargetOption>();
+        }
+
+        private string BuildVoiceClarificationPrompt(IList<VoiceTargetOption> options)
+        {
+            var lines = new List<string>
+            {
+                "Неоднозначная команда. Ответьте голосом: «первое», «второе» или назовите страницу/устройство."
+            };
+            for (var i = 0; i < options.Count; i++)
+                lines.Add((i + 1) + ". " + options[i].DisplayText);
+            lines.Add("Чтобы отменить всю команду, скажите «отмена».");
+            return string.Join("\n", lines.ToArray());
+        }
+
         private async void Voice_CommandRecognized(object sender, string text)
         {
             await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, async delegate
@@ -2480,62 +2607,95 @@ namespace ESP32AIControl.WP81
                 MarfaVoiceResultText.Text = VoiceResultText.Text;
                 try
                 {
-                    var selectedAmbiguousCommands = new List<string>();
-                    ParsedVoiceCommand parsed;
-                    while (true)
+                    ParsedVoiceCommand parsed = null;
+                    if (!string.IsNullOrWhiteSpace(_pendingVoiceClarificationPhrase))
                     {
-                        parsed = _voiceParser.Parse(text, selectedAmbiguousCommands);
-                        if (parsed != null)
-                            break;
-
-                        var options = _voiceParser.LastAmbiguousOptions;
-                        if (options == null || options.Count == 0)
+                        if (IsVoiceClarificationCancel(text))
                         {
-                            var reason = string.IsNullOrWhiteSpace(_voiceParser.LastReason)
-                                ? "Команда не распознана или элемент не найден."
-                                : _voiceParser.LastReason;
-                            VoiceStatusText.Text = reason;
-                            MarfaVoiceResultText.Text = reason;
-                            VoiceResultText.Text = reason;
-                            Log("VOICE: " + reason);
-                            return;
-                        }
-
-                        VoiceStatusText.Text = "Марфа уточняет устройство…";
-                        MarfaVoiceResultText.Text = VoiceStatusText.Text;
-                        var selectedCommand = await ShowVoiceTargetChoiceAsync(options);
-                        if (string.IsNullOrWhiteSpace(selectedCommand))
-                        {
+                            ClearPendingVoiceClarification();
                             VoiceStatusText.Text = "Уточнение отменено. Ничего не отправлено.";
                             MarfaVoiceResultText.Text = VoiceStatusText.Text;
                             VoiceResultText.Text = VoiceStatusText.Text;
-                            Log("VOICE: пользователь отменил уточнение устройства; команды не отправлены.");
+                            Log("VOICE: пользователь отменил голосовое уточнение; команды не отправлены.");
+                            return;
+                        }
+
+                        string selectedCommand;
+                        if (!TrySelectVoiceClarification(text, _pendingVoiceClarificationOptions, out selectedCommand))
+                        {
+                            var prompt = BuildVoiceClarificationPrompt(_pendingVoiceClarificationOptions);
+                            VoiceStatusText.Text = "Не удалось однозначно понять ответ. " + prompt;
+                            MarfaVoiceResultText.Text = VoiceStatusText.Text;
+                            VoiceResultText.Text = VoiceStatusText.Text;
+                            Log("VOICE CLARIFICATION: ответ не сопоставлен однозначно: " + text);
                             return;
                         }
 
                         var replacePreviousChoice = !string.IsNullOrWhiteSpace(_voiceParser.LastReason) &&
                             _voiceParser.LastReason.IndexOf("больше не доступен", StringComparison.OrdinalIgnoreCase) >= 0;
-                        if (replacePreviousChoice && selectedAmbiguousCommands.Count > 0)
-                            selectedAmbiguousCommands[selectedAmbiguousCommands.Count - 1] = selectedCommand;
+                        if (replacePreviousChoice && _pendingVoiceClarificationSelections.Count > 0)
+                            _pendingVoiceClarificationSelections[_pendingVoiceClarificationSelections.Count - 1] = selectedCommand;
                         else
-                            selectedAmbiguousCommands.Add(selectedCommand);
+                            _pendingVoiceClarificationSelections.Add(selectedCommand);
 
                         Log("VOICE CLARIFICATION: selected " + selectedCommand);
-                        VoiceStatusText.Text = "Проверяю выбранные устройства…";
-                        MarfaVoiceResultText.Text = VoiceStatusText.Text;
-                        if (selectedAmbiguousCommands.Count > 5)
+                        parsed = _voiceParser.Parse(
+                            _pendingVoiceClarificationPhrase, _pendingVoiceClarificationSelections);
+                    }
+                    else
+                    {
+                        parsed = _voiceParser.Parse(text, null);
+                        if (parsed == null && _voiceParser.LastAmbiguousOptions != null &&
+                            _voiceParser.LastAmbiguousOptions.Count > 0)
                         {
-                            VoiceStatusText.Text = "Слишком много неоднозначных действий. Ничего не отправлено.";
+                            _pendingVoiceClarificationPhrase = text;
+                            _pendingVoiceClarificationOptions = _voiceParser.LastAmbiguousOptions.ToList();
+                            VoiceStatusText.Text = BuildVoiceClarificationPrompt(_pendingVoiceClarificationOptions);
                             MarfaVoiceResultText.Text = VoiceStatusText.Text;
                             VoiceResultText.Text = VoiceStatusText.Text;
-                            Log("VOICE: превышен лимит уточнений; команды не отправлены.");
+                            Log("VOICE CLARIFICATION: ожидаю голосовой выбор для фразы: " + text);
                             return;
                         }
+                    }
+
+                    if (parsed == null)
+                    {
+                        var options = _voiceParser.LastAmbiguousOptions;
+                        if (options != null && options.Count > 0 &&
+                            !string.IsNullOrWhiteSpace(_pendingVoiceClarificationPhrase))
+                        {
+                            if (_pendingVoiceClarificationSelections.Count > 5)
+                            {
+                                ClearPendingVoiceClarification();
+                                VoiceStatusText.Text = "Слишком много уточнений. Ничего не отправлено.";
+                                MarfaVoiceResultText.Text = VoiceStatusText.Text;
+                                VoiceResultText.Text = VoiceStatusText.Text;
+                                return;
+                            }
+
+                            _pendingVoiceClarificationOptions = options.ToList();
+                            VoiceStatusText.Text = BuildVoiceClarificationPrompt(_pendingVoiceClarificationOptions);
+                            MarfaVoiceResultText.Text = VoiceStatusText.Text;
+                            VoiceResultText.Text = VoiceStatusText.Text;
+                            Log("VOICE CLARIFICATION: требуется ещё один выбор.");
+                            return;
+                        }
+
+                        var reason = string.IsNullOrWhiteSpace(_voiceParser.LastReason)
+                            ? "Команда не распознана или элемент не найден."
+                            : _voiceParser.LastReason;
+                        ClearPendingVoiceClarification();
+                        VoiceStatusText.Text = reason;
+                        MarfaVoiceResultText.Text = reason;
+                        VoiceResultText.Text = reason;
+                        Log("VOICE: " + reason);
+                        return;
                     }
 
                     var commands = parsed.Commands != null && parsed.Commands.Count > 0
                         ? parsed.Commands
                         : new List<string> { parsed.Command };
+                    ClearPendingVoiceClarification();
 
                     for (var i = 0; i < commands.Count; i++)
                         ValidateCommand(commands[i]);
@@ -2564,17 +2724,12 @@ namespace ESP32AIControl.WP81
 
                     if (parsed.ExecuteAt.HasValue)
                     {
-                        // Multi-command delayed execution is rejected by the parser;
-                        // keep this path strictly single-command.
                         await _scheduler.ScheduleAsync(commands[0], parsed.ExecuteAt.Value);
                         await RefreshScheduleAsync();
                         Log("VOICE SCHEDULE: " + commands[0] + " @ " + parsed.ExecuteAt.Value);
                     }
                     else
                     {
-                        // Preflight every command before sending the first MQTT
-                        // packet. A malformed or unplannable later command must
-                        // never leave the first action executed by itself.
                         for (var i = 0; i < commands.Count; i++)
                         {
                             var plan = _commandExecutor.BuildPlan(commands[i]);
