@@ -461,6 +461,18 @@
                                 CornerRadius="10"
                                 Padding="10"
                                 Margin="0,8,0,0">
+                            <TextBlock x:Name="ScenarioDeviationText"
+                                       Text="Проверка отклонений запустится после загрузки сценариев и получения данных MQTT."
+                                       TextWrapping="Wrap"
+                                       FontSize="12"
+                                       Foreground="#FFE8C77A"/>
+                        </Border>
+                        <Border Background="#FF17181D"
+                                BorderBrush="#FF393B44"
+                                BorderThickness="1"
+                                CornerRadius="10"
+                                Padding="10"
+                                Margin="0,8,0,0">
                             <TextBlock x:Name="ScenarioPlanText"
                                        Text="Здесь появится результат проверки и список действий."
                                        TextWrapping="Wrap"
