@@ -90,7 +90,7 @@ namespace ESP32AIControl.WP81.Core.Voice
                         ? actionSpans[i + 1].Index
                         : text.Length;
                     var clause = text.Substring(start, end - start)
-                        .Trim(' ', \t, ',', ';', '.', '!', '?');
+                        .Trim(' ', '\t', ',', ';', '.', '!', '?');
                     clause = Regex.Replace(clause, @"\s+(?:и|а|затем|после этого|далее|and|then)\s*$", string.Empty,
                         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
                     string clauseReason;
