@@ -705,6 +705,7 @@ namespace ESP32AIControl.WP81
                 Environment.NewLine + Environment.NewLine, activeScripts);
             _commandExecutor.SetScenarioScript(_appSettings.IoTManagerScenario);
             _scenarioMonitor.SetProfiles(_scenarioProfiles);
+            _scenarioMonitor.Observe();
         }
 
         private async void ScenarioMonitor_DeviationsChanged(
