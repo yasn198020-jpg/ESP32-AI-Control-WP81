@@ -146,6 +146,11 @@ namespace ESP32AIControl.WP81
 
         private void UpdateNavigationChrome()
         {
+            if (NavHomeButton == null || NavMarfaButton == null ||
+                NavCommandsButton == null || NavHistoryButton == null ||
+                NavPendingButton == null || PageTitleText == null)
+                return;
+
             switch (MainPivot.SelectedIndex)
             {
                 case 0: PageTitleText.Text = "Главная"; break;
@@ -275,6 +280,12 @@ namespace ESP32AIControl.WP81
                 await _settingsStore.SaveAsync(_appSettings);
                 await CleanupHistoryAsync();
 
+                OpenCommandSummary.Text = string.IsNullOrWhiteSpace(_appSettings.VoiceOpenCommand)
+                    ? "Команда не настроена. Укажите MQTT-цель в настройках."
+                    : _appSettings.VoiceOpenCommand;
+                CloseCommandSummary.Text = string.IsNullOrWhiteSpace(_appSettings.VoiceCloseCommand)
+                    ? "Команда не настроена. Укажите MQTT-цель в настройках."
+                    : _appSettings.VoiceCloseCommand;
                 SettingsStatus.Text = "Настройки сохранены.";
                 Log("Настройки сохранены.");
             }
@@ -1151,11 +1162,13 @@ namespace ESP32AIControl.WP81
             {
                 VoiceButton.IsEnabled = false;
                 VoiceResultText.Text = "Слушаю…";
+                VoiceStatusText.Text = "Марфа слушает…";
                 await _voice.StartListeningAsync();
             }
             catch (Exception ex)
             {
                 VoiceResultText.Text = "Ошибка голоса: " + ex.Message;
+                VoiceStatusText.Text = VoiceResultText.Text;
                 Log("VOICE ERROR: " + ex.Message);
             }
             finally
@@ -1170,6 +1183,7 @@ namespace ESP32AIControl.WP81
             await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, async delegate
             {
                 VoiceResultText.Text = "Распознано: " + text;
+                VoiceStatusText.Text = VoiceResultText.Text;
                 try
                 {
                     var parsed = _voiceParser.Parse(text);
