@@ -18,6 +18,9 @@ namespace ESP32AIControl.WP81.Models
         public string WarningMinimum { get; set; }
         public string WarningMaximum { get; set; }
         public string DefinitionName { get; set; }
+        public string ScaleFactor { get; set; }
+        public string[] Options { get; set; }
+        public string ConfigJson { get; set; }
         public DateTimeOffset UpdatedAt { get; set; }
 
         public string Key
@@ -43,6 +46,9 @@ namespace ESP32AIControl.WP81.Models
                 WarningMinimum = WarningMinimum,
                 WarningMaximum = WarningMaximum,
                 DefinitionName = DefinitionName,
+                ScaleFactor = ScaleFactor,
+                Options = Options,
+                ConfigJson = ConfigJson,
                 UpdatedAt = UpdatedAt
             };
         }
