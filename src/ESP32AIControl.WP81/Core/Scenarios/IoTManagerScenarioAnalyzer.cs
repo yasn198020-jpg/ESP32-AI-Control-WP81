@@ -209,6 +209,8 @@ namespace ESP32AIControl.WP81.Core.Scenarios
 
                 if (!isAnd)
                 {
+                    if (left.Count + right.Count > 256)
+                        return null;
                     var union = new List<List<ScenarioCondition>>();
                     union.AddRange(left);
                     union.AddRange(right);
