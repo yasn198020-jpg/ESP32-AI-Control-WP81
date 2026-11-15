@@ -1904,49 +1904,6 @@ namespace ESP32AIControl.WP81
             BuildGraphButton_Click(this, new RoutedEventArgs());
         }
 
-        private static Windows.UI.Color ResolveWidgetColor(string raw, double value)
-        {
-            var fallback = Windows.UI.Color.FromArgb(255, 144, 202, 249);
-            if (double.IsNaN(value) || string.IsNullOrWhiteSpace(raw)) return fallback;
-            var text = raw.Trim();
-            if (text.StartsWith("[", StringComparison.Ordinal))
-            {
-                var matches = System.Text.RegularExpressions.Regex.Matches(text,
-                    "\\{[^}]*\\\"level\\\"\\s*:\\s*(-?[0-9]+(?:\\.[0-9]+)?)[^}]*\\\"value\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"[^}]*\\}");
-                var selectedLevel = double.NegativeInfinity;
-                var selectedColor = string.Empty;
-                foreach (System.Text.RegularExpressions.Match match in matches)
-                {
-                    double level;
-                    if (double.TryParse(match.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out level) && level <= value && level >= selectedLevel)
-                    { selectedLevel = level; selectedColor = match.Groups[2].Value; }
-                }
-                text = selectedColor;
-            }
-            if (text.Length == 7 && text[0] == '#')
-            {
-                byte r, g, b;
-                if (byte.TryParse(text.Substring(1, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out r) &&
-                    byte.TryParse(text.Substring(3, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out g) &&
-                    byte.TryParse(text.Substring(5, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out b))
-                    return Windows.UI.Color.FromArgb(255, r, g, b);
-            }
-            switch (text.ToLowerInvariant())
-            {
-                case "red": return Windows.UI.Colors.Red;
-                case "green": return Windows.UI.Colors.Green;
-                case "blue": return Windows.UI.Colors.Blue;
-                case "orange": return Windows.UI.Colors.Orange;
-                case "yellow": return Windows.UI.Colors.Yellow;
-                case "white": return Windows.UI.Colors.White;
-                case "gray": case "grey": return Windows.UI.Colors.Gray;
-                case "lime": return Windows.UI.Colors.Lime;
-                case "cyan": return Windows.UI.Colors.Cyan;
-                case "magenta": return Windows.UI.Colors.Magenta;
-            }
-            return fallback;
-        }
-
         private static double ReadWidgetNumber(string value, double fallback)
         {
             double result;
