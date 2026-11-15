@@ -388,10 +388,10 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                 targetState.DeviceId,
                 new HashSet<string>(StringComparer.OrdinalIgnoreCase));
 
-            // A prerequisite comparison other than equality cannot yet be
-            // converted into a deterministic control value. Do not return a
-            // partial plan that might omit a required interlock.
-            return analysis.IsComplete ? analysis : null;
+            // Keep incomplete analyses visible to the planner. Falling back to
+            // heuristic dependencies after a known but unresolved scenario rule
+            // could execute the target without a required prerequisite.
+            return analysis;
         }
 
         private void ResolveActionValues(DeviceRepository devices)
@@ -489,6 +489,8 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             var bestScore = -1;
             ScenarioAssignment best = null;
             WidgetState bestWidget = null;
+            var hasTargetRule = false;
+            var ambiguousBest = false;
 
             for (var r = 0; r < _rules.Count; r++)
             {
@@ -500,6 +502,7 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                 if (!RuleBelongsToDevice(rule, devices, targetState.DeviceId))
                     continue;
 
+                hasTargetRule = true;
                 for (var a = 0; a < rule.Assignments.Count; a++)
                 {
                     var assignment = rule.Assignments[a];
@@ -530,12 +533,29 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                         bestScore = score;
                         best = assignment;
                         bestWidget = widget;
+                        ambiguousBest = false;
+                    }
+                    else if (score == bestScore &&
+                             (!object.ReferenceEquals(assignment, best) ||
+                              !object.ReferenceEquals(widget, bestWidget)))
+                    {
+                        ambiguousBest = true;
                     }
                 }
             }
 
-            if (best == null || bestWidget == null)
+            if (!hasTargetRule)
                 return null;
+
+            if (best == null || bestWidget == null || ambiguousBest)
+            {
+                return new ScenarioAnalysis
+                {
+                    TargetVariable = targetState.Id,
+                    TargetValue = targetValue,
+                    IsComplete = false
+                };
+            }
 
             return new ScenarioAnalysis
             {
@@ -576,43 +596,43 @@ namespace ESP32AIControl.WP81.Core.Scenarios
         {
             var key = (variable ?? string.Empty) + "=" + (value ?? string.Empty);
             if (!visiting.Add(key))
+            {
+                analysis.IsComplete = false;
                 return;
+            }
 
             var candidates = FindAssignments(variable, value);
-            ScenarioAssignment selected = null;
+            var eligible = new List<ScenarioAssignment>();
 
             for (var i = 0; i < candidates.Count; i++)
             {
                 var candidate = candidates[i];
-
                 if (!RuleBelongsToDevice(candidate, devices, deviceId))
                     continue;
 
                 if (!requireTargetCondition ||
                     HasCondition(candidate.Conditions, analysis.TargetVariable, analysis.TargetValue))
-                {
-                    selected = candidate;
-                    break;
-                }
+                    eligible.Add(candidate);
             }
 
-            if (selected == null && candidates.Count > 0 && !requireTargetCondition)
+            if (eligible.Count == 0)
             {
-                for (var i = 0; i < candidates.Count; i++)
-                {
-                    if (RuleBelongsToDevice(candidates[i], devices, deviceId))
-                    {
-                        selected = candidates[i];
-                        break;
-                    }
-                }
-            }
-
-            if (selected == null)
-            {
+                if (candidates.Count > 0)
+                    analysis.IsComplete = false;
                 visiting.Remove(key);
                 return;
             }
+
+            if (eligible.Count > 1)
+            {
+                // Multiple rules can assign the same intermediate variable.
+                // The current planner cannot safely choose one alternative.
+                analysis.IsComplete = false;
+                visiting.Remove(key);
+                return;
+            }
+
+            var selected = eligible[0];
 
             for (var i = 0; i < selected.Conditions.Count; i++)
             {
