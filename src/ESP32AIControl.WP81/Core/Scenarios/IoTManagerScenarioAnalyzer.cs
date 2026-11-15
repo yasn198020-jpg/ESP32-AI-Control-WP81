@@ -79,6 +79,12 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             RegexOptions.IgnoreCase);
 
         private readonly List<ScenarioRule> _rules = new List<ScenarioRule>();
+        private bool _hasUnsupportedRules;
+
+        public bool HasUnsupportedRules
+        {
+            get { return _hasUnsupportedRules; }
+        }
 
         public IoTManagerScenarioAnalyzer(string script)
         {
@@ -98,6 +104,7 @@ namespace ESP32AIControl.WP81.Core.Scenarios
         public void Load(string script)
         {
             _rules.Clear();
+            _hasUnsupportedRules = false;
 
             if (string.IsNullOrWhiteSpace(script))
                 return;
@@ -113,7 +120,16 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                 {
                     var sourceRule = compiled.Rules[r];
                     var alternatives = ExpandPlannerConditions(sourceRule.Condition, false);
-                    if (alternatives == null || alternatives.Count == 0)
+                    if (alternatives == null)
+                    {
+                        // The runtime understands this condition, but the dependency
+                        // planner cannot prove a complete execution order for it.
+                        // Remember this so ScenarioPlanner can fail closed instead of
+                        // silently falling back to heuristic actions.
+                        _hasUnsupportedRules = true;
+                        continue;
+                    }
+                    if (alternatives.Count == 0)
                         continue;
 
                     var actions = new List<ScenarioAssignment>();
