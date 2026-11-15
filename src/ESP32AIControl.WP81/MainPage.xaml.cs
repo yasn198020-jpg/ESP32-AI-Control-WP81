@@ -196,7 +196,11 @@ namespace ESP32AIControl.WP81
         private void CommandsNavigation_Click(object sender, RoutedEventArgs e) { ShowSection(1); }
         private void HistoryNavigation_Click(object sender, RoutedEventArgs e) { ShowSection(2); }
         private void PendingNavigation_Click(object sender, RoutedEventArgs e) { ShowSection(3); }
-        private void MarfaNavigation_Click(object sender, RoutedEventArgs e) { VoiceButton_Click(sender, e); }
+        private void MarfaNavigation_Click(object sender, RoutedEventArgs e)
+        {
+            ShowSection(1);
+            VoiceButton_Click(sender, e);
+        }
 
         private void NavigateHome_Click(object sender, RoutedEventArgs e) { ShowSection(0); }
         private void NavigateGraphs_Click(object sender, RoutedEventArgs e) { ShowSection(2); }
@@ -1161,6 +1165,7 @@ namespace ESP32AIControl.WP81
             try
             {
                 VoiceButton.IsEnabled = false;
+                CommandVoiceButton.IsEnabled = false;
                 VoiceResultText.Text = "Слушаю…";
                 VoiceStatusText.Text = "Марфа слушает…";
                 await _voice.StartListeningAsync();
@@ -1174,6 +1179,7 @@ namespace ESP32AIControl.WP81
             finally
             {
                 VoiceButton.IsEnabled = true;
+                CommandVoiceButton.IsEnabled = true;
                 await _voice.StopListeningAsync();
             }
         }
