@@ -147,7 +147,7 @@
                                            FontWeight="SemiBold"
                                            Foreground="#FFECEFF1"/>
                                 <TextBlock x:Name="MarfaVoiceResultText"
-                                           Text="Нажмите кнопку и произнесите команду"
+                                           Text="Нажмите кнопку и произнесите действие и название управляемого элемента. Перед отправкой Марфа попросит подтверждение."
                                            TextWrapping="Wrap"
                                            Foreground="#FFBDBDBD"
                                            Margin="0,10,0,12"/>
@@ -182,7 +182,7 @@
                                    FontSize="25"
                                    FontWeight="SemiBold"
                                    Foreground="#FFF5F5F5"/>
-                        <TextBlock Text="Здесь показаны команды открытия и закрытия, которые сейчас использует Марфа."
+                        <TextBlock Text="Здесь находятся дополнительные команды открытия и закрытия теплицы. Также Марфа может найти отдельный переключатель или кнопку по названию MQTT-элемента."
                                    TextWrapping="Wrap"
                                    Foreground="#FFBDBDBD"
                                    Margin="0,4,0,14"/>
@@ -238,7 +238,7 @@
                                    Foreground="#FFBDBDBD"
                                    TextWrapping="Wrap"
                                    Margin="0,8,0,0"/>
-                        <TextBlock Text="Обучение произвольным фразам и привязка нескольких действий — следующий этап переноса Марфы."
+                        <TextBlock Text="Поддерживаются одиночные команды с однозначным совпадением. Несколько действий в одной фразе и полноценный диалог уточнений пока не перенесены; неоднозначная команда не отправляется."
                                    TextWrapping="Wrap"
                                    Foreground="#FF9E9E9E"
                                    FontSize="12"
