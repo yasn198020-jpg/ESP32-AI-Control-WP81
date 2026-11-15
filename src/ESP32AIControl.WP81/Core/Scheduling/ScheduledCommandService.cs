@@ -423,19 +423,31 @@ namespace ESP32AIControl.WP81.Core.Scheduling
             {
                 if (_loaded) return;
 
-                StorageFile file;
-            try
-            {
-                file = await ApplicationData.Current.LocalFolder.GetFileAsync(FileName);
-            }
-            catch (FileNotFoundException)
-            {
-                _loaded = true;
-                return;
-            }
+                var folder = ApplicationData.Current.LocalFolder;
+                StorageFile file = null;
+                var recoveredTemporarySnapshot = false;
+                try
+                {
+                    file = await folder.GetFileAsync(FileName);
+                }
+                catch (FileNotFoundException)
+                {
+                    try
+                    {
+                        // A process interruption between replacing the old snapshot
+                        // and renaming the completed temporary snapshot is recoverable.
+                        file = await folder.GetFileAsync(FileName + ".tmp");
+                        recoveredTemporarySnapshot = true;
+                    }
+                    catch (FileNotFoundException)
+                    {
+                        _loaded = true;
+                        return;
+                    }
+                }
 
-            var json = await FileIO.ReadTextAsync(file);
-            var recoveredInterruptedExecution = false;
+                var json = await FileIO.ReadTextAsync(file);
+                var recoveredInterruptedExecution = false;
             if (!string.IsNullOrWhiteSpace(json))
             {
                 using (var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(json)))
@@ -466,7 +478,7 @@ namespace ESP32AIControl.WP81.Core.Scheduling
             }
 
             _loaded = true;
-                if (recoveredInterruptedExecution)
+                if (recoveredInterruptedExecution || recoveredTemporarySnapshot)
                     await SaveAsync();
             }
             finally
@@ -508,9 +520,12 @@ namespace ESP32AIControl.WP81.Core.Scheduling
                     }
 
                     if (currentFile != null)
-                        await temporaryFile.MoveAndReplaceAsync(currentFile);
-                    else
-                        await temporaryFile.MoveAsync(folder, FileName, NameCollisionOption.ReplaceExisting);
+                        await currentFile.DeleteAsync();
+
+                    // Rename only after the complete temporary snapshot has been
+                    // written. If the app stops between delete and rename, LoadAsync
+                    // can recover the still-present temporary file on next launch.
+                    await temporaryFile.RenameAsync(FileName, NameCollisionOption.ReplaceExisting);
                 }
             }
             finally
