@@ -2,7 +2,7 @@ name: WP81 Build
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, ui/android-parity-phase1 ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
