@@ -196,6 +196,11 @@
                         <Button Content="Произнести команду"
                                 HorizontalAlignment="Stretch"
                                 Click="VoiceButton_Click"/>
+                        <TextBlock x:Name="VoiceStatusText"
+                                   Text="Голосовое управление готово"
+                                   Foreground="#FFBDBDBD"
+                                   TextWrapping="Wrap"
+                                   Margin="0,8,0,0"/>
                         <TextBlock Text="Обучение произвольным фразам и привязка нескольких действий — следующий этап переноса Марфы."
                                    TextWrapping="Wrap"
                                    Foreground="#FF9E9E9E"
