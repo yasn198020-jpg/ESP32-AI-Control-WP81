@@ -91,7 +91,14 @@ namespace ESP32AIControl.WP81.Core.State
                         Description = message.Description,
                         WidgetType = message.WidgetType,
                         Page = message.Page,
-                        Order = message.Order
+                        Order = message.Order,
+                        Unit = message.Unit,
+                        Minimum = message.Minimum,
+                        Maximum = message.Maximum,
+                        Step = message.Step,
+                        WarningMinimum = message.WarningMinimum,
+                        WarningMaximum = message.WarningMaximum,
+                        DefinitionName = message.DefinitionName
                     };
                     _widgets[key] = state;
                 }
@@ -104,6 +111,13 @@ namespace ESP32AIControl.WP81.Core.State
                     state.Description = message.Description;
                 if (!string.IsNullOrEmpty(message.WidgetType))
                     state.WidgetType = message.WidgetType;
+                if (!string.IsNullOrEmpty(message.Unit)) state.Unit = message.Unit;
+                if (!string.IsNullOrEmpty(message.Minimum)) state.Minimum = message.Minimum;
+                if (!string.IsNullOrEmpty(message.Maximum)) state.Maximum = message.Maximum;
+                if (!string.IsNullOrEmpty(message.Step)) state.Step = message.Step;
+                if (!string.IsNullOrEmpty(message.WarningMinimum)) state.WarningMinimum = message.WarningMinimum;
+                if (!string.IsNullOrEmpty(message.WarningMaximum)) state.WarningMaximum = message.WarningMaximum;
+                if (!string.IsNullOrEmpty(message.DefinitionName)) state.DefinitionName = message.DefinitionName;
                 if (!string.IsNullOrEmpty(message.Page))
                     state.Page = message.Page;
                 if (message.Order != 0)
