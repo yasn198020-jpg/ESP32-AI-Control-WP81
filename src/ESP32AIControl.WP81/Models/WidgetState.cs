@@ -22,6 +22,7 @@ namespace ESP32AIControl.WP81.Models
         public string[] Options { get; set; }
         public string ConfigJson { get; set; }
         public string ColorConfig { get; set; }
+        public string StatusPayload { get; set; }
         public DateTimeOffset UpdatedAt { get; set; }
 
         public string Key
@@ -51,6 +52,7 @@ namespace ESP32AIControl.WP81.Models
                 Options = Options,
                 ConfigJson = ConfigJson,
                 ColorConfig = ColorConfig,
+                StatusPayload = StatusPayload,
                 UpdatedAt = UpdatedAt
             };
         }
