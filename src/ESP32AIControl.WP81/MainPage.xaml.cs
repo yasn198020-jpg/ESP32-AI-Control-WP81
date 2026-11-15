@@ -2631,6 +2631,7 @@ namespace ESP32AIControl.WP81
                             return;
                         }
 
+                        _pendingVoiceClarificationExpiresAt = DateTimeOffset.Now.AddMinutes(2);
                         string selectedCommand;
                         if (!TrySelectVoiceClarification(text, _pendingVoiceClarificationOptions, out selectedCommand))
                         {
