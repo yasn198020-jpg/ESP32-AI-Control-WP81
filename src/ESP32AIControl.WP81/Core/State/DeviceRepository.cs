@@ -10,8 +10,14 @@ namespace ESP32AIControl.WP81.Core.State
         private readonly Dictionary<string, WidgetState> _widgets =
             new Dictionary<string, WidgetState>();
 
-        private readonly Dictionary<string, DateTimeOffset> _lastUpdates =
-            new Dictionary<string, DateTimeOffset>();
+        private sealed class UpdateStamp
+        {
+            public string Value;
+            public DateTimeOffset UpdatedAt;
+        }
+
+        private readonly Dictionary<string, UpdateStamp> _lastUpdates =
+            new Dictionary<string, UpdateStamp>();
 
         // IoTManager element IDs are globally unique across ESPs. The index
         // lets scenario code resolve "btn43" to the real widget/device without
@@ -181,16 +187,25 @@ namespace ESP32AIControl.WP81.Core.State
 
         private bool IsDuplicate(string key, string value)
         {
-            var stampKey = key + "|" + (value ?? string.Empty);
-            DateTimeOffset previous;
+            var normalizedValue = value ?? string.Empty;
+            var now = DateTimeOffset.Now;
+            UpdateStamp previous;
 
-            if (_lastUpdates.TryGetValue(stampKey, out previous))
+            if (_lastUpdates.TryGetValue(key, out previous))
             {
-                if ((DateTimeOffset.Now - previous).TotalMilliseconds < 750)
+                if (string.Equals(previous.Value, normalizedValue, StringComparison.Ordinal) &&
+                    (now - previous.UpdatedAt).TotalMilliseconds < 750)
                     return true;
             }
 
-            _lastUpdates[stampKey] = DateTimeOffset.Now;
+            // Keep one recent stamp per widget instead of one dictionary entry
+            // per distinct sensor value; otherwise frequently changing sensors
+            // grow this cache for the lifetime of the application.
+            _lastUpdates[key] = new UpdateStamp
+            {
+                Value = normalizedValue,
+                UpdatedAt = now
+            };
             return false;
         }
     }
