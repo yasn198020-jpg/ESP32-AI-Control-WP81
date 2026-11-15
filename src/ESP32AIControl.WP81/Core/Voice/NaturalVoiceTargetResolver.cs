@@ -46,7 +46,14 @@ namespace ESP32AIControl.WP81.Core.Voice
         public string ResolveCommand(string phrase, out string reason)
         {
             reason = null;
-            var tokens = Tokenize(phrase);
+            // Strip only an explicitly parsed delay so widget numbers such as
+            // "окно 2" remain available to resolve the correct control.
+            var searchable = Regex.Replace(
+                phrase ?? string.Empty,
+                @"(?:через|in)\s+(?:[0-9]+|один|одну|два|две|три|четыре|пять|десять|двадцать|тридцать|сорок|пятьдесят|шестьдесят)\s*(?:секунд(?:у|ы)?|сек|минут(?:у|ы)?|мин|час(?:а|ов)?|дн(?:я|ей)?)",
+                " ",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            var tokens = Tokenize(searchable);
             var intent = DetectIntent(tokens);
             if (intent == null)
                 return null;
@@ -60,8 +67,7 @@ namespace ESP32AIControl.WP81.Core.Voice
             var targetTokens = new List<string>();
             foreach (var token in tokens)
             {
-                if (IsActionToken(token) || StopWords.Contains(token) ||
-                    Regex.IsMatch(token, @"^\d+$"))
+                if (IsActionToken(token) || StopWords.Contains(token))
                     continue;
 
                 var normalized = NormalizeWord(token);
@@ -147,33 +153,24 @@ namespace ESP32AIControl.WP81.Core.Voice
             var hasTurn = tokens.Contains("turn", StringComparer.OrdinalIgnoreCase);
             for (var i = 0; i < tokens.Count; i++)
             {
-                var token = NormalizeWord(tokens[i]);
-                if (token.StartsWith("откр", StringComparison.Ordinal) ||
-                    token == "open" || token.StartsWith("подним", StringComparison.Ordinal) ||
-                    token.StartsWith("отпер", StringComparison.Ordinal))
+                var token = tokens[i].ToLowerInvariant();
+                if (IsOneOf(token, "открой", "откройте", "открыть", "открывай", "открывайте",
+                    "открыл", "открыла", "открыли", "открою", "откроет", "open"))
                     intents.Add("open");
-                else if (token.StartsWith("закр", StringComparison.Ordinal) ||
-                         token == "close" || token.StartsWith("опуст", StringComparison.Ordinal) ||
-                         token.StartsWith("запер", StringComparison.Ordinal))
+                else if (IsOneOf(token, "закрой", "закройте", "закрыть", "закрывай", "закрывайте",
+                    "закрыл", "закрыла", "закрыли", "закрою", "закроет", "close", "shut"))
                     intents.Add("close");
-                else if (token.StartsWith("включ", StringComparison.Ordinal) ||
-                         token.StartsWith("вруб", StringComparison.Ordinal) ||
-                         token.StartsWith("зажг", StringComparison.Ordinal) ||
-                         (hasTurn && token == "on"))
+                else if (IsOneOf(token, "включи", "включите", "включить", "включай", "включайте",
+                    "вруби", "врубите", "зажги", "зажгите", "запитай") ||
+                    (hasTurn && token == "on"))
                     intents.Add("on");
-                else if (token.StartsWith("выключ", StringComparison.Ordinal) ||
-                         token.StartsWith("выруб", StringComparison.Ordinal) ||
-                         token.StartsWith("погас", StringComparison.Ordinal) ||
-                         token.StartsWith("отруб", StringComparison.Ordinal) ||
-                         (hasTurn && token == "off"))
+                else if (IsOneOf(token, "выключи", "выключите", "выключить", "выключай", "выключайте",
+                    "выруби", "вырубите", "погаси", "погасите", "отруби") ||
+                    (hasTurn && token == "off"))
                     intents.Add("off");
-                else if (token.StartsWith("запуст", StringComparison.Ordinal) ||
-                         token.StartsWith("старт", StringComparison.Ordinal) ||
-                         token == "start")
+                else if (IsOneOf(token, "запусти", "запустите", "запустить", "запускать", "start"))
                     intents.Add("start");
-                else if (token.StartsWith("останов", StringComparison.Ordinal) ||
-                         token.StartsWith("прекрат", StringComparison.Ordinal) ||
-                         token == "stop")
+                else if (IsOneOf(token, "останови", "остановите", "остановить", "прекрати", "прекратите", "stop"))
                     intents.Add("stop");
             }
 
@@ -190,25 +187,27 @@ namespace ESP32AIControl.WP81.Core.Voice
 
         private static bool IsActionToken(string token)
         {
-            var word = NormalizeWord(token);
-            return word.StartsWith("откр", StringComparison.Ordinal) ||
-                   word.StartsWith("закр", StringComparison.Ordinal) ||
-                   word.StartsWith("включ", StringComparison.Ordinal) ||
-                   word.StartsWith("выключ", StringComparison.Ordinal) ||
-                   word.StartsWith("вруб", StringComparison.Ordinal) ||
-                   word.StartsWith("выруб", StringComparison.Ordinal) ||
-                   word.StartsWith("зажг", StringComparison.Ordinal) ||
-                   word.StartsWith("погас", StringComparison.Ordinal) ||
-                   word.StartsWith("отруб", StringComparison.Ordinal) ||
-                   word.StartsWith("подним", StringComparison.Ordinal) ||
-                   word.StartsWith("опуст", StringComparison.Ordinal) ||
-                   word.StartsWith("отпер", StringComparison.Ordinal) ||
-                   word.StartsWith("запер", StringComparison.Ordinal) ||
-                   word.StartsWith("запуст", StringComparison.Ordinal) ||
-                   word.StartsWith("останов", StringComparison.Ordinal) ||
-                   word.StartsWith("прекрат", StringComparison.Ordinal) ||
-                   word == "open" || word == "close" || word == "turn" ||
-                   word == "on" || word == "off" || word == "start" || word == "stop";
+            var word = (token ?? string.Empty).ToLowerInvariant();
+            return IsOneOf(word,
+                "открой", "откройте", "открыть", "открывай", "открывайте",
+                "открыл", "открыла", "открыли", "открою", "откроет", "open",
+                "закрой", "закройте", "закрыть", "закрывай", "закрывайте",
+                "закрыл", "закрыла", "закрыли", "закрою", "закроет", "close", "shut",
+                "включи", "включите", "включить", "включай", "включайте",
+                "вруби", "врубите", "зажги", "зажгите", "запитай",
+                "выключи", "выключите", "выключить", "выключай", "выключайте",
+                "выруби", "вырубите", "погаси", "погасите", "отруби",
+                "запусти", "запустите", "запустить", "запускать",
+                "останови", "остановите", "остановить", "прекрати", "прекратите",
+                "turn", "on", "off", "start", "stop");
+        }
+
+        private static bool IsOneOf(string value, params string[] options)
+        {
+            for (var i = 0; i < options.Length; i++)
+                if (string.Equals(value, options[i], StringComparison.OrdinalIgnoreCase))
+                    return true;
+            return false;
         }
 
         private static bool IsControllable(WidgetState widget)
