@@ -227,80 +227,78 @@ namespace ESP32AIControl.WP81.Core.Scheduling
             if (Interlocked.Exchange(ref _tickRunning, 1) != 0)
                 return;
 
-            var due = new List<ScheduledCommand>();
+            ScheduledCommand activeClaim = null;
             try
             {
-                await _mutationGate.WaitAsync();
-                try
+                while (true)
                 {
-                    lock (_gate)
+                    ScheduledCommand next = null;
+                    var claimFailed = false;
+
+                    await _mutationGate.WaitAsync();
+                    try
                     {
-                        var now = DateTimeOffset.Now;
-                        foreach (var item in _items)
+                        lock (_gate)
                         {
-                            if (item.Status == "Scheduled" &&
-                                !_mutating.Contains(item.Id) &&
-                                item.ExecuteAt <= now)
+                            var now = DateTimeOffset.Now;
+                            foreach (var item in _items)
                             {
-                                item.Status = "Executing";
-                                due.Add(item.Clone());
+                                if (item.Status == "Scheduled" &&
+                                    !_mutating.Contains(item.Id) &&
+                                    item.ExecuteAt <= now)
+                                {
+                                    item.Status = "Executing";
+                                    next = item.Clone();
+                                    activeClaim = next;
+                                    break;
+                                }
                             }
                         }
-                    }
 
-                    if (due.Count > 0)
-                    {
-                        try
+                        if (next != null)
                         {
-                            // Persist the execution claim before sending anything.
-                            // A restart can then mark interrupted work as unknown
-                            // instead of replaying a command that may have reached the device.
-                            await SaveAsync();
-                        }
-                        catch (Exception persistenceError)
-                        {
-                            lock (_gate)
+                            try
                             {
-                                foreach (var copy in due)
+                                // Claim and persist exactly one task before sending it.
+                                // Tasks later in the queue remain Scheduled if the app stops.
+                                await SaveAsync();
+                            }
+                            catch (Exception persistenceError)
+                            {
+                                lock (_gate)
                                 {
-                                    var item = FindUnsafe(copy.Id);
+                                    var item = FindUnsafe(next.Id);
                                     if (item != null && item.Status == "Executing")
                                     {
                                         item.Status = "Scheduled";
                                         item.LastError = "Не удалось сохранить состояние очереди: " + persistenceError.Message;
                                     }
                                 }
+                                claimFailed = true;
                             }
-                            foreach (var copy in due)
-                            {
-                                var item = Find(copy.Id);
-                                if (item != null) RaiseChanged(item);
-                            }
-                            return;
                         }
                     }
-                }
-                finally
-                {
-                    _mutationGate.Release();
-                }
-
-                foreach (var copy in due)
-                {
-                    var original = Find(copy.Id);
-                    if (original == null) continue;
-
-                    lock (_gate)
+                    finally
                     {
-                        if (original.Status != "Executing")
-                            continue;
+                        _mutationGate.Release();
+                    }
+
+                    if (next == null)
+                        break;
+
+                    var original = Find(next.Id);
+                    if (claimFailed)
+                    {
+                        if (original != null) RaiseChanged(original);
+                        activeClaim = null;
+                        break;
                     }
 
                     var completed = false;
                     string executionError = null;
                     try
                     {
-                        await _executor.ExecuteAsync(copy.Command);
+                        await _executor.ExecuteAsync(next.Command);
                         completed = true;
                     }
                     catch (Exception ex)
@@ -313,7 +311,7 @@ namespace ESP32AIControl.WP81.Core.Scheduling
                     {
                         lock (_gate)
                         {
-                            if (original.Status == "Executing")
+                            if (original != null && original.Status == "Executing")
                             {
                                 if (completed)
                                 {
@@ -338,9 +336,9 @@ namespace ESP32AIControl.WP81.Core.Scheduling
                         {
                             lock (_gate)
                             {
-                                if (original.Status == "Completed")
+                                if (original != null && original.Status == "Completed")
                                     original.LastError = "Команда выполнена, но результат не удалось сохранить: " + persistenceError.Message;
-                                else if (original.Status == "Failed")
+                                else if (original != null && original.Status == "Failed")
                                     original.LastError = (original.LastError ?? string.Empty) +
                                         " Не удалось сохранить итоговый статус: " + persistenceError.Message;
                             }
@@ -351,41 +349,40 @@ namespace ESP32AIControl.WP81.Core.Scheduling
                         _mutationGate.Release();
                     }
 
-                    RaiseChanged(original);
+                    if (original != null) RaiseChanged(original);
+                    activeClaim = null;
                 }
             }
             catch (Exception ex)
             {
                 // Never let an async-void timer exception escape the ThreadPool callback.
-                await _mutationGate.WaitAsync();
-                try
+                // Only the single claimed task can be reset; later tasks were never claimed.
+                if (activeClaim != null)
                 {
-                    foreach (var copy in due)
+                    await _mutationGate.WaitAsync();
+                    try
                     {
-                        var item = Find(copy.Id);
-                        if (item == null) continue;
-                        lock (_gate)
+                        var item = Find(activeClaim.Id);
+                        if (item != null)
                         {
-                            // Only work that has not crossed the execution boundary
-                            // may be returned to Scheduled.
-                            if (item.Status == "Executing")
+                            lock (_gate)
                             {
-                                item.Status = "Scheduled";
-                                item.LastError = "Ошибка планировщика: " + ex.Message;
+                                if (item.Status == "Executing")
+                                {
+                                    item.Status = "Scheduled";
+                                    item.LastError = "Ошибка планировщика: " + ex.Message;
+                                }
                             }
                         }
+                        try { await SaveAsync(); } catch { }
                     }
-                    try { await SaveAsync(); } catch { }
-                }
-                finally
-                {
-                    _mutationGate.Release();
-                }
+                    finally
+                    {
+                        _mutationGate.Release();
+                    }
 
-                foreach (var copy in due)
-                {
-                    var item = Find(copy.Id);
-                    if (item != null) RaiseChanged(item);
+                    var changed = Find(activeClaim.Id);
+                    if (changed != null) RaiseChanged(changed);
                 }
             }
             finally
