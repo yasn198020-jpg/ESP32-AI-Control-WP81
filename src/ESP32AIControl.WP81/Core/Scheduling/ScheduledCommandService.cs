@@ -18,6 +18,8 @@ namespace ESP32AIControl.WP81.Core.Scheduling
         private readonly ICommandExecutor _executor;
         private readonly object _gate = new object();
         private readonly SemaphoreSlim _saveGate = new SemaphoreSlim(1, 1);
+        private readonly SemaphoreSlim _loadGate = new SemaphoreSlim(1, 1);
+        private readonly SemaphoreSlim _mutationGate = new SemaphoreSlim(1, 1);
         private readonly HashSet<string> _mutating = new HashSet<string>(StringComparer.Ordinal);
         private readonly List<ScheduledCommand> _items = new List<ScheduledCommand>();
         private ThreadPoolTimer _timer;
@@ -53,15 +55,23 @@ namespace ESP32AIControl.WP81.Core.Scheduling
                 CreatedAt = DateTimeOffset.Now
             };
 
-            lock (_gate) _items.Add(item);
+            await _mutationGate.WaitAsync();
             try
             {
-                await SaveAsync();
+                lock (_gate) _items.Add(item);
+                try
+                {
+                    await SaveAsync();
+                }
+                catch
+                {
+                    lock (_gate) _items.RemoveAll(x => x.Id == item.Id);
+                    throw;
+                }
             }
-            catch
+            finally
             {
-                lock (_gate) _items.RemoveAll(x => x.Id == item.Id);
-                throw;
+                _mutationGate.Release();
             }
 
             RaiseChanged(item);
@@ -74,107 +84,123 @@ namespace ESP32AIControl.WP81.Core.Scheduling
             if (string.IsNullOrWhiteSpace(command))
                 throw new ArgumentException("Команда для расписания не может быть пустой.", "command");
 
-            ScheduledCommand item = null;
-            string previousCommand = null;
-            DateTimeOffset previousExecuteAt = DateTimeOffset.MinValue;
-            string previousStatus = null;
-            string previousError = null;
-
-            lock (_gate)
-            {
-                for (var i = 0; i < _items.Count; i++)
-                {
-                    if (_items[i].Id == id)
-                    {
-                        item = _items[i];
-                        break;
-                    }
-                }
-
-                if (item == null) throw new InvalidOperationException("Задача не найдена.");
-                if (item.Status == "Completed" || item.Status == "Cancelled")
-                    throw new InvalidOperationException("Завершённую задачу нельзя изменить.");
-                if (item.Status == "Executing")
-                    throw new InvalidOperationException("Команда уже выполняется. Изменить её сейчас нельзя.");
-                if (!_mutating.Add(id))
-                    throw new InvalidOperationException("Эта задача уже изменяется.");
-
-                previousCommand = item.Command;
-                previousExecuteAt = item.ExecuteAt;
-                previousStatus = item.Status;
-                previousError = item.LastError;
-                item.Command = command.Trim();
-                item.ExecuteAt = executeAt;
-                item.Status = "Scheduled";
-                item.LastError = null;
-            }
-
+            await _mutationGate.WaitAsync();
             try
             {
-                await SaveAsync();
-            }
-            catch
-            {
+                ScheduledCommand item = null;
+                string previousCommand = null;
+                DateTimeOffset previousExecuteAt = DateTimeOffset.MinValue;
+                string previousStatus = null;
+                string previousError = null;
+
                 lock (_gate)
                 {
-                    item.Command = previousCommand;
-                    item.ExecuteAt = previousExecuteAt;
-                    item.Status = previousStatus;
-                    item.LastError = previousError;
+                    for (var i = 0; i < _items.Count; i++)
+                    {
+                        if (_items[i].Id == id)
+                        {
+                            item = _items[i];
+                            break;
+                        }
+                    }
+
+                    if (item == null) throw new InvalidOperationException("Задача не найдена.");
+                    if (item.Status == "Completed" || item.Status == "Cancelled")
+                        throw new InvalidOperationException("Завершённую задачу нельзя изменить.");
+                    if (item.Status == "Executing")
+                        throw new InvalidOperationException("Команда уже выполняется. Изменить её сейчас нельзя.");
+                    if (!_mutating.Add(id))
+                        throw new InvalidOperationException("Эта задача уже изменяется.");
+
+                    previousCommand = item.Command;
+                    previousExecuteAt = item.ExecuteAt;
+                    previousStatus = item.Status;
+                    previousError = item.LastError;
+                    item.Command = command.Trim();
+                    item.ExecuteAt = executeAt;
+                    item.Status = "Scheduled";
+                    item.LastError = null;
                 }
-                throw;
+
+                try
+                {
+                    await SaveAsync();
+                }
+                catch
+                {
+                    lock (_gate)
+                    {
+                        item.Command = previousCommand;
+                        item.ExecuteAt = previousExecuteAt;
+                        item.Status = previousStatus;
+                        item.LastError = previousError;
+                    }
+                    throw;
+                }
+                finally
+                {
+                    lock (_gate) _mutating.Remove(id);
+                }
+
+                RaiseChanged(item);
             }
             finally
             {
-                lock (_gate) _mutating.Remove(id);
+                _mutationGate.Release();
             }
-
-            RaiseChanged(item);
         }
 
         public async Task CancelAsync(string taskId)
         {
             await EnsureLoadedAsync();
-            ScheduledCommand item = null;
-            string previousStatus = null;
-
-            lock (_gate)
-            {
-                for (var i = 0; i < _items.Count; i++)
-                {
-                    if (_items[i].Id == taskId)
-                    {
-                        item = _items[i];
-                        break;
-                    }
-                }
-
-                if (item == null) return;
-                if (item.Status == "Completed" || item.Status == "Cancelled") return;
-                if (item.Status == "Executing")
-                    throw new InvalidOperationException("Команда уже выполняется и не может быть отменена.");
-                if (!_mutating.Add(taskId))
-                    throw new InvalidOperationException("Эта задача уже изменяется.");
-
-                previousStatus = item.Status;
-                item.Status = "Cancelled";
-            }
-
+            await _mutationGate.WaitAsync();
             try
             {
-                await SaveAsync();
-            }
-            catch
-            {
-                lock (_gate) item.Status = previousStatus;
-                throw;
+                ScheduledCommand item = null;
+                string previousStatus = null;
+
+                lock (_gate)
+                {
+                    for (var i = 0; i < _items.Count; i++)
+                    {
+                        if (_items[i].Id == taskId)
+                        {
+                            item = _items[i];
+                            break;
+                        }
+                    }
+
+                    if (item == null) return;
+                    if (item.Status == "Completed" || item.Status == "Cancelled") return;
+                    if (item.Status == "Executing")
+                        throw new InvalidOperationException("Команда уже выполняется и не может быть отменена.");
+                    if (!_mutating.Add(taskId))
+                        throw new InvalidOperationException("Эта задача уже изменяется.");
+
+                    previousStatus = item.Status;
+                    item.Status = "Cancelled";
+                }
+
+                try
+                {
+                    await SaveAsync();
+                }
+                catch
+                {
+                    lock (_gate) item.Status = previousStatus;
+                    throw;
+                }
+                finally
+                {
+                    lock (_gate) _mutating.Remove(taskId);
+                }
+
+                RaiseChanged(item);
             }
             finally
             {
-                lock (_gate) _mutating.Remove(taskId);
+                _mutationGate.Release();
             }
-
-            RaiseChanged(item);
         }
 
         public async Task<IList<ScheduledCommand>> GetAllAsync()
@@ -349,9 +375,12 @@ namespace ESP32AIControl.WP81.Core.Scheduling
 
         private async Task LoadAsync()
         {
-            if (_loaded) return;
+            await _loadGate.WaitAsync();
+            try
+            {
+                if (_loaded) return;
 
-            StorageFile file;
+                StorageFile file;
             try
             {
                 file = await ApplicationData.Current.LocalFolder.GetFileAsync(FileName);
@@ -394,8 +423,13 @@ namespace ESP32AIControl.WP81.Core.Scheduling
             }
 
             _loaded = true;
-            if (recoveredInterruptedExecution)
-                await SaveAsync();
+                if (recoveredInterruptedExecution)
+                    await SaveAsync();
+            }
+            finally
+            {
+                _loadGate.Release();
+            }
         }
 
         private async Task SaveAsync()
