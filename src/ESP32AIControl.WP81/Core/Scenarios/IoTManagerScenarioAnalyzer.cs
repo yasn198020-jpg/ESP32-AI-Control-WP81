@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Text.RegularExpressions;
 using ESP32AIControl.WP81.Models;
 using ESP32AIControl.WP81.Core.State;
@@ -23,6 +24,7 @@ namespace ESP32AIControl.WP81.Core.Scenarios
         public string Variable { get; set; }
         public string Operator { get; set; }
         public string Value { get; set; }
+        internal ScenarioExpression Expression { get; set; }
         public IList<ScenarioCondition> Conditions { get; private set; }
 
         public ScenarioAssignment()
@@ -56,10 +58,12 @@ namespace ESP32AIControl.WP81.Core.Scenarios
         public string TargetValue { get; set; }
         public string ActuatorVariable { get; set; }
         public string ActuatorValue { get; set; }
+        public bool IsComplete { get; set; }
         public IList<ScenarioDependency> Dependencies { get; private set; }
 
         public ScenarioAnalysis()
         {
+            IsComplete = true;
             Dependencies = new List<ScenarioDependency>();
         }
     }
@@ -75,6 +79,12 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             RegexOptions.IgnoreCase);
 
         private readonly List<ScenarioRule> _rules = new List<ScenarioRule>();
+        private bool _hasUnsupportedRules;
+
+        public bool HasUnsupportedRules
+        {
+            get { return _hasUnsupportedRules; }
+        }
 
         public IoTManagerScenarioAnalyzer(string script)
         {
@@ -94,13 +104,284 @@ namespace ESP32AIControl.WP81.Core.Scenarios
         public void Load(string script)
         {
             _rules.Clear();
+            _hasUnsupportedRules = false;
 
             if (string.IsNullOrWhiteSpace(script))
                 return;
 
+            // The planner uses conjunctions of simple comparisons. Expand
+            // boolean expressions to DNF so OR branches become independent
+            // planner rules instead of being silently dropped (which used to
+            // turn "A == 1 | B == 1" into an unconditional actuator action).
+            var compiled = ScenarioLanguageParser.Compile(script);
+            if (compiled.Errors.Count == 0 && compiled.Rules.Count > 0)
+            {
+                for (var r = 0; r < compiled.Rules.Count; r++)
+                {
+                    var sourceRule = compiled.Rules[r];
+                    var alternatives = ExpandPlannerConditions(sourceRule.Condition, false);
+                    if (alternatives == null)
+                    {
+                        // The runtime understands this condition, but the dependency
+                        // planner cannot prove a complete execution order for it.
+                        // Remember this so ScenarioPlanner can fail closed instead of
+                        // silently falling back to heuristic actions.
+                        _hasUnsupportedRules = true;
+                        continue;
+                    }
+                    if (alternatives.Count == 0)
+                        continue;
+
+                    var actions = new List<ScenarioAssignment>();
+                    for (var a = 0; a < sourceRule.Actions.Count; a++)
+                    {
+                        var sourceAction = sourceRule.Actions[a];
+                        actions.Add(new ScenarioAssignment
+                        {
+                            Variable = sourceAction.TargetId,
+                            Operator = sourceAction.Operator,
+                            Value = GetStaticActionValue(sourceAction.Expression),
+                            Expression = sourceAction.Expression
+                        });
+                    }
+
+                    if (actions.Count == 0)
+                        continue;
+
+                    foreach (var alternative in alternatives)
+                    {
+                        var rule = new ScenarioRule();
+                        foreach (var condition in alternative)
+                            rule.Conditions.Add(new ScenarioCondition
+                            {
+                                Variable = condition.Variable,
+                                Operator = condition.Operator,
+                                Value = condition.Value
+                            });
+
+                        foreach (var sourceAction in actions)
+                        {
+                            var assignment = new ScenarioAssignment
+                            {
+                                Variable = sourceAction.Variable,
+                                Operator = sourceAction.Operator,
+                                Value = sourceAction.Value,
+                                Expression = sourceAction.Expression
+                            };
+                            foreach (var condition in rule.Conditions)
+                                assignment.Conditions.Add(new ScenarioCondition
+                                {
+                                    Variable = condition.Variable,
+                                    Operator = condition.Operator,
+                                    Value = condition.Value
+                                });
+                            rule.Assignments.Add(assignment);
+                        }
+
+                        if (rule.Assignments.Count > 0)
+                            _rules.Add(rule);
+                    }
+                }
+
+                // A syntactically valid modern script must not fall through to
+                // the legacy regex parser: unsupported expressions are safer
+                // to omit from dependency planning than to misread.
+                return;
+            }
+
             var sections = ExtractScenarioSections(script);
             for (var i = 0; i < sections.Count; i++)
                 ParseBlock(sections[i], 0, sections[i].Length, new List<ScenarioCondition>(), _rules);
+        }
+
+        // Returns disjunctive normal form: each inner list is an AND clause;
+        // the outer list joins those clauses with OR. Null means that the
+        // expression is valid at runtime but cannot be represented safely by
+        // the dependency planner.
+        private static List<List<ScenarioCondition>> ExpandPlannerConditions(
+            ScenarioExpression expression,
+            bool inverted)
+        {
+            var unary = expression as ScenarioUnaryExpression;
+            if (unary != null)
+                return unary.Operator == "!"
+                    ? ExpandPlannerConditions(unary.Expression, !inverted)
+                    : null;
+
+            var binary = expression as ScenarioBinaryExpression;
+            if (binary != null && (binary.Operator == "&" || binary.Operator == "|"))
+            {
+                var isAnd = (binary.Operator == "&") != inverted;
+                var left = ExpandPlannerConditions(binary.Left, inverted);
+                var right = ExpandPlannerConditions(binary.Right, inverted);
+                if (left == null || right == null)
+                    return null;
+
+                if (!isAnd)
+                {
+                    if (left.Count + right.Count > 256)
+                        return null;
+                    var union = new List<List<ScenarioCondition>>();
+                    union.AddRange(left);
+                    union.AddRange(right);
+                    return union;
+                }
+
+                var product = new List<List<ScenarioCondition>>();
+                foreach (var leftClause in left)
+                    foreach (var rightClause in right)
+                    {
+                        // Avoid exponential expansion on pathological scripts.
+                        // The runtime evaluator still handles the full expression;
+                        // the planner simply declines an oversized dependency graph.
+                        if (product.Count >= 256)
+                            return null;
+
+                        var clause = CloneConditions(leftClause);
+                        foreach (var condition in rightClause)
+                            AddUniqueCondition(clause, condition);
+                        product.Add(clause);
+                    }
+                return product;
+            }
+
+            if (binary != null)
+            {
+                if (binary.Operator != "==" && binary.Operator != "!=" &&
+                    binary.Operator != "<" && binary.Operator != "<=" &&
+                    binary.Operator != ">" && binary.Operator != ">=")
+                    return null;
+
+                var leftVariable = binary.Left as ScenarioVariableExpression;
+                var rightVariable = binary.Right as ScenarioVariableExpression;
+                string variable = null;
+                string value = null;
+                var op = binary.Operator;
+
+                if (leftVariable != null)
+                {
+                    variable = leftVariable.Name;
+                    value = GetStaticActionValue(binary.Right);
+                }
+                else if (rightVariable != null)
+                {
+                    variable = rightVariable.Name;
+                    value = GetStaticActionValue(binary.Left);
+                    op = ReverseComparison(op);
+                }
+
+                if (string.IsNullOrEmpty(variable) || value == null)
+                    return null;
+
+                if (inverted)
+                    op = InvertComparison(op);
+                if (op == null)
+                    return null;
+
+                var clause = new List<ScenarioCondition>();
+                clause.Add(new ScenarioCondition { Variable = variable, Operator = op, Value = value });
+                return new List<List<ScenarioCondition>> { clause };
+            }
+
+            var number = expression as ScenarioNumberExpression;
+            if (number != null)
+            {
+                var truth = Math.Abs(number.Value) > 0.000001;
+                return truth != inverted
+                    ? new List<List<ScenarioCondition>> { new List<ScenarioCondition>() }
+                    : new List<List<ScenarioCondition>>();
+            }
+
+            var literal = expression as ScenarioVariableExpression;
+            if (literal != null &&
+                (string.Equals(literal.Name, "true", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(literal.Name, "false", StringComparison.OrdinalIgnoreCase)))
+            {
+                var truth = string.Equals(literal.Name, "true", StringComparison.OrdinalIgnoreCase);
+                return truth != inverted
+                    ? new List<List<ScenarioCondition>> { new List<ScenarioCondition>() }
+                    : new List<List<ScenarioCondition>>();
+            }
+
+            return null;
+        }
+
+        private static List<ScenarioCondition> CloneConditions(IList<ScenarioCondition> source)
+        {
+            var result = new List<ScenarioCondition>();
+            foreach (var item in source)
+                result.Add(new ScenarioCondition
+                {
+                    Variable = item.Variable,
+                    Operator = item.Operator,
+                    Value = item.Value
+                });
+            return result;
+        }
+
+        private static void AddUniqueCondition(
+            IList<ScenarioCondition> output,
+            ScenarioCondition condition)
+        {
+            foreach (var existing in output)
+                if (string.Equals(existing.Variable, condition.Variable, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(existing.Operator, condition.Operator, StringComparison.Ordinal) &&
+                    string.Equals(existing.Value, condition.Value, StringComparison.OrdinalIgnoreCase))
+                    return;
+            output.Add(new ScenarioCondition
+            {
+                Variable = condition.Variable,
+                Operator = condition.Operator,
+                Value = condition.Value
+            });
+        }
+
+        private static string GetStaticActionValue(ScenarioExpression expression)
+        {
+            var number = expression as ScenarioNumberExpression;
+            if (number != null)
+                return number.Value.ToString("G", CultureInfo.InvariantCulture);
+
+            var text = expression as ScenarioTextExpression;
+            if (text != null)
+                return text.Value;
+
+            var unary = expression as ScenarioUnaryExpression;
+            if (unary != null && (unary.Operator == "-" || unary.Operator == "+"))
+            {
+                var inner = unary.Expression as ScenarioNumberExpression;
+                if (inner != null)
+                    return (unary.Operator == "-" ? -inner.Value : inner.Value)
+                        .ToString("G", CultureInfo.InvariantCulture);
+            }
+
+            return null;
+        }
+
+        private static string ReverseComparison(string op)
+        {
+            switch (op)
+            {
+                case "<": return ">";
+                case "<=": return ">=";
+                case ">": return "<";
+                case ">=": return "<=";
+                default: return op;
+            }
+        }
+
+        private static string InvertComparison(string op)
+        {
+            switch (op)
+            {
+                case "==": return "!=";
+                case "!=": return "==";
+                case "<": return ">=";
+                case "<=": return ">";
+                case ">": return "<=";
+                case ">=": return "<";
+                default: return null;
+            }
         }
 
         public ScenarioAnalysis AnalyzeControl(
@@ -110,6 +391,8 @@ namespace ESP32AIControl.WP81.Core.Scenarios
         {
             if (!HasRules || targetState == null || devices == null)
                 return null;
+
+            ResolveActionValues(devices);
 
             var analysis = FindActuatorPath(targetState, targetValue, devices);
             if (analysis == null)
@@ -121,7 +404,97 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                 targetState.DeviceId,
                 new HashSet<string>(StringComparer.OrdinalIgnoreCase));
 
+            // Keep incomplete analyses visible to the planner. Falling back to
+            // heuristic dependencies after a known but unresolved scenario rule
+            // could execute the target without a required prerequisite.
             return analysis;
+        }
+
+        private void ResolveActionValues(DeviceRepository devices)
+        {
+            if (devices == null)
+                return;
+
+            var variables = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var widgets = devices.GetWidgetsSnapshot();
+            foreach (var widget in widgets)
+            {
+                if (widget == null || string.IsNullOrWhiteSpace(widget.Id))
+                    continue;
+                variables[widget.Id] = widget.Value ?? string.Empty;
+            }
+
+            foreach (var rule in _rules)
+            {
+                var evaluated = new List<string>();
+                var complete = true;
+                var actionTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var action in rule.Assignments)
+                {
+                    if (action != null && !string.IsNullOrWhiteSpace(action.Variable))
+                        actionTargets.Add(action.Variable);
+                }
+
+                foreach (var assignment in rule.Assignments)
+                {
+                    if (assignment.Expression == null)
+                    {
+                        evaluated.Add(assignment.Value);
+                        if (assignment.Value == null)
+                            complete = false;
+                        continue;
+                    }
+
+                    // Expressions that read a variable also written by this
+                    // same action group depend on interpreter execution order.
+                    // The planner does not emulate sequential side effects, so
+                    // such a rule is intentionally treated as unresolved.
+                    if (ExpressionReferencesAny(assignment.Expression, actionTargets))
+                    {
+                        evaluated.Add(null);
+                        complete = false;
+                        continue;
+                    }
+
+                    var value = ScenarioLanguageEvaluator.AsComparableText(
+                        ScenarioLanguageEvaluator.Evaluate(assignment.Expression, variables));
+                    evaluated.Add(value);
+                    if (value == null)
+                        complete = false;
+                }
+
+                // A rule is a group of simultaneous actions. If even one
+                // action cannot be resolved from the current device snapshot,
+                // suppress every action from that rule in dependency planning.
+                for (var i = 0; i < rule.Assignments.Count; i++)
+                    rule.Assignments[i].Value = complete ? evaluated[i] : null;
+            }
+        }
+
+        private static bool ExpressionReferencesAny(
+            ScenarioExpression expression,
+            ISet<string> identifiers)
+        {
+            var variable = expression as ScenarioVariableExpression;
+            if (variable != null)
+                return identifiers.Contains(variable.Name);
+
+            var unary = expression as ScenarioUnaryExpression;
+            if (unary != null)
+                return ExpressionReferencesAny(unary.Expression, identifiers);
+
+            var binary = expression as ScenarioBinaryExpression;
+            if (binary != null)
+                return ExpressionReferencesAny(binary.Left, identifiers) ||
+                       ExpressionReferencesAny(binary.Right, identifiers);
+
+            var call = expression as ScenarioCallExpression;
+            if (call != null)
+                foreach (var argument in call.Arguments)
+                    if (ExpressionReferencesAny(argument, identifiers))
+                        return true;
+
+            return false;
         }
 
         private ScenarioAnalysis FindActuatorPath(
@@ -135,6 +508,8 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             var bestScore = -1;
             ScenarioAssignment best = null;
             WidgetState bestWidget = null;
+            var hasTargetRule = false;
+            var ambiguousBest = false;
 
             for (var r = 0; r < _rules.Count; r++)
             {
@@ -146,6 +521,7 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                 if (!RuleBelongsToDevice(rule, devices, targetState.DeviceId))
                     continue;
 
+                hasTargetRule = true;
                 for (var a = 0; a < rule.Assignments.Count; a++)
                 {
                     var assignment = rule.Assignments[a];
@@ -176,12 +552,29 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                         bestScore = score;
                         best = assignment;
                         bestWidget = widget;
+                        ambiguousBest = false;
+                    }
+                    else if (score == bestScore &&
+                             (!object.ReferenceEquals(assignment, best) ||
+                              !object.ReferenceEquals(widget, bestWidget)))
+                    {
+                        ambiguousBest = true;
                     }
                 }
             }
 
-            if (best == null || bestWidget == null)
+            if (!hasTargetRule)
                 return null;
+
+            if (best == null || bestWidget == null || ambiguousBest)
+            {
+                return new ScenarioAnalysis
+                {
+                    TargetVariable = targetState.Id,
+                    TargetValue = targetValue,
+                    IsComplete = false
+                };
+            }
 
             return new ScenarioAnalysis
             {
@@ -222,54 +615,60 @@ namespace ESP32AIControl.WP81.Core.Scenarios
         {
             var key = (variable ?? string.Empty) + "=" + (value ?? string.Empty);
             if (!visiting.Add(key))
+            {
+                analysis.IsComplete = false;
                 return;
+            }
 
             var candidates = FindAssignments(variable, value);
-            ScenarioAssignment selected = null;
+            var eligible = new List<ScenarioAssignment>();
 
             for (var i = 0; i < candidates.Count; i++)
             {
                 var candidate = candidates[i];
-
                 if (!RuleBelongsToDevice(candidate, devices, deviceId))
                     continue;
 
                 if (!requireTargetCondition ||
                     HasCondition(candidate.Conditions, analysis.TargetVariable, analysis.TargetValue))
-                {
-                    selected = candidate;
-                    break;
-                }
+                    eligible.Add(candidate);
             }
 
-            if (selected == null && candidates.Count > 0 && !requireTargetCondition)
+            if (eligible.Count == 0)
             {
-                for (var i = 0; i < candidates.Count; i++)
-                {
-                    if (RuleBelongsToDevice(candidates[i], devices, deviceId))
-                    {
-                        selected = candidates[i];
-                        break;
-                    }
-                }
-            }
-
-            if (selected == null)
-            {
+                if (candidates.Count > 0)
+                    analysis.IsComplete = false;
                 visiting.Remove(key);
                 return;
             }
+
+            if (eligible.Count > 1)
+            {
+                // Multiple rules can assign the same intermediate variable.
+                // The current planner cannot safely choose one alternative.
+                analysis.IsComplete = false;
+                visiting.Remove(key);
+                return;
+            }
+
+            var selected = eligible[0];
 
             for (var i = 0; i < selected.Conditions.Count; i++)
             {
                 var condition = selected.Conditions[i];
 
-                if (!string.Equals(condition.Operator, "==", StringComparison.Ordinal))
+                if (string.Equals(condition.Variable, analysis.TargetVariable, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!ConditionMatchesValue(condition, analysis.TargetValue))
+                        analysis.IsComplete = false;
                     continue;
+                }
 
-                if (string.Equals(condition.Variable, analysis.TargetVariable, StringComparison.OrdinalIgnoreCase) &&
-                    IsValue(condition.Value, analysis.TargetValue))
+                if (!string.Equals(condition.Operator, "==", StringComparison.Ordinal))
+                {
+                    analysis.IsComplete = false;
                     continue;
+                }
 
                 var state = ResolveOnDevice(condition.Variable, devices, deviceId);
 
@@ -280,6 +679,16 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                         state,
                         condition.Value,
                         "Условие сценария для " + GetDescription(variable, devices, deviceId));
+                    continue;
+                }
+
+                if (state != null)
+                {
+                    // A sensor/read-only condition cannot be made true by a
+                    // control dependency. It is safe only when the current
+                    // snapshot already satisfies the scenario condition.
+                    if (!ConditionMatchesValue(condition, state.Value))
+                        analysis.IsComplete = false;
                     continue;
                 }
 
@@ -479,15 +888,48 @@ namespace ESP32AIControl.WP81.Core.Scenarios
 
             for (var i = 0; i < conditions.Count; i++)
             {
-                var c = conditions[i];
-
-                if (string.Equals(c.Variable, variable, StringComparison.OrdinalIgnoreCase) &&
-                    string.Equals(c.Operator, "==", StringComparison.Ordinal) &&
-                    IsValue(c.Value, value))
+                var condition = conditions[i];
+                if (string.Equals(condition.Variable, variable, StringComparison.OrdinalIgnoreCase) &&
+                    ConditionMatchesValue(condition, value))
                     return true;
             }
 
             return false;
+        }
+
+        private static bool ConditionMatchesValue(ScenarioCondition condition, string value)
+        {
+            if (condition == null)
+                return false;
+
+            var actual = (value ?? string.Empty).Trim();
+            var expected = (condition.Value ?? string.Empty).Trim();
+            double actualNumber;
+            double expectedNumber;
+            int comparison;
+
+            if (double.TryParse(actual.Replace(',', '.'), NumberStyles.Float,
+                    CultureInfo.InvariantCulture, out actualNumber) &&
+                double.TryParse(expected.Replace(',', '.'), NumberStyles.Float,
+                    CultureInfo.InvariantCulture, out expectedNumber))
+            {
+                comparison = actualNumber.CompareTo(expectedNumber);
+            }
+            else
+            {
+                comparison = string.Compare(actual, expected, StringComparison.OrdinalIgnoreCase);
+            }
+
+            switch (condition.Operator)
+            {
+                case "==": return comparison == 0;
+                case "!=": return comparison != 0;
+                case "<": return comparison < 0;
+                case "<=": return comparison <= 0;
+                case ">": return comparison > 0;
+                case ">=": return comparison >= 0;
+                default: return false;
+            }
         }
 
         private static bool IsValue(string first, string second)

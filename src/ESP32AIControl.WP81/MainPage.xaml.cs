@@ -2,8 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using Windows.UI.Core;
+using Windows.ApplicationModel.DataTransfer;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Controls.Primitives;
@@ -36,8 +39,19 @@ namespace ESP32AIControl.WP81
         private readonly RtfHistoryExporter _exporter;
         private readonly Esp32CommandExecutor _commandExecutor;
         private readonly ScheduledCommandService _scheduler;
+        private readonly ScenarioProfileStore _scenarioStore;
+        private readonly ScenarioDeviationMonitor _scenarioMonitor;
+        private readonly List<ScenarioProfile> _scenarioProfiles = new List<ScenarioProfile>();
         private readonly Wp81VoiceCommandService _voice;
         private VoiceCommandParser _voiceParser;
+        private string _pendingVoiceClarificationPhrase;
+        private DateTimeOffset _pendingVoiceClarificationExpiresAt;
+        private readonly List<string> _pendingVoiceClarificationSelections = new List<string>();
+        private IList<VoiceTargetOption> _pendingVoiceClarificationOptions =
+            new List<VoiceTargetOption>();
+        private string _selectedScenarioProfileId;
+        private bool _refreshingScenarioList;
+        private readonly SemaphoreSlim _scenarioMutationGate = new SemaphoreSlim(1, 1);
 
         private readonly Dictionary<string, WidgetVisual> _visuals =
             new Dictionary<string, WidgetVisual>();
@@ -58,6 +72,7 @@ namespace ESP32AIControl.WP81
         public MainPage()
         {
             InitializeComponent();
+            ScenarioEnabledCheckBox.IsChecked = true;
 
             _settingsStore = new AppSettingsStore();
             _appSettings = new AppSettings();
@@ -74,8 +89,11 @@ namespace ESP32AIControl.WP81
             _exporter = new RtfHistoryExporter();
             _commandExecutor = new Esp32CommandExecutor(_mqtt, _devices);
             _scheduler = new ScheduledCommandService(_commandExecutor);
+            _scenarioStore = new ScenarioProfileStore();
+            _scenarioMonitor = new ScenarioDeviationMonitor(_devices);
+            _scenarioMonitor.DeviationsChanged += ScenarioMonitor_DeviationsChanged;
             _voice = new Wp81VoiceCommandService();
-            _voiceParser = new VoiceCommandParser(string.Empty, string.Empty);
+            _voiceParser = new VoiceCommandParser(string.Empty, string.Empty, _devices);
 
             _mqtt.MessageReceived += Mqtt_MessageReceived;
             _mqtt.ConnectionStateChanged += Mqtt_ConnectionStateChanged;
@@ -96,8 +114,8 @@ namespace ESP32AIControl.WP81
             {
                 _appSettings = await _settingsStore.LoadAsync();
                 ApplySettingsToMqtt();
-                _commandExecutor.SetScenarioScript(_appSettings.IoTManagerScenario);
                 ApplySettingsToUi();
+                await LoadScenarioProfilesAsync();
                 await _scheduler.InitializeAsync();
 
                 GraphFrom.Date = DateTimeOffset.Now.AddDays(-1);
@@ -110,6 +128,7 @@ namespace ESP32AIControl.WP81
                 await CleanupHistoryAsync();
                 await RefreshScheduleAsync();
                 RefreshGraphWidgets();
+                UpdateNavigationChrome();
                 Log("Приложение и локальное хранилище готовы.");
             }
             catch (Exception ex)
@@ -130,13 +149,106 @@ namespace ESP32AIControl.WP81
 
         private void ShowSection(int index)
         {
+            if (index < 0 || index >= MainPivot.Items.Count)
+                return;
+
+            NavigationPopup.IsOpen = false;
             MainPivot.SelectedIndex = index;
+            UpdateNavigationChrome();
         }
 
+        private void MainPivot_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            UpdateNavigationChrome();
+        }
+
+        private void UpdateNavigationChrome()
+        {
+            if (NavHomeButton == null || NavMarfaButton == null ||
+                NavCommandsButton == null || NavHistoryButton == null ||
+                NavPendingButton == null || PageTitleText == null)
+                return;
+
+            switch (MainPivot.SelectedIndex)
+            {
+                case 0: PageTitleText.Text = "Главная"; break;
+                case 1: PageTitleText.Text = "Марфа"; break;
+                case 2: PageTitleText.Text = "Команды"; break;
+                case 3: PageTitleText.Text = "История и графики"; break;
+                case 4: PageTitleText.Text = "Отложенные команды"; break;
+                case 5: PageTitleText.Text = "Настройки"; break;
+                case 6: PageTitleText.Text = "Сценарии"; break;
+                case 7: PageTitleText.Text = "Журнал"; break;
+                default: PageTitleText.Text = "ESP32 AI Control"; break;
+            }
+
+            SetNavigationButtonState(NavHomeButton, MainPivot.SelectedIndex == 0);
+            SetNavigationButtonState(NavMarfaButton, MainPivot.SelectedIndex == 1);
+            SetNavigationButtonState(NavCommandsButton, MainPivot.SelectedIndex == 2);
+            SetNavigationButtonState(NavHistoryButton, MainPivot.SelectedIndex == 3);
+            SetNavigationButtonState(NavPendingButton, MainPivot.SelectedIndex == 4);
+        }
+
+        private void SetNavigationButtonState(Button button, bool selected)
+        {
+            button.Background = new SolidColorBrush(
+                selected
+                    ? Windows.UI.Color.FromArgb(255, 55, 58, 66)
+                    : Windows.UI.Color.FromArgb(0, 0, 0, 0));
+            button.Foreground = new SolidColorBrush(
+                selected
+                    ? Windows.UI.Color.FromArgb(255, 255, 255, 255)
+                    : Windows.UI.Color.FromArgb(255, 189, 189, 189));
+        }
+
+        private void MenuButton_Click(object sender, RoutedEventArgs e)
+        {
+            NavigationPopup.IsOpen = !NavigationPopup.IsOpen;
+        }
+
+        private void MenuScenarios_Click(object sender, RoutedEventArgs e) { ShowSection(6); }
+        private void MenuJournal_Click(object sender, RoutedEventArgs e) { ShowSection(7); }
+        private void MenuSettings_Click(object sender, RoutedEventArgs e) { ShowSection(5); }
+        private void MenuHistory_Click(object sender, RoutedEventArgs e) { ShowSection(3); }
+        private void MenuPending_Click(object sender, RoutedEventArgs e) { ShowSection(4); }
+
+        private void CommandsNavigation_Click(object sender, RoutedEventArgs e) { ShowSection(2); }
+        private void HistoryNavigation_Click(object sender, RoutedEventArgs e) { ShowSection(3); }
+        private void PendingNavigation_Click(object sender, RoutedEventArgs e) { ShowSection(4); }
+        private void MarfaNavigation_Click(object sender, RoutedEventArgs e)
+        {
+            ShowSection(1);
+            VoiceButton_Click(sender, e);
+        }
+        private void MarfaListenButton_Click(object sender, RoutedEventArgs e) { VoiceButton_Click(sender, e); }
+
         private void NavigateHome_Click(object sender, RoutedEventArgs e) { ShowSection(0); }
-        private void NavigateGraphs_Click(object sender, RoutedEventArgs e) { ShowSection(1); }
-        private void NavigateTasks_Click(object sender, RoutedEventArgs e) { ShowSection(2); }
-        private void NavigateSettings_Click(object sender, RoutedEventArgs e) { ShowSection(3); }
+        private void NavigateGraphs_Click(object sender, RoutedEventArgs e) { ShowSection(3); }
+        private void NavigateTasks_Click(object sender, RoutedEventArgs e) { ShowSection(4); }
+        private void NavigateSettings_Click(object sender, RoutedEventArgs e) { ShowSection(5); }
+
+        private void ClearLogButton_Click(object sender, RoutedEventArgs e)
+        {
+            LogText.Text = string.Empty;
+        }
+
+        private void CopyLogButton_Click(object sender, RoutedEventArgs e)
+        {
+            var manager = DataTransferManager.GetForCurrentView();
+            manager.DataRequested += ShareLog_DataRequested;
+            DataTransferManager.ShowShareUI();
+            JournalStatusText.Text = "Выберите приложение для отправки журнала.";
+        }
+
+        private void ShareLog_DataRequested(DataTransferManager sender, DataRequestedEventArgs args)
+        {
+            sender.DataRequested -= ShareLog_DataRequested;
+
+            var request = args.Request;
+            request.Data.Properties.Title = "Журнал ESP32 AI Control";
+            request.Data.Properties.Description = "Журнал событий приложения";
+            request.Data.SetText(LogText.Text ?? string.Empty);
+        }
 
         private async void ConnectButton_Click(object sender, RoutedEventArgs e)
         {
@@ -201,16 +313,23 @@ namespace ESP32AIControl.WP81
                 _appSettings.AutoExportPeriod = GetAutoExportTag();
                 _appSettings.VoiceOpenCommand = VoiceOpenCommandBox.Text.Trim();
                 _appSettings.VoiceCloseCommand = VoiceCloseCommandBox.Text.Trim();
-                _appSettings.IoTManagerScenario = ScenarioTextBox.Text ?? string.Empty;
 
+                ClearPendingVoiceClarification();
                 _voiceParser = new VoiceCommandParser(
                     _appSettings.VoiceOpenCommand,
-                    _appSettings.VoiceCloseCommand);
-                _commandExecutor.SetScenarioScript(_appSettings.IoTManagerScenario);
+                    _appSettings.VoiceCloseCommand,
+                    _devices);
+                ApplyScenarioProfilesToEngine();
 
                 await _settingsStore.SaveAsync(_appSettings);
                 await CleanupHistoryAsync();
 
+                OpenCommandSummary.Text = string.IsNullOrWhiteSpace(_appSettings.VoiceOpenCommand)
+                    ? "Команда не настроена. Укажите MQTT-цель в настройках."
+                    : _appSettings.VoiceOpenCommand;
+                CloseCommandSummary.Text = string.IsNullOrWhiteSpace(_appSettings.VoiceCloseCommand)
+                    ? "Команда не настроена. Укажите MQTT-цель в настройках."
+                    : _appSettings.VoiceCloseCommand;
                 SettingsStatus.Text = "Настройки сохранены.";
                 Log("Настройки сохранены.");
             }
@@ -231,9 +350,11 @@ namespace ESP32AIControl.WP81
             _settings.ClientId = string.IsNullOrEmpty(_appSettings.ClientId)
                 ? "ESP32-AI-Control-WP81" : _appSettings.ClientId;
 
+            ClearPendingVoiceClarification();
             _voiceParser = new VoiceCommandParser(
                 _appSettings.VoiceOpenCommand,
-                _appSettings.VoiceCloseCommand);
+                _appSettings.VoiceCloseCommand,
+                _devices);
         }
 
         private void ApplySettingsToUi()
@@ -247,6 +368,12 @@ namespace ESP32AIControl.WP81
             RetentionDaysBox.Text = _appSettings.RetentionDays.ToString(CultureInfo.InvariantCulture);
             VoiceOpenCommandBox.Text = _appSettings.VoiceOpenCommand;
             VoiceCloseCommandBox.Text = _appSettings.VoiceCloseCommand;
+            OpenCommandSummary.Text = string.IsNullOrWhiteSpace(_appSettings.VoiceOpenCommand)
+                ? "Команда не настроена. Укажите MQTT-цель в настройках."
+                : _appSettings.VoiceOpenCommand;
+            CloseCommandSummary.Text = string.IsNullOrWhiteSpace(_appSettings.VoiceCloseCommand)
+                ? "Команда не настроена. Укажите MQTT-цель в настройках."
+                : _appSettings.VoiceCloseCommand;
             ScenarioTextBox.Text = _appSettings.IoTManagerScenario;
 
             foreach (var item in AutoExportBox.Items)
@@ -262,11 +389,24 @@ namespace ESP32AIControl.WP81
 
         private void ReadMqttSettingsFromUi()
         {
-            _settings.Host = HostBox.Text.Trim();
-            _settings.Port = PortBox.Text.Trim();
-            _settings.Prefix = PrefixBox.Text.Trim().Trim('/');
-            _settings.UserName = UserNameBox.Text.Trim();
-            _settings.Password = PasswordBox.Password;
+            var host = (HostBox.Text ?? string.Empty).Trim();
+            var portText = (PortBox.Text ?? string.Empty).Trim();
+            var prefix = (PrefixBox.Text ?? string.Empty).Trim().Trim('/');
+            int port;
+
+            if (string.IsNullOrWhiteSpace(host))
+                throw new InvalidOperationException("Укажите адрес MQTT-сервера.");
+            if (!int.TryParse(portText, NumberStyles.Integer, CultureInfo.InvariantCulture, out port) ||
+                port < 1 || port > 65535)
+                throw new InvalidOperationException("Порт MQTT должен быть числом от 1 до 65535.");
+            if (string.IsNullOrWhiteSpace(prefix))
+                throw new InvalidOperationException("Укажите MQTT prefix.");
+
+            _settings.Host = host;
+            _settings.Port = port.ToString(CultureInfo.InvariantCulture);
+            _settings.Prefix = prefix;
+            _settings.UserName = (UserNameBox.Text ?? string.Empty).Trim();
+            _settings.Password = PasswordBox.Password ?? string.Empty;
         }
 
         private async void ImportScenarioButton_Click(object sender, RoutedEventArgs e)
@@ -285,16 +425,16 @@ namespace ESP32AIControl.WP81
 
                 var scenario = await Windows.Storage.FileIO.ReadTextAsync(file);
                 ScenarioTextBox.Text = scenario;
-                _appSettings.IoTManagerScenario = scenario;
-                _commandExecutor.SetScenarioScript(scenario);
-                await _settingsStore.SaveAsync(_appSettings);
+                if (string.IsNullOrWhiteSpace(ScenarioTitleBox.Text))
+                    ScenarioTitleBox.Text = System.IO.Path.GetFileNameWithoutExtension(file.Name);
 
-                SettingsStatus.Text = "Сценарий IoTManager загружен.";
+                ScenarioPlanText.Text = "Файл загружен в редактор. Проверьте содержимое и нажмите «Сохранить сценарий».";
+                ScenarioStatus.Text = "Сценарий загружен в редактор; сохранение ещё не выполнено.";
                 Log("SCENARIO IMPORT: " + file.Name);
             }
             catch (Exception ex)
             {
-                SettingsStatus.Text = "Ошибка импорта сценария: " + ex.Message;
+                ScenarioStatus.Text = "Ошибка импорта сценария: " + ex.Message;
                 Log("SCENARIO IMPORT ERROR: " + ex.Message);
             }
         }
@@ -303,44 +443,405 @@ namespace ESP32AIControl.WP81
         {
             try
             {
-                _commandExecutor.SetScenarioScript(ScenarioTextBox.Text ?? string.Empty);
+                var source = ScenarioTextBox.Text ?? string.Empty;
+                var compiled = ScenarioLanguageParser.Compile(source);
+                var report = new List<string>();
+                report.Add("Полный разбор IoT-сценария: " +
+                    compiled.Rules.Count.ToString(CultureInfo.InvariantCulture) + " правил.");
+                report.Add("Идентификаторов: " +
+                    compiled.Identifiers.Count.ToString(CultureInfo.InvariantCulture) + ".");
 
-                Log("SCENARIO READ: разобрано правил = " +
-                    _commandExecutor.GetScenarioRuleCount().ToString(CultureInfo.InvariantCulture));
+                if (compiled.Errors.Count > 0)
+                {
+                    report.Add("Ошибки синтаксиса:");
+                    for (var i = 0; i < compiled.Errors.Count; i++)
+                        report.Add("• " + compiled.Errors[i]);
+                    ScenarioPlanText.Text = string.Join(Environment.NewLine, report);
+                    ScenarioStatus.Text = "Сценарий не прошёл проверку. Сохранение заблокировано.";
+                    Log("SCENARIO TEST INVALID: " + string.Join(" | ", compiled.Errors.ToArray()));
+                    return;
+                }
 
-                var open = VoiceOpenCommandBox.Text.Trim();
-                var close = VoiceCloseCommandBox.Text.Trim();
+                if (compiled.Rules.Count == 0)
+                {
+                    report.Add("Не найдены правила IF / THEN с действиями.");
+                    ScenarioPlanText.Text = string.Join(Environment.NewLine, report);
+                    ScenarioStatus.Text = "В сценарии нет исполняемых правил.";
+                    return;
+                }
 
-                if (string.IsNullOrEmpty(open) && string.IsNullOrEmpty(close))
-                    throw new InvalidOperationException("Заполните команды открытия/закрытия.");
+                _commandExecutor.SetScenarioScript(source);
+                var open = (VoiceOpenCommandBox.Text ?? string.Empty).Trim();
+                var close = (VoiceCloseCommandBox.Text ?? string.Empty).Trim();
 
                 if (!string.IsNullOrEmpty(open))
-                    LogScenarioPlan("OPEN", open);
+                    report.Add(LogScenarioPlan("OPEN", open));
 
                 if (!string.IsNullOrEmpty(close))
-                    LogScenarioPlan("CLOSE", close);
+                    report.Add(LogScenarioPlan("CLOSE", close));
 
-                SettingsStatus.Text = "План проверен. См. диагностику MQTT.";
+                if (string.IsNullOrEmpty(open) && string.IsNullOrEmpty(close))
+                    report.Add("Команды открытия и закрытия не настроены. Проверка обратного плана пропущена.");
+
+                ScenarioPlanText.Text = string.Join(Environment.NewLine + Environment.NewLine, report);
+                ScenarioStatus.Text = "Проверка завершена. Правил: " +
+                    compiled.Rules.Count.ToString(CultureInfo.InvariantCulture) + ".";
+                Log("SCENARIO TEST COMPLETE: rules=" +
+                    compiled.Rules.Count.ToString(CultureInfo.InvariantCulture));
+                ApplyScenarioProfilesToEngine();
             }
             catch (Exception ex)
             {
-                SettingsStatus.Text = "Ошибка проверки: " + ex.Message;
+                ScenarioPlanText.Text = "Проверка не выполнена: " + ex.Message;
+                ScenarioStatus.Text = "Ошибка проверки: " + ex.Message;
                 Log("SCENARIO TEST ERROR: " + ex.Message);
+                ApplyScenarioProfilesToEngine();
             }
         }
 
-        private void LogScenarioPlan(string name, string command)
+        private async void SaveScenarioButton_Click(object sender, RoutedEventArgs e)
+        {
+            await _scenarioMutationGate.WaitAsync();
+            try
+            {
+                var source = ScenarioTextBox.Text ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(source))
+                    throw new InvalidOperationException("Содержимое сценария пустое.");
+
+                var validation = ScenarioLanguageParser.Compile(source);
+                if (validation.Errors.Count > 0)
+                    throw new InvalidOperationException(
+                        "Ошибки синтаксиса: " + string.Join("; ", validation.Errors.ToArray()));
+                if (validation.Rules.Count == 0)
+                    throw new InvalidOperationException("В сценарии нет правил IF / THEN с действиями.");
+
+                var title = (ScenarioTitleBox.Text ?? string.Empty).Trim();
+                if (string.IsNullOrWhiteSpace(title))
+                    title = "Сценарий " + (_scenarioProfiles.Count + 1).ToString(CultureInfo.InvariantCulture);
+
+                // Edit a detached candidate. The live list and active engine are
+                // changed only after the profile file has been committed.
+                var candidateProfiles = _scenarioProfiles.Select(item => item.Clone()).ToList();
+                ScenarioProfile profile = null;
+                if (!string.IsNullOrEmpty(_selectedScenarioProfileId))
+                    profile = candidateProfiles.FirstOrDefault(delegate(ScenarioProfile item)
+                    {
+                        return string.Equals(item.Id, _selectedScenarioProfileId, StringComparison.Ordinal);
+                    });
+
+                var isNew = profile == null;
+                if (isNew)
+                {
+                    profile = new ScenarioProfile
+                    {
+                        Id = Guid.NewGuid().ToString("N"),
+                        Enabled = true
+                    };
+                    candidateProfiles.Add(profile);
+                }
+
+                profile.Title = title;
+                profile.Source = source;
+                profile.Enabled = ScenarioEnabledCheckBox.IsChecked == true;
+
+                await _scenarioStore.SaveAsync(candidateProfiles);
+
+                _scenarioProfiles.Clear();
+                _scenarioProfiles.AddRange(candidateProfiles);
+                _selectedScenarioProfileId = profile.Id;
+                ApplyScenarioProfilesToEngine();
+
+                var settingsWarning = string.Empty;
+                try
+                {
+                    await _settingsStore.SaveAsync(_appSettings);
+                }
+                catch (Exception settingsError)
+                {
+                    settingsWarning = " Список сценариев сохранён, но резервная настройка не обновлена: " +
+                        settingsError.Message;
+                    Log("SCENARIO SETTINGS SAVE ERROR: " + settingsError.Message);
+                }
+
+                RefreshScenarioProfilesUi();
+                ScenarioStatus.Text = (isNew ? "Сценарий добавлен: " : "Сценарий обновлён: ") + title +
+                    (profile.Enabled ? " (активен)." : " (выключен).") + settingsWarning;
+                Log("SCENARIO " + (isNew ? "ADDED: " : "UPDATED: ") + title +
+                    "; active rules=" + _commandExecutor.GetScenarioRuleCount().ToString(CultureInfo.InvariantCulture));
+            }
+            catch (Exception ex)
+            {
+                ScenarioStatus.Text = "Ошибка сохранения: " + ex.Message;
+                Log("SCENARIO SAVE ERROR: " + ex.Message);
+            }
+            finally
+            {
+                _scenarioMutationGate.Release();
+            }
+        }
+
+        private async void DeleteScenarioButton_Click(object sender, RoutedEventArgs e)
+        {
+            await _scenarioMutationGate.WaitAsync();
+            try
+            {
+                if (string.IsNullOrEmpty(_selectedScenarioProfileId))
+                    throw new InvalidOperationException("Сначала выберите сохранённый сценарий.");
+
+                var selectedId = _selectedScenarioProfileId;
+                var profile = _scenarioProfiles.FirstOrDefault(delegate(ScenarioProfile item)
+                {
+                    return string.Equals(item.Id, selectedId, StringComparison.Ordinal);
+                });
+                if (profile == null)
+                    throw new InvalidOperationException("Сценарий уже удалён.");
+
+                var dialog = new Windows.UI.Popups.MessageDialog(
+                    "Удалить сценарий «" + profile.Title + "»?");
+                dialog.Commands.Add(new Windows.UI.Popups.UICommand("Удалить"));
+                dialog.Commands.Add(new Windows.UI.Popups.UICommand("Отмена"));
+                dialog.DefaultCommandIndex = 1;
+                dialog.CancelCommandIndex = 1;
+                var answer = await dialog.ShowAsync();
+                if (answer == null || answer.Label != "Удалить")
+                    return;
+
+                var candidateProfiles = _scenarioProfiles
+                    .Select(item => item.Clone())
+                    .ToList();
+                var candidate = candidateProfiles.FirstOrDefault(delegate(ScenarioProfile item)
+                {
+                    return string.Equals(item.Id, selectedId, StringComparison.Ordinal);
+                });
+                if (candidate == null)
+                    throw new InvalidOperationException("Сценарий уже удалён.");
+
+                candidateProfiles.Remove(candidate);
+                await _scenarioStore.SaveAsync(candidateProfiles);
+
+                _scenarioProfiles.Clear();
+                _scenarioProfiles.AddRange(candidateProfiles);
+                _selectedScenarioProfileId = null;
+                ApplyScenarioProfilesToEngine();
+
+                var settingsWarning = string.Empty;
+                try
+                {
+                    await _settingsStore.SaveAsync(_appSettings);
+                }
+                catch (Exception settingsError)
+                {
+                    settingsWarning = " Список сохранён, но резервная настройка не обновлена: " +
+                        settingsError.Message;
+                    Log("SCENARIO SETTINGS SAVE ERROR: " + settingsError.Message);
+                }
+
+                RefreshScenarioProfilesUi();
+                ClearScenarioEditor();
+                ScenarioStatus.Text = "Сценарий удалён." + settingsWarning;
+                Log("SCENARIO DELETED: " + profile.Title);
+            }
+            catch (Exception ex)
+            {
+                ScenarioStatus.Text = "Не удалось удалить сценарий: " + ex.Message;
+                Log("SCENARIO DELETE ERROR: " + ex.Message);
+            }
+            finally
+            {
+                _scenarioMutationGate.Release();
+            }
+        }
+
+        private void NewScenarioButton_Click(object sender, RoutedEventArgs e)
+        {
+            _selectedScenarioProfileId = null;
+            _refreshingScenarioList = true;
+            ScenarioList.SelectedIndex = -1;
+            _refreshingScenarioList = false;
+            ClearScenarioEditor();
+            ScenarioStatus.Text = "Новый сценарий. Введите название и код, затем сохраните.";
+        }
+
+        private void ClearScenarioButton_Click(object sender, RoutedEventArgs e)
+        {
+            NewScenarioButton_Click(sender, e);
+        }
+
+        private void ClearScenarioEditor()
+        {
+            ScenarioTitleBox.Text = string.Empty;
+            ScenarioTextBox.Text = string.Empty;
+            ScenarioEnabledCheckBox.IsChecked = true;
+            ScenarioPlanText.Text = "Новый сценарий ещё не сохранён.";
+        }
+
+        private void ScenarioList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_refreshingScenarioList)
+                return;
+
+            var index = ScenarioList.SelectedIndex;
+            if (index < 0 || index >= _scenarioProfiles.Count)
+                return;
+
+            var profile = _scenarioProfiles[index];
+            _selectedScenarioProfileId = profile.Id;
+            LoadScenarioProfileIntoEditor(profile);
+        }
+
+        private void LoadScenarioProfileIntoEditor(ScenarioProfile profile)
+        {
+            if (profile == null)
+                return;
+
+            ScenarioTitleBox.Text = profile.Title ?? string.Empty;
+            ScenarioTextBox.Text = profile.Source ?? string.Empty;
+            ScenarioEnabledCheckBox.IsChecked = profile.Enabled;
+            ScenarioPlanText.Text = "Выбран сценарий «" + profile.Title + "». Нажмите «Проверить план» для анализа.";
+            ScenarioStatus.Text = profile.Enabled ? "Сценарий активен." : "Сценарий выключен.";
+        }
+
+        private void RefreshScenarioProfilesUi()
+        {
+            _refreshingScenarioList = true;
+            ScenarioList.Items.Clear();
+
+            var selectedIndex = -1;
+            for (var i = 0; i < _scenarioProfiles.Count; i++)
+            {
+                var profile = _scenarioProfiles[i];
+                ScenarioList.Items.Add((profile.Enabled ? "● " : "○ ") +
+                    (string.IsNullOrWhiteSpace(profile.Title) ? "Без названия" : profile.Title));
+                if (!string.IsNullOrEmpty(_selectedScenarioProfileId) &&
+                    string.Equals(profile.Id, _selectedScenarioProfileId, StringComparison.Ordinal))
+                    selectedIndex = i;
+            }
+
+            ScenarioList.SelectedIndex = selectedIndex;
+            _refreshingScenarioList = false;
+
+            if (selectedIndex >= 0)
+                LoadScenarioProfileIntoEditor(_scenarioProfiles[selectedIndex]);
+        }
+
+        private async Task LoadScenarioProfilesAsync()
+        {
+            IList<ScenarioProfile> loaded;
+            try
+            {
+                loaded = await _scenarioStore.LoadAsync();
+            }
+            catch (Exception ex)
+            {
+                // A damaged profile file must not prevent MQTT, history or the rest
+                // of the application from starting. Keep the legacy setting as fallback.
+                loaded = new List<ScenarioProfile>();
+                ScenarioStatus.Text = "Не удалось прочитать список сценариев: " + ex.Message;
+                Log("SCENARIO LOAD ERROR: " + ex.Message);
+            }
+
+            _scenarioProfiles.Clear();
+            foreach (var profile in loaded)
+            {
+                if (profile == null || string.IsNullOrWhiteSpace(profile.Id) ||
+                    string.IsNullOrWhiteSpace(profile.Source))
+                    continue;
+                _scenarioProfiles.Add(profile.Clone());
+            }
+
+            // Migrate the former single-script setting without losing the user's existing scenario.
+            if (_scenarioProfiles.Count == 0 && !string.IsNullOrWhiteSpace(_appSettings.IoTManagerScenario))
+            {
+                _scenarioProfiles.Add(new ScenarioProfile
+                {
+                    Id = Guid.NewGuid().ToString("N"),
+                    Title = "Основной сценарий",
+                    Source = _appSettings.IoTManagerScenario,
+                    Enabled = true
+                });
+                await _scenarioStore.SaveAsync(_scenarioProfiles);
+                ScenarioStatus.Text = "Старый сценарий перенесён в новый список.";
+            }
+
+            _selectedScenarioProfileId = _scenarioProfiles.Count > 0
+                ? _scenarioProfiles[0].Id
+                : null;
+            ApplyScenarioProfilesToEngine();
+            RefreshScenarioProfilesUi();
+        }
+
+        private void ApplyScenarioProfilesToEngine()
+        {
+            var activeScripts = new List<string>();
+            foreach (var profile in _scenarioProfiles)
+                if (profile.Enabled && !string.IsNullOrWhiteSpace(profile.Source))
+                    activeScripts.Add(profile.Source.Trim());
+
+            _appSettings.IoTManagerScenario = string.Join(
+                Environment.NewLine + Environment.NewLine, activeScripts);
+            _commandExecutor.SetScenarioScript(_appSettings.IoTManagerScenario);
+            _scenarioMonitor.SetProfiles(_scenarioProfiles);
+            _scenarioMonitor.Observe();
+        }
+
+        private async void ScenarioMonitor_DeviationsChanged(
+            object sender,
+            ScenarioDeviationChangedEventArgs e)
+        {
+            await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, delegate
+            {
+                var lines = new List<string>();
+                var diagnostics = _scenarioMonitor.Diagnostics;
+                if (diagnostics.Count > 0)
+                {
+                    lines.Add("Ошибки сценариев:");
+                    for (var i = 0; i < diagnostics.Count; i++)
+                        lines.Add("• " + diagnostics[i]);
+                }
+
+                if (e == null || e.Deviations.Count == 0)
+                {
+                    lines.Add(diagnostics.Count == 0
+                        ? "Отклонений от активных сценариев нет. Контроль выполняется по MQTT-обновлениям."
+                        : "Проверка отклонений включена только для сценариев без ошибок.");
+                }
+                else
+                {
+                    lines.Add("Активные отклонения: " +
+                        e.Deviations.Count.ToString(CultureInfo.InvariantCulture));
+                    foreach (var deviation in e.Deviations.Take(12))
+                        lines.Add("• " + deviation.Message);
+                    if (e.Deviations.Count > 12)
+                        lines.Add("… и ещё " + (e.Deviations.Count - 12).ToString(CultureInfo.InvariantCulture));
+                }
+
+                ScenarioDeviationText.Text = string.Join(Environment.NewLine, lines);
+            });
+        }
+
+        private string LogScenarioPlan(string name, string command)
         {
             Log("SCENARIO TEST " + name + ": " + command);
 
             var plan = _commandExecutor.BuildPlan(command);
+            var lines = new List<string>();
+            lines.Add(name + ": " + command);
+
+            if (plan.Actions.Count == 0)
+                lines.Add("  Нет дополнительных действий в плане. Команда будет проверена исполнителем напрямую.");
 
             for (var i = 0; i < plan.Actions.Count; i++)
             {
                 var action = plan.Actions[i];
+                var line = (action.IsDependency ? "  Зависимость: " : "  Действие: ") + action.Command;
+                if (!string.IsNullOrEmpty(action.Reason))
+                    line += " — " + action.Reason;
+                lines.Add(line);
                 Log("PLAN " + (action.IsDependency ? "DEP " : "ACT ") + action.Command +
                     (string.IsNullOrEmpty(action.Reason) ? string.Empty : " | " + action.Reason));
             }
+
+            return string.Join(Environment.NewLine, lines);
         }
 
         private string GetAutoExportTag()
@@ -368,6 +869,18 @@ namespace ESP32AIControl.WP81
                 Log("HISTORY ERROR: " + ex.Message);
             }
 
+            try
+            {
+                _scenarioMonitor.Observe();
+            }
+            catch (Exception ex)
+            {
+                await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, delegate
+                {
+                    Log("SCENARIO MONITOR ERROR: " + ex.Message);
+                });
+            }
+
             await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, delegate
             {
                 UpdateWidgetVisual(e);
@@ -381,6 +894,10 @@ namespace ESP32AIControl.WP81
             await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, delegate
             {
                 ConnectionText.Text = "MQTT: " + e.State;
+                var isConnected = e.State == MqttConnectionState.Connected;
+                TopConnectionText.Text = isConnected ? "ON" : "OFF";
+                ConnectionIndicator.Fill = new SolidColorBrush(
+                    isConnected ? Windows.UI.Colors.LimeGreen : Windows.UI.Colors.IndianRed);
             });
         }
 
@@ -400,19 +917,36 @@ namespace ESP32AIControl.WP81
             };
 
             var type = NormalizeType(state.WidgetType);
-            var isSwitch = type == "switch" || type == "toggle" ||
-                           type == "checkbox" || type == "vbutton";
-            var isAction = type == "button" || type == "action" || type == "buttonout";
-            var isSlider = type == "slider" || type == "range" || type == "inputdgt";
+            var definition = NormalizeType(state.DefinitionName);
+            var isSwitch = type == "switch" || type == "toggle" || type == "checkbox" ||
+                           type == "inputbool" || definition == "toggle";
+            var isAction = type == "button" || type == "action" || type == "buttonout" ||
+                           type == "buttonin" || type == "pushbutton" ||
+                           definition == "button" || definition == "vbtn" || definition == "btn";
+            var isRange = definition == "range" || definition == "rangeservo" || type == "range" || type == "rangeservo";
+            var isSlider = isRange || type == "slider";
+            var isNumericInput = definition == "inputdgt" || type == "inputdgt" || type == "inputint" || type == "inputfloat" || type == "number";
+            var isDateInput = definition == "inputdate" || type == "inputdate";
+            var isTimeInput = definition == "inputtm" || type == "inputtm";
+            var isSelect = definition == "select" || type == "select";
+            var isCircularProgress = definition == "progressround" || type == "progressround";
+            var isFillGauge = definition == "fillgauge" || type == "fillgauge";
+            var isProgressLine = definition == "progressline" || type == "progress";
+            var isProgress = isCircularProgress || isFillGauge || isProgressLine;
+            var isChart = definition.StartsWith("chart", StringComparison.Ordinal) || type == "chart";
+            var isInput = !isSwitch && !isAction && !isSlider && !isNumericInput && !isDateInput && !isTimeInput && !isSelect && !isProgress && !isChart &&
+                          (type == "input" || type == "inputtext" || type == "text" || type == "inputtxt" || type == "inputstr" || type == "inputstring" || definition == "inputtxt");
 
             var shell = new Border
             {
-                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 27, 29, 36)),
-                Padding = new Thickness(10, 9, 10, 9),
-                BorderThickness = new Thickness(0, 0, 0, 1),
-                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 47, 49, 59))
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 43, 43, 43)),
+                Padding = new Thickness(12, 10, 12, 10),
+                BorderThickness = new Thickness(1),
+                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 57, 59, 68)),
+                CornerRadius = new CornerRadius(12)
             };
 
+            visual.Shell = shell;
             var row = new Grid();
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(32) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -420,9 +954,9 @@ namespace ESP32AIControl.WP81
 
             var icon = new TextBlock
             {
-                Text = isSwitch ? "◉" : (isAction ? "●" : "◆"),
+                Text = isSwitch ? "◉" : (isAction ? "●" : (isRange || isSlider ? "◌" : (isProgress ? "◍" : (isChart ? "▥" : "◆")))),
                 FontSize = 21,
-                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 177, 92, 255)),
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 128, 101, 232)),
                 VerticalAlignment = VerticalAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Left
             };
@@ -465,6 +999,7 @@ namespace ESP32AIControl.WP81
                 check.Checked += delegate { PublishSwitchValue(visual, true); };
                 check.Unchecked += delegate { PublishSwitchValue(visual, false); };
                 visual.Control = check;
+                visual.SwitchControl = check;
                 Grid.SetColumn(check, 2);
                 row.Children.Add(check);
                 visual.ValueText.Visibility = Visibility.Collapsed;
@@ -473,13 +1008,14 @@ namespace ESP32AIControl.WP81
             {
                 var valueBadge = new Border
                 {
-                    Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 25, 118, 210)),
+                    Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 48, 54, 64)),
                     Child = visual.ValueText,
                     Padding = new Thickness(5, 5, 5, 5),
                     MinWidth = 76,
                     HorizontalAlignment = HorizontalAlignment.Right,
                     VerticalAlignment = VerticalAlignment.Center
                 };
+                visual.ValueBadge = valueBadge;
                 Grid.SetColumn(valueBadge, 2);
                 row.Children.Add(valueBadge);
             }
@@ -502,22 +1038,164 @@ namespace ESP32AIControl.WP81
             }
             else if (isSlider)
             {
+                var minimum = ReadWidgetNumber(state.Minimum, 0);
+                var maximum = ReadWidgetNumber(state.Maximum, definition == "rangeservo" ? 180 : 100);
+                if (maximum <= minimum) maximum = minimum + 100;
+                var step = ReadWidgetNumber(state.Step, 1);
+                var scale = ReadWidgetNumber(state.ScaleFactor, 1);
+                if (step <= 0) step = 1;
+                if (scale == 0) scale = 1;
                 var slider = new Slider
                 {
-                    Minimum = 0,
-                    Maximum = 100,
-                    StepFrequency = 1,
-                    Width = 280,
-                    HorizontalAlignment = HorizontalAlignment.Stretch,
+                    Minimum = minimum, Maximum = maximum, StepFrequency = step,
+                    Width = 280, HorizontalAlignment = HorizontalAlignment.Stretch,
                     Margin = new Thickness(34, 2, 0, 0)
                 };
-                slider.ValueChanged += async delegate(object s, RangeBaseValueChangedEventArgs ev)
+                slider.PointerReleased += async delegate
                 {
                     if (_syncingControls) return;
-                    await PublishControl(visual, ev.NewValue.ToString(CultureInfo.InvariantCulture));
+                    await PublishControl(visual, (slider.Value / scale).ToString("0.####", CultureInfo.InvariantCulture));
                 };
                 visual.Control = slider;
+                visual.SliderControl = slider;
                 visual.Container.Children.Add(slider);
+                visual.UnitText = new TextBlock
+                {
+                    Text = "Диапазон " + FormatWidgetNumber(minimum) + " … " + FormatWidgetNumber(maximum) +
+                           (string.IsNullOrWhiteSpace(state.Unit) ? string.Empty : " " + state.Unit),
+                    FontSize = 11,
+                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 156, 163, 175)),
+                    Margin = new Thickness(34, 0, 0, 0)
+                };
+                visual.Container.Children.Add(visual.UnitText);
+            }
+            else if (isNumericInput || isInput)
+            {
+                var inputRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(34, 4, 0, 0) };
+                var input = new TextBox { Text = state.Value ?? string.Empty, Width = 210, MinWidth = 100, FontSize = 16 };
+                var send = new Button { Content = "Отправить", Margin = new Thickness(8, 0, 0, 0), MinWidth = 100 };
+                send.Click += async delegate
+                {
+                    var value = input.Text == null ? string.Empty : input.Text.Trim();
+                    if (!string.IsNullOrEmpty(value)) await PublishControl(visual, value);
+                };
+                visual.InputControl = input;
+                visual.Control = input;
+                inputRow.Children.Add(input);
+                inputRow.Children.Add(send);
+                visual.Container.Children.Add(inputRow);
+            }
+            else if (isDateInput)
+            {
+                var dateRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(34, 4, 0, 0) };
+                var date = new DatePicker { HorizontalAlignment = HorizontalAlignment.Left, Width = 210 };
+                DateTimeOffset parsedDate;
+                if (DateTimeOffset.TryParse(state.Value, CultureInfo.CurrentCulture, DateTimeStyles.None, out parsedDate)) date.Date = parsedDate;
+                var sendDate = new Button { Content = "Отправить", Margin = new Thickness(8, 0, 0, 0) };
+                sendDate.Click += async delegate { await PublishControl(visual, date.Date.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture)); };
+                visual.DateControl = date;
+                dateRow.Children.Add(date); dateRow.Children.Add(sendDate);
+                visual.Container.Children.Add(dateRow);
+            }
+            else if (isTimeInput)
+            {
+                var timeRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(34, 4, 0, 0) };
+                var time = new TimePicker { HorizontalAlignment = HorizontalAlignment.Left, Width = 210 };
+                TimeSpan parsedTime;
+                if (TimeSpan.TryParse(state.Value, out parsedTime)) time.Time = parsedTime;
+                var sendTime = new Button { Content = "Отправить", Margin = new Thickness(8, 0, 0, 0) };
+                sendTime.Click += async delegate { await PublishControl(visual, time.Time.ToString(@"hh\:mm", CultureInfo.InvariantCulture)); };
+                visual.TimeControl = time;
+                timeRow.Children.Add(time); timeRow.Children.Add(sendTime);
+                visual.Container.Children.Add(timeRow);
+            }
+            else if (isSelect)
+            {
+                var select = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(34, 4, 0, 0) };
+                var options = state.Options ?? new string[0];
+                if (options.Length == 0) options = new[] { "Выключен", "Включен" };
+                foreach (var option in options) select.Items.Add(option);
+                int selected;
+                if (!int.TryParse(state.Value, out selected)) selected = 0;
+                select.SelectedIndex = Math.Max(0, Math.Min(options.Length - 1, selected));
+                select.SelectionChanged += async delegate
+                {
+                    if (_syncingControls || select.SelectedIndex < 0) return;
+                    await PublishControl(visual, select.SelectedIndex.ToString(CultureInfo.InvariantCulture));
+                };
+                visual.SelectControl = select;
+                visual.Control = select;
+                visual.Container.Children.Add(select);
+            }
+            else if (isProgress)
+            {
+                var minimum = ReadWidgetNumber(state.Minimum, 0);
+                var maximum = ReadWidgetNumber(state.Maximum, 100);
+                if (maximum <= minimum) maximum = minimum + 100;
+
+                if (isCircularProgress || isFillGauge)
+                {
+                    visual.IsFillGauge = isFillGauge;
+                    visual.GaugeCanvas = new Canvas
+                    {
+                        Width = 112,
+                        Height = 112,
+                        Margin = new Thickness(34, 5, 0, 0)
+                    };
+                    visual.Container.Children.Add(visual.GaugeCanvas);
+                    visual.UnitText = new TextBlock
+                    {
+                        Text = "Максимум " + FormatWidgetNumber(maximum) +
+                               (string.IsNullOrWhiteSpace(state.Unit) ? string.Empty : " " + state.Unit),
+                        FontSize = 11,
+                        Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 156, 163, 175)),
+                        Margin = new Thickness(34, 0, 0, 0)
+                    };
+                    visual.Container.Children.Add(visual.UnitText);
+                }
+                else
+                {
+                    var progress = new ProgressBar
+                    {
+                        Minimum = minimum,
+                        Maximum = maximum,
+                        Value = Math.Max(minimum, Math.Min(maximum, ReadWidgetNumber(state.Value, minimum))),
+                        Height = 12,
+                        Margin = new Thickness(34, 8, 8, 4)
+                    };
+                    visual.ProgressControl = progress;
+                    visual.Container.Children.Add(progress);
+                    visual.UnitText = new TextBlock
+                    {
+                        Text = (state.Value ?? "0") + " / " + FormatWidgetNumber(maximum) +
+                               (string.IsNullOrWhiteSpace(state.Unit) ? string.Empty : " " + state.Unit),
+                        FontSize = 11,
+                        Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 156, 163, 175)),
+                        Margin = new Thickness(34, 0, 0, 0)
+                    };
+                    visual.Container.Children.Add(visual.UnitText);
+                }
+            }
+            else if (isChart)
+            {
+                visual.InlineChartCanvas = new Canvas
+                {
+                    Height = 92,
+                    Width = 300,
+                    MinWidth = 240,
+                    Margin = new Thickness(34, 5, 0, 0)
+                };
+                visual.InlineChartCanvas.SizeChanged += delegate { DrawInlineChart(visual); };
+                visual.Container.Children.Add(visual.InlineChartCanvas);
+
+                var openChart = new Button
+                {
+                    Content = "Открыть историю",
+                    HorizontalAlignment = HorizontalAlignment.Right,
+                    Margin = new Thickness(34, 2, 0, 0)
+                };
+                openChart.Click += delegate { OpenWidgetHistory(visual.State); };
+                visual.Container.Children.Add(openChart);
             }
             else if (!isSwitch)
             {
@@ -537,7 +1215,8 @@ namespace ESP32AIControl.WP81
 
         private void UpdateWidgetVisual(WidgetState state)
         {
-            if (state == null || string.IsNullOrEmpty(state.Id))
+            if (state == null || string.IsNullOrEmpty(state.Id) ||
+                string.Equals(state.DefinitionName, "nil", StringComparison.OrdinalIgnoreCase))
                 return;
 
             WidgetVisual visual;
@@ -551,17 +1230,48 @@ namespace ESP32AIControl.WP81
             else
             {
                 var newPage = NormalizePage(state.Page);
-                if (!string.Equals(visual.PageName, newPage, StringComparison.Ordinal))
-                    MoveWidgetVisual(visual, newPage);
-
-                visual.State = state;
-                visual.Title.Text = GetTitle(state);
+                var configurationChanged = visual.State != null &&
+                    (!string.Equals(visual.State.WidgetType, state.WidgetType, StringComparison.OrdinalIgnoreCase) ||
+                     !string.Equals(visual.State.DefinitionName, state.DefinitionName, StringComparison.OrdinalIgnoreCase) ||
+                     !string.Equals(visual.State.Minimum, state.Minimum, StringComparison.Ordinal) ||
+                     !string.Equals(visual.State.Maximum, state.Maximum, StringComparison.Ordinal) ||
+                     !string.Equals(visual.State.Step, state.Step, StringComparison.Ordinal) ||
+                     !string.Equals(visual.State.Unit, state.Unit, StringComparison.Ordinal) ||
+                     !string.Equals(visual.State.ScaleFactor, state.ScaleFactor, StringComparison.Ordinal) ||
+                     !string.Equals(visual.State.Options == null ? string.Empty : string.Join("|", visual.State.Options), state.Options == null ? string.Empty : string.Join("|", state.Options), StringComparison.Ordinal) ||
+                     !string.Equals(visual.State.ColorConfig, state.ColorConfig, StringComparison.Ordinal) ||
+                     !string.Equals(visual.State.WarningMinimum, state.WarningMinimum, StringComparison.Ordinal) ||
+                     !string.Equals(visual.State.WarningMaximum, state.WarningMaximum, StringComparison.Ordinal));
+                if (configurationChanged)
+                {
+                    PageVisual oldPage;
+                    if (_pages.TryGetValue(visual.PageName, out oldPage))
+                        oldPage.Content.Children.Remove(visual.Container);
+                    visual = CreateWidgetVisual(state);
+                    _visuals[state.Key] = visual;
+                    InsertWidgetVisual(visual);
+                    CleanupEmptyPages();
+                }
+                else
+                {
+                    if (!string.Equals(visual.PageName, newPage, StringComparison.Ordinal))
+                        MoveWidgetVisual(visual, newPage);
+                    visual.State = state;
+                    visual.Title.Text = GetTitle(state);
+                }
                 _widgetIndex[state.Key] = state;
             }
 
             _syncingControls = true;
-            try { ApplyValueToVisual(visual, state.Value); }
+            try
+            {
+                ApplyValueToVisual(visual, state.Value);
+                ApplyWidgetThresholdStyle(visual, state);
+            }
             finally { _syncingControls = false; }
+
+            if (visual.InlineChartCanvas != null)
+                RefreshInlineChart(visual);
         }
 
         private void InsertWidgetVisual(WidgetVisual visual)
@@ -664,23 +1374,585 @@ namespace ESP32AIControl.WP81
         private void ApplyValueToVisual(WidgetVisual visual, string value)
         {
             if (visual.ValueText != null)
-                visual.ValueText.Text = string.IsNullOrEmpty(value) ? "—" : value;
+                visual.ValueText.Text = string.IsNullOrEmpty(value) ? "—" :
+                    value + (string.IsNullOrWhiteSpace(visual.State.Unit) ? string.Empty : " " + visual.State.Unit);
 
-            var check = visual.Control as CheckBox;
+            var check = visual.SwitchControl;
             if (check != null)
             {
                 check.IsChecked = ParseBoolean(value);
                 return;
             }
 
-            var slider = visual.Control as Slider;
+            var slider = visual.SliderControl;
             if (slider != null)
             {
                 double number;
-                if (double.TryParse((value ?? string.Empty).Replace(',', '.'),
-                    NumberStyles.Float, CultureInfo.InvariantCulture, out number))
-                    slider.Value = Math.Max(slider.Minimum, Math.Min(slider.Maximum, number));
+                var scale = ReadWidgetNumber(visual.State.ScaleFactor, 1);
+                if (scale == 0) scale = 1;
+                if (double.TryParse((value ?? string.Empty).Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out number))
+                    slider.Value = Math.Max(slider.Minimum, Math.Min(slider.Maximum, number * scale));
             }
+
+            if (visual.InputControl != null && visual.InputControl.FocusState == FocusState.Unfocused)
+                visual.InputControl.Text = value ?? string.Empty;
+            if (visual.SelectControl != null)
+            {
+                int selected;
+                if (int.TryParse(value, out selected) && selected >= 0 && selected < visual.SelectControl.Items.Count)
+                    visual.SelectControl.SelectedIndex = selected;
+            }
+            if (visual.ProgressControl != null)
+            {
+                var progressValue = ReadWidgetNumber(value, visual.ProgressControl.Minimum);
+                visual.ProgressControl.Value = Math.Max(visual.ProgressControl.Minimum,
+                    Math.Min(visual.ProgressControl.Maximum, progressValue));
+                if (visual.UnitText != null)
+                    visual.UnitText.Text = FormatWidgetNumber(progressValue) + " / " +
+                        FormatWidgetNumber(visual.ProgressControl.Maximum) +
+                        (string.IsNullOrWhiteSpace(visual.State.Unit) ? string.Empty : " " + visual.State.Unit);
+            }
+            if (visual.DateControl != null)
+            {
+                DateTimeOffset date;
+                if (DateTimeOffset.TryParse(value, CultureInfo.CurrentCulture, DateTimeStyles.None, out date)) visual.DateControl.Date = date;
+            }
+            if (visual.TimeControl != null)
+            {
+                TimeSpan time;
+                if (TimeSpan.TryParse(value, out time)) visual.TimeControl.Time = time;
+            }
+        }
+
+        private static Windows.UI.Color ResolveWidgetColor(string raw, double value)
+        {
+            var fallback = Windows.UI.Color.FromArgb(255, 144, 202, 249);
+            if (double.IsNaN(value) || string.IsNullOrWhiteSpace(raw)) return fallback;
+            var text = raw.Trim();
+            if (text.StartsWith("[", StringComparison.Ordinal))
+            {
+                var objects = System.Text.RegularExpressions.Regex.Matches(text, "\\{[^}]*\\}");
+                var selectedLevel = double.NegativeInfinity;
+                var selectedColor = string.Empty;
+                foreach (System.Text.RegularExpressions.Match item in objects)
+                {
+                    var levelMatch = System.Text.RegularExpressions.Regex.Match(item.Value, "\\\"level\\\"\\s*:\\s*(-?[0-9]+(?:\\.[0-9]+)?)");
+                    var colorMatch = System.Text.RegularExpressions.Regex.Match(item.Value, "\\\"value\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"");
+                    double level;
+                    if (levelMatch.Success && colorMatch.Success && double.TryParse(levelMatch.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out level) && level <= value && level >= selectedLevel)
+                    { selectedLevel = level; selectedColor = colorMatch.Groups[1].Value; }
+                }
+                text = selectedColor;
+            }
+            if ((text.Length == 7 || text.Length == 9) && text[0] == '#')
+            {
+                byte a = 255, r, g, b;
+                var offset = text.Length == 9 ? 3 : 1;
+                if (text.Length == 9 && !byte.TryParse(text.Substring(1, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out a)) a = 255;
+                if (byte.TryParse(text.Substring(offset, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out r) &&
+                    byte.TryParse(text.Substring(offset + 2, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out g) &&
+                    byte.TryParse(text.Substring(offset + 4, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out b))
+                    return Windows.UI.Color.FromArgb(a, r, g, b);
+            }
+            switch (text.ToLowerInvariant())
+            {
+                case "red": return Windows.UI.Colors.Red;
+                case "green": return Windows.UI.Colors.Green;
+                case "blue": return Windows.UI.Colors.Blue;
+                case "orange": return Windows.UI.Colors.Orange;
+                case "yellow": return Windows.UI.Colors.Yellow;
+                case "white": return Windows.UI.Colors.White;
+                case "gray": case "grey": return Windows.UI.Colors.Gray;
+                case "lime": return Windows.UI.Colors.Lime;
+                case "cyan": return Windows.UI.Colors.Cyan;
+                case "magenta": return Windows.UI.Colors.Magenta;
+            }
+            return fallback;
+        }
+
+        private static string FormatWidgetNumber(double value)
+        {
+            return value.ToString("0.##", CultureInfo.InvariantCulture);
+        }
+
+        private void DrawCircularGauge(WidgetVisual visual, Windows.UI.Color accent)
+        {
+            if (visual == null || visual.GaugeCanvas == null || visual.State == null)
+                return;
+
+            var canvas = visual.GaugeCanvas;
+            canvas.Children.Clear();
+
+            var state = visual.State;
+            var minimum = ReadWidgetNumber(state.Minimum, 0);
+            var maximum = ReadWidgetNumber(state.Maximum, 100);
+            if (maximum <= minimum) maximum = minimum + 100;
+            var number = ReadWidgetNumber(state.Value, minimum);
+            var fraction = Math.Max(0.0, Math.Min(1.0, (number - minimum) / (maximum - minimum)));
+            var config = state.ConfigJson ?? string.Empty;
+            var stroke = ReadWidgetNumber(ReadJsonNumber(config, "stroke").HasValue
+                ? ReadJsonNumber(config, "stroke").Value.ToString(CultureInfo.InvariantCulture)
+                : string.Empty, visual.IsFillGauge ? 7.0 : 20.0);
+            stroke = Math.Max(4.0, Math.Min(24.0, stroke));
+
+            var ringColor = accent;
+            var configuredRing = ReadJsonString(config, visual.IsFillGauge ? "circleColor" : "color");
+            if (!string.IsNullOrWhiteSpace(configuredRing))
+                ringColor = ResolveWidgetColor(configuredRing, number);
+
+            if (visual.IsFillGauge)
+            {
+                var waveColor = ringColor;
+                var configuredWave = ReadJsonString(config, "waveColor");
+                if (!string.IsNullOrWhiteSpace(configuredWave))
+                    waveColor = ResolveWidgetColor(configuredWave, number);
+
+                var fill = new Ellipse
+                {
+                    Width = 64,
+                    Height = 64,
+                    Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(
+                        (byte)(24 + fraction * 82), waveColor.R, waveColor.G, waveColor.B))
+                };
+                Canvas.SetLeft(fill, 24);
+                Canvas.SetTop(fill, 24);
+                canvas.Children.Add(fill);
+
+                var gaugeRing = new Ellipse
+                {
+                    Width = 86,
+                    Height = 86,
+                    Stroke = new SolidColorBrush(ringColor),
+                    StrokeThickness = stroke,
+                    Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0))
+                };
+                Canvas.SetLeft(gaugeRing, 13);
+                Canvas.SetTop(gaugeRing, 13);
+                canvas.Children.Add(gaugeRing);
+            }
+            else
+            {
+                var semicircle = Regex.IsMatch(config,
+                    "\"semicircle\"\\s*:\\s*(?:\"1\"|1|true)",
+                    RegexOptions.IgnoreCase);
+                if (semicircle)
+                {
+                    var track = new Polyline
+                    {
+                        Stroke = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 77, 80, 88)),
+                        StrokeThickness = stroke
+                    };
+                    var trackPoints = new PointCollection();
+                    for (var i = 0; i <= 32; i++)
+                    {
+                        var angle = (180.0 + 180.0 * i / 32.0) * Math.PI / 180.0;
+                        trackPoints.Add(new Windows.Foundation.Point(
+                            56 + 39 * Math.Cos(angle),
+                            56 + 39 * Math.Sin(angle)));
+                    }
+                    track.Points = trackPoints;
+                    canvas.Children.Add(track);
+                }
+                else
+                {
+                    var track = new Ellipse
+                    {
+                        Width = 86,
+                        Height = 86,
+                        Stroke = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 77, 80, 88)),
+                        StrokeThickness = stroke,
+                        Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0))
+                    };
+                    Canvas.SetLeft(track, 13);
+                    Canvas.SetTop(track, 13);
+                    canvas.Children.Add(track);
+                }
+
+                if (fraction > 0.001)
+                {
+                    var arc = new Polyline
+                    {
+                        Stroke = new SolidColorBrush(ringColor),
+                        StrokeThickness = stroke
+                    };
+                    var points = new PointCollection();
+                    var segments = Math.Max(2, (int)Math.Ceiling(64 * fraction));
+                    var startAngle = semicircle ? 180.0 : -90.0;
+                    var sweepAngle = (semicircle ? 180.0 : 360.0) * fraction;
+                    for (var i = 0; i <= segments; i++)
+                    {
+                        var angle = (startAngle + sweepAngle * i / segments) * Math.PI / 180.0;
+                        points.Add(new Windows.Foundation.Point(
+                            56 + 39 * Math.Cos(angle),
+                            56 + 39 * Math.Sin(angle)));
+                    }
+                    arc.Points = points;
+                    canvas.Children.Add(arc);
+                }
+            }
+
+            var displayValue = visual.IsFillGauge
+                ? Math.Round(fraction * 100).ToString("0", CultureInfo.InvariantCulture) + "%"
+                : FormatWidgetNumber(number);
+            var valueText = new TextBlock
+            {
+                Text = displayValue,
+                Width = 86,
+                Height = 28,
+                FontSize = 18,
+                FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(Windows.UI.Colors.White),
+                TextAlignment = TextAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Canvas.SetLeft(valueText, 13);
+            Canvas.SetTop(valueText, 42);
+            canvas.Children.Add(valueText);
+        }
+
+        private static string ReadJsonString(string json, string name)
+        {
+            var pattern = "\"" + Regex.Escape(name) + "\"\\s*:\\s*\"([^\"]*)\"";
+            var match = Regex.Match(json ?? string.Empty, pattern, RegexOptions.IgnoreCase);
+            return match.Success ? match.Groups[1].Value : string.Empty;
+        }
+
+        private void RefreshInlineChart(WidgetVisual visual)
+        {
+            if (visual == null || visual.InlineChartCanvas == null || visual.State == null ||
+                visual.InlineChartLoading)
+                return;
+
+            var now = DateTimeOffset.Now;
+            if (visual.LastInlineChartRefresh != DateTimeOffset.MinValue &&
+                (now - visual.LastInlineChartRefresh).TotalSeconds < 30)
+            {
+                DrawInlineChart(visual);
+                return;
+            }
+
+            visual.LastInlineChartRefresh = now;
+            visual.InlineChartLoading = true;
+            RefreshInlineChartAsync(visual, visual.State.Clone());
+        }
+
+        private async void RefreshInlineChartAsync(WidgetVisual visual, WidgetState state)
+        {
+            try
+            {
+                var chartSamples = ParseInlineChartPayload(state.StatusPayload);
+                if (chartSamples.Count == 0)
+                {
+                    var points = await _measurementStore.ReadAsync(
+                        state.DeviceId, state.Id, DateTimeOffset.Now.AddDays(-7), DateTimeOffset.Now);
+                    chartSamples = new List<Tuple<double?, double?, double?>>();
+                    foreach (var point in points)
+                    {
+                        double number;
+                        if (double.TryParse((point.Value ?? string.Empty).Replace(',', '.'),
+                            NumberStyles.Float, CultureInfo.InvariantCulture, out number) &&
+                            !double.IsNaN(number) && !double.IsInfinity(number))
+                            chartSamples.Add(Tuple.Create((double?)number, (double?)null, (double?)null));
+                    }
+                }
+
+                if (chartSamples.Count > 48)
+                    chartSamples = chartSamples.Skip(chartSamples.Count - 48).ToList();
+
+                await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, delegate
+                {
+                    WidgetVisual current;
+                    if (_visuals.TryGetValue(state.Key, out current) && object.ReferenceEquals(current, visual))
+                    {
+                        visual.InlineChartSamples = chartSamples;
+                        DrawInlineChart(visual);
+                    }
+                    visual.InlineChartLoading = false;
+                });
+            }
+            catch (Exception ex)
+            {
+                await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, delegate
+                {
+                    visual.InlineChartLoading = false;
+                    Log("INLINE CHART ERROR: " + ex.Message);
+                });
+            }
+        }
+
+        private static IList<Tuple<double?, double?, double?>> ParseInlineChartPayload(string payload)
+        {
+            var result = new List<Tuple<double?, double?, double?>>();
+            if (string.IsNullOrWhiteSpace(payload))
+                return result;
+
+            var status = System.Text.RegularExpressions.Regex.Match(
+                payload, "\\\"status\\\"\\s*:\\s*\\[(.*?)\\]",
+                System.Text.RegularExpressions.RegexOptions.Singleline);
+            if (!status.Success)
+                return result;
+
+            var objects = System.Text.RegularExpressions.Regex.Matches(status.Groups[1].Value, "\\{[^{}]*\\}");
+            foreach (System.Text.RegularExpressions.Match item in objects)
+            {
+                var first = ReadJsonNumber(item.Value, "y1");
+                var second = ReadJsonNumber(item.Value, "y2");
+                var third = ReadJsonNumber(item.Value, "y3");
+
+                if (!first.HasValue && !second.HasValue && !third.HasValue)
+                {
+                    first = ReadJsonNumber(item.Value, "y");
+                    if (!first.HasValue) first = ReadJsonNumber(item.Value, "value");
+                }
+
+                if (first.HasValue || second.HasValue || third.HasValue)
+                    result.Add(Tuple.Create(first, second, third));
+            }
+
+            return result;
+        }
+
+        private static double? ReadJsonNumber(string json, string name)
+        {
+            var pattern = "\\\"" + System.Text.RegularExpressions.Regex.Escape(name) +
+                "\\\"\\s*:\\s*(-?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?)";
+            var match = System.Text.RegularExpressions.Regex.Match(
+                json ?? string.Empty, pattern,
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (!match.Success)
+                return null;
+
+            double value;
+            if (!double.TryParse(match.Groups[1].Value, NumberStyles.Float,
+                CultureInfo.InvariantCulture, out value) ||
+                double.IsNaN(value) || double.IsInfinity(value))
+                return null;
+            return value;
+        }
+
+        private void DrawInlineChart(WidgetVisual visual)
+        {
+            if (visual == null || visual.InlineChartCanvas == null)
+                return;
+
+            var canvas = visual.InlineChartCanvas;
+            canvas.Children.Clear();
+            var width = canvas.ActualWidth >= 120 ? canvas.ActualWidth : 300.0;
+            var height = canvas.ActualHeight >= 40 ? canvas.ActualHeight : 92.0;
+            const double left = 30.0;
+            const double rightPadding = 8.0;
+            const double top = 10.0;
+            const double bottomPadding = 12.0;
+            var plotWidth = Math.Max(1.0, width - left - rightPadding);
+            var plotHeight = Math.Max(1.0, height - top - bottomPadding);
+            var samples = visual.InlineChartSamples ?? new List<Tuple<double?, double?, double?>>();
+
+            if (samples.Count == 0)
+            {
+                var empty = new TextBlock
+                {
+                    Text = visual.InlineChartLoading ? "Загрузка истории…" : "Нет данных графика",
+                    FontSize = 11,
+                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 156, 163, 175))
+                };
+                Canvas.SetLeft(empty, left);
+                Canvas.SetTop(empty, 34);
+                canvas.Children.Add(empty);
+                return;
+            }
+
+            var definition = NormalizeType(visual.State.DefinitionName);
+            var isBar = definition == "chart3" || definition == "chart4" ||
+                System.Text.RegularExpressions.Regex.IsMatch(
+                    visual.State.ConfigJson ?? string.Empty,
+                    "\\\"type\\\"\\s*:\\s*\\\"bar\\\"",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            var showPoints = definition == "chart2" ||
+                (definition != "chart1" && !System.Text.RegularExpressions.Regex.IsMatch(
+                    visual.State.ConfigJson ?? string.Empty,
+                    "\\\"pointRadius\\\"\\s*:\\s*0(?:\\D|$)",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase));
+
+            var seriesValues = new List<List<double>>();
+            var seriesIndexes = new List<int>();
+            for (var seriesIndex = 0; seriesIndex < 3; seriesIndex++)
+            {
+                var values = new List<double>();
+                foreach (var sample in samples)
+                {
+                    var value = seriesIndex == 0 ? sample.Item1 :
+                        (seriesIndex == 1 ? sample.Item2 : sample.Item3);
+                    if (value.HasValue)
+                        values.Add(value.Value);
+                }
+                if (values.Count > 0)
+                {
+                    seriesValues.Add(values);
+                    seriesIndexes.Add(seriesIndex);
+                }
+            }
+
+            if (seriesValues.Count == 0)
+                return;
+
+            var allValues = seriesValues.SelectMany(delegate(List<double> values) { return values; }).ToList();
+            var min = allValues.Min();
+            var max = allValues.Max();
+            if (Math.Abs(max - min) < 0.000001) max = min + 1.0;
+
+            for (var grid = 0; grid < 3; grid++)
+            {
+                var y = top + plotHeight * grid / 2.0;
+                canvas.Children.Add(new Line
+                {
+                    X1 = left, Y1 = y, X2 = width - rightPadding, Y2 = y,
+                    Stroke = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 63, 66, 74)),
+                    StrokeThickness = 1
+                });
+            }
+
+            var colors = new[]
+            {
+                Windows.UI.Color.FromArgb(255, 105, 145, 245),
+                Windows.UI.Color.FromArgb(255, 102, 187, 106),
+                Windows.UI.Color.FromArgb(255, 255, 179, 0)
+            };
+
+            for (var seriesIndex = 0; seriesIndex < seriesValues.Count; seriesIndex++)
+            {
+                var values = seriesValues[seriesIndex];
+                var sourceIndex = seriesIndexes[seriesIndex];
+                var color = colors[seriesIndex % colors.Length];
+                if (isBar)
+                {
+                    var groupWidth = plotWidth / Math.Max(1, samples.Count);
+                    var barWidth = Math.Max(1.0, groupWidth / seriesValues.Count - 1.0);
+                    for (var sampleIndex = 0; sampleIndex < samples.Count; sampleIndex++)
+                    {
+                        var sample = samples[sampleIndex];
+                        var value = sourceIndex == 0 ? sample.Item1 :
+                            (sourceIndex == 1 ? sample.Item2 : sample.Item3);
+                        if (!value.HasValue) continue;
+                        var x = left + sampleIndex * groupWidth + seriesIndex * barWidth;
+                        var normalized = (value.Value - min) / (max - min);
+                        var barHeight = Math.Max(1.0, normalized * plotHeight);
+                        var bar = new Rectangle
+                        {
+                            Width = barWidth,
+                            Height = barHeight,
+                            Fill = new SolidColorBrush(color)
+                        };
+                        Canvas.SetLeft(bar, x);
+                        Canvas.SetTop(bar, top + plotHeight - barHeight);
+                        canvas.Children.Add(bar);
+                    }
+                }
+                else
+                {
+                    var line = new Polyline
+                    {
+                        Stroke = new SolidColorBrush(color),
+                        StrokeThickness = 2
+                    };
+                    var points = new PointCollection();
+                    var pointIndex = 0;
+                    foreach (var sample in samples)
+                    {
+                        var value = sourceIndex == 0 ? sample.Item1 :
+                            (sourceIndex == 1 ? sample.Item2 : sample.Item3);
+                        if (!value.HasValue) continue;
+                        var x = left + (samples.Count == 1 ? plotWidth / 2.0 :
+                            plotWidth * pointIndex / Math.Max(1, values.Count - 1));
+                        var y = top + (1.0 - (value.Value - min) / (max - min)) * plotHeight;
+                        points.Add(new Windows.Foundation.Point(x, y));
+                        pointIndex++;
+                    }
+                    line.Points = points;
+                    canvas.Children.Add(line);
+
+                    if (showPoints)
+                    {
+                        foreach (var point in points)
+                        {
+                            var dot = new Ellipse
+                            {
+                                Width = 5,
+                                Height = 5,
+                                Fill = new SolidColorBrush(color)
+                            };
+                            Canvas.SetLeft(dot, point.X - 2.5);
+                            Canvas.SetTop(dot, point.Y - 2.5);
+                            canvas.Children.Add(dot);
+                        }
+                    }
+                }
+            }
+
+            var high = new TextBlock
+            {
+                Text = FormatWidgetNumber(allValues.Max()),
+                FontSize = 9,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 156, 163, 175))
+            };
+            var low = new TextBlock
+            {
+                Text = FormatWidgetNumber(allValues.Min()),
+                FontSize = 9,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 156, 163, 175))
+            };
+            Canvas.SetLeft(high, 0);
+            Canvas.SetTop(high, top - 3);
+            Canvas.SetLeft(low, 0);
+            Canvas.SetTop(low, top + plotHeight - 8);
+            canvas.Children.Add(high);
+            canvas.Children.Add(low);
+        }
+
+        private void OpenWidgetHistory(WidgetState state)
+        {
+            if (state == null) return;
+            if (ContainsComboValue(GraphWidgetBox, state.Key)) GraphWidgetBox.SelectedItem = state.Key;
+            ShowSection(3);
+            BuildGraphButton_Click(this, new RoutedEventArgs());
+        }
+
+        private static double ReadWidgetNumber(string value, double fallback)
+        {
+            double result;
+            if (double.TryParse((value ?? string.Empty).Replace(',', '.'), NumberStyles.Float,
+                CultureInfo.InvariantCulture, out result)) return result;
+            return fallback;
+        }
+
+        private void ApplyWidgetThresholdStyle(WidgetVisual visual, WidgetState state)
+        {
+            if (visual == null || visual.Shell == null) return;
+            var number = ReadWidgetNumber(state.Value, double.NaN);
+            var low = ReadWidgetNumber(state.WarningMinimum, double.NaN);
+            var high = ReadWidgetNumber(state.WarningMaximum, double.NaN);
+            var warning = !double.IsNaN(number) &&
+                ((!double.IsNaN(low) && number < low) || (!double.IsNaN(high) && number > high));
+            visual.Shell.Background = new SolidColorBrush(warning
+                ? Windows.UI.Color.FromArgb(255, 65, 43, 39)
+                : Windows.UI.Color.FromArgb(255, 43, 43, 43));
+            visual.Shell.BorderBrush = new SolidColorBrush(warning
+                ? Windows.UI.Color.FromArgb(255, 190, 95, 65)
+                : Windows.UI.Color.FromArgb(255, 57, 59, 68));
+            var accent = warning
+                ? Windows.UI.Color.FromArgb(255, 255, 190, 150)
+                : ResolveWidgetColor(state.ColorConfig, number);
+            if (visual.ValueText != null)
+                visual.ValueText.Foreground = new SolidColorBrush(accent);
+            if (visual.ValueBadge != null)
+                visual.ValueBadge.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(42, accent.R, accent.G, accent.B));
+            if (visual.UnitText != null && visual.SliderControl != null)
+                visual.UnitText.Text =
+                    FormatWidgetNumber(visual.SliderControl.Minimum) + "–" +
+                    FormatWidgetNumber(visual.SliderControl.Maximum) +
+                    (string.IsNullOrWhiteSpace(state.Unit) ? string.Empty : " " + state.Unit);
+
+            if (visual.GaugeCanvas != null)
+                DrawCircularGauge(visual, accent);
         }
 
         private static bool ParseBoolean(string value)
@@ -955,9 +2227,14 @@ namespace ESP32AIControl.WP81
 
                 await _scheduler.ScheduleAsync(command, executeAt);
                 await RefreshScheduleAsync();
+                ScheduleStatusText.Text = "Задача добавлена: " + executeAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss");
                 Log("SCHEDULE ADD: " + command + " @ " + executeAt);
             }
-            catch (Exception ex) { Log("SCHEDULE ERROR: " + ex.Message); }
+            catch (Exception ex)
+            {
+                ScheduleStatusText.Text = "Не удалось добавить задачу: " + ex.Message;
+                Log("SCHEDULE ERROR: " + ex.Message);
+            }
         }
 
         private async void UpdateScheduleButton_Click(object sender, RoutedEventArgs e)
@@ -974,9 +2251,14 @@ namespace ESP32AIControl.WP81
 
                 await _scheduler.UpdateAsync(selected.Id, command, executeAt);
                 await RefreshScheduleAsync();
+                ScheduleStatusText.Text = "Задача обновлена.";
                 Log("SCHEDULE UPDATE: " + selected.Id);
             }
-            catch (Exception ex) { Log("SCHEDULE ERROR: " + ex.Message); }
+            catch (Exception ex)
+            {
+                ScheduleStatusText.Text = "Не удалось изменить задачу: " + ex.Message;
+                Log("SCHEDULE ERROR: " + ex.Message);
+            }
         }
 
         private async void CancelScheduleButton_Click(object sender, RoutedEventArgs e)
@@ -987,8 +2269,35 @@ namespace ESP32AIControl.WP81
                 if (selected == null) return;
                 await _scheduler.CancelAsync(selected.Id);
                 await RefreshScheduleAsync();
+                ScheduleStatusText.Text = "Задача отменена.";
             }
-            catch (Exception ex) { Log("SCHEDULE ERROR: " + ex.Message); }
+            catch (Exception ex)
+            {
+                ScheduleStatusText.Text = "Не удалось отменить задачу: " + ex.Message;
+                Log("SCHEDULE ERROR: " + ex.Message);
+            }
+        }
+
+        private async void RetryScheduleButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var selected = SelectedSchedule();
+                if (selected == null)
+                    throw new InvalidOperationException("Сначала выберите задачу.");
+                if (!string.Equals(selected.Status, "Failed", StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("Повторить можно только задачу со статусом «Ошибка».");
+
+                await _scheduler.UpdateAsync(selected.Id, selected.Command, DateTimeOffset.Now.AddMinutes(1));
+                await RefreshScheduleAsync();
+                ScheduleStatusText.Text = "Повтор запланирован примерно через минуту.";
+                Log("SCHEDULE RETRY: " + selected.Id);
+            }
+            catch (Exception ex)
+            {
+                ScheduleStatusText.Text = "Повтор не выполнен: " + ex.Message;
+                Log("SCHEDULE RETRY ERROR: " + ex.Message);
+            }
         }
 
         private async void RefreshScheduleButton_Click(object sender, RoutedEventArgs e)
@@ -1006,10 +2315,26 @@ namespace ESP32AIControl.WP81
             {
                 _scheduleRows.Add(item);
                 ScheduleList.Items.Add(
-                    item.Status + " | " +
+                    FormatScheduleStatus(item.Status) + " | " +
                     item.ExecuteAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss") +
                     " | " + item.Command +
                     (string.IsNullOrEmpty(item.LastError) ? string.Empty : " | " + item.LastError));
+            }
+
+            if (items.Count == 0)
+                ScheduleStatusText.Text = "Список пока пуст. Добавьте команду и время выполнения.";
+        }
+
+        private static string FormatScheduleStatus(string status)
+        {
+            switch ((status ?? string.Empty).ToLowerInvariant())
+            {
+                case "scheduled": return "Ожидает";
+                case "executing": return "Выполняется";
+                case "completed": return "Выполнено";
+                case "cancelled": return "Отменено";
+                case "failed": return "Ошибка";
+                default: return string.IsNullOrEmpty(status) ? "Неизвестно" : status;
             }
         }
 
@@ -1030,6 +2355,9 @@ namespace ESP32AIControl.WP81
             ScheduleCommandBox.Text = item.Command;
             ScheduleDate.Date = new DateTimeOffset(item.ExecuteAt.LocalDateTime.Date);
             ScheduleTime.Time = item.ExecuteAt.LocalDateTime.TimeOfDay;
+            ScheduleStatusText.Text = FormatScheduleStatus(item.Status) + " • " +
+                item.ExecuteAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss") +
+                (string.IsNullOrWhiteSpace(item.LastError) ? string.Empty : Environment.NewLine + item.LastError);
         }
 
         private ScheduledCommand SelectedSchedule()
@@ -1048,8 +2376,28 @@ namespace ESP32AIControl.WP81
         private static void ValidateCommand(string command)
         {
             var parts = (command ?? string.Empty).Split(new[] { '=' }, 2);
-            if (parts.Length != 2 || parts[0].Trim().IndexOf('/') <= 0)
+            if (parts.Length != 2)
                 throw new InvalidOperationException("Формат: device/widget=value");
+
+            var target = parts[0].Trim();
+            var value = parts[1].Trim();
+            var separator = target.IndexOf('/');
+            if (separator <= 0 || separator >= target.Length - 1 ||
+                target.IndexOf('/', separator + 1) >= 0 ||
+                ContainsWhitespace(target) || string.IsNullOrWhiteSpace(value))
+                throw new InvalidOperationException("Укажите ID устройства, ID виджета и непустое значение: device/widget=value");
+        }
+
+        private static bool ContainsWhitespace(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return false;
+
+            for (var i = 0; i < value.Length; i++)
+                if (char.IsWhiteSpace(value[i]))
+                    return true;
+
+            return false;
         }
 
         private async void VoiceButton_Click(object sender, RoutedEventArgs e)
@@ -1057,19 +2405,237 @@ namespace ESP32AIControl.WP81
             try
             {
                 VoiceButton.IsEnabled = false;
+                CommandVoiceButton.IsEnabled = false;
+                MarfaListenButton.IsEnabled = false;
                 VoiceResultText.Text = "Слушаю…";
+                VoiceStatusText.Text = "Марфа слушает…";
+                MarfaVoiceResultText.Text = "Марфа слушает…";
                 await _voice.StartListeningAsync();
             }
             catch (Exception ex)
             {
                 VoiceResultText.Text = "Ошибка голоса: " + ex.Message;
+                VoiceStatusText.Text = VoiceResultText.Text;
+                MarfaVoiceResultText.Text = VoiceResultText.Text;
                 Log("VOICE ERROR: " + ex.Message);
             }
             finally
             {
                 VoiceButton.IsEnabled = true;
+                CommandVoiceButton.IsEnabled = true;
+                MarfaListenButton.IsEnabled = true;
                 await _voice.StopListeningAsync();
             }
+        }
+
+        private async Task<string> ShowVoiceTargetChoiceAsync(IList<VoiceTargetOption> options)
+        {
+            if (options == null || options.Count == 0)
+                return null;
+
+            var completion = new TaskCompletionSource<string>();
+            var popup = new Popup();
+            popup.HorizontalOffset = 8;
+            popup.VerticalOffset = 58;
+
+            var panel = new StackPanel();
+            panel.Width = 328;
+
+            panel.Children.Add(new TextBlock
+            {
+                Text = "Марфа нашла несколько устройств. Выберите нужное:",
+                TextWrapping = TextWrapping.Wrap,
+                FontSize = 17,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 245, 245, 245)),
+                Margin = new Thickness(0, 0, 0, 10)
+            });
+
+            var choices = new ListView
+            {
+                Height = 244,
+                SelectionMode = ListViewSelectionMode.Single,
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 37, 38, 44))
+            };
+            foreach (var option in options)
+                choices.Items.Add(option.DisplayText);
+            panel.Children.Add(choices);
+
+            var buttons = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 10, 0, 0)
+            };
+            var chooseButton = new Button
+            {
+                Content = "Выбрать",
+                IsEnabled = false,
+                Margin = new Thickness(0, 0, 8, 0)
+            };
+            var cancelButton = new Button { Content = "Отмена" };
+
+            choices.SelectionChanged += delegate
+            {
+                chooseButton.IsEnabled = choices.SelectedIndex >= 0;
+            };
+            chooseButton.Click += delegate
+            {
+                var index = choices.SelectedIndex;
+                if (index < 0 || index >= options.Count)
+                    return;
+                completion.TrySetResult(options[index].Command);
+                popup.IsOpen = false;
+            };
+            cancelButton.Click += delegate
+            {
+                completion.TrySetResult(null);
+                popup.IsOpen = false;
+            };
+
+            buttons.Children.Add(chooseButton);
+            buttons.Children.Add(cancelButton);
+            panel.Children.Add(buttons);
+
+            popup.Child = new Border
+            {
+                Width = 352,
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 43, 44, 51)),
+                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 91, 94, 106)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(10),
+                Padding = new Thickness(12),
+                Child = panel
+            };
+            popup.Closed += delegate
+            {
+                completion.TrySetResult(null);
+            };
+            popup.IsOpen = true;
+            return await completion.Task;
+        }
+
+        private static bool IsVoiceClarificationCancel(string text)
+        {
+            var value = (text ?? string.Empty).Trim().ToLowerInvariant();
+            return value == "отмена" || value == "отмени" || value == "не надо" ||
+                   value == "не нужно" || value == "cancel" || value == "stop";
+        }
+
+        private static string NormalizeClarificationWord(string value)
+        {
+            var word = (value ?? string.Empty).ToLowerInvariant().Trim();
+            if (word.Length > 3)
+            {
+                var endings = new[] { "иями", "ями", "ами", "ого", "ему", "ому",
+                    "ах", "ях", "ам", "ям", "ой", "ей", "ом", "ем", "а", "я", "е", "и", "ы", "у", "ю" };
+                for (var i = 0; i < endings.Length; i++)
+                {
+                    if (word.EndsWith(endings[i], StringComparison.Ordinal) &&
+                        word.Length - endings[i].Length >= 3)
+                    {
+                        word = word.Substring(0, word.Length - endings[i].Length);
+                        break;
+                    }
+                }
+            }
+            return word;
+        }
+
+        private static bool TrySelectVoiceClarification(
+            string reply,
+            IList<VoiceTargetOption> options,
+            out string command)
+        {
+            command = null;
+            if (options == null || options.Count == 0)
+                return false;
+
+            var normalized = Regex.Replace((reply ?? string.Empty).ToLowerInvariant(),
+                @"[^a-z0-9а-яё]+", " ").Trim();
+            var ordinal = Regex.Match(normalized,
+                @"(?:^|\s)(1|2|3|4|5|перв(?:ое|ый|ая|ую)|втор(?:ое|ой|ая|ую)|третье|третий|третья|четверт(?:ое|ый|ая)|пят(?:ое|ый|ая)|один|одна|два|две|три|четыре|пять)(?:$|\s)",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            if (ordinal.Success)
+            {
+                var token = ordinal.Groups[1].Value;
+                var index = 0;
+                if (token == "1" || token.StartsWith("перв", StringComparison.Ordinal) ||
+                    token == "один" || token == "одна") index = 0;
+                else if (token == "2" || token.StartsWith("втор", StringComparison.Ordinal) ||
+                    token == "два" || token == "две") index = 1;
+                else if (token == "3" || token.StartsWith("трет", StringComparison.Ordinal) ||
+                    token == "три") index = 2;
+                else if (token == "4" || token.StartsWith("четверт", StringComparison.Ordinal) ||
+                    token == "четыре") index = 3;
+                else if (token == "5" || token.StartsWith("пят", StringComparison.Ordinal) ||
+                    token == "пять") index = 4;
+
+                if (index >= 0 && index < options.Count)
+                {
+                    command = options[index].Command;
+                    return true;
+                }
+            }
+
+            var ignored = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "на", "в", "во", "у", "для", "по", "из", "с", "со", "мне",
+                "пожалуйста", "вариант", "устройство", "элемент", "странице"
+            };
+            var replyWords = Regex.Matches(normalized, @"[a-z0-9]+|[а-яё]+")
+                .Cast<Match>()
+                .Select(x => NormalizeClarificationWord(x.Value))
+                .Where(x => x.Length >= 2 && !ignored.Contains(x))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (replyWords.Count == 0)
+                return false;
+
+            var ranked = new List<Tuple<VoiceTargetOption, int>>();
+            foreach (var option in options)
+            {
+                var candidateWords = Regex.Matches(
+                    (option.Title ?? string.Empty) + " " + (option.Page ?? string.Empty) + " " +
+                    (option.DeviceId ?? string.Empty) + " " + (option.WidgetId ?? string.Empty),
+                    @"[a-z0-9]+|[а-яё]+")
+                    .Cast<Match>()
+                    .Select(x => NormalizeClarificationWord(x.Value))
+                    .Where(x => x.Length >= 2)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                var score = replyWords.Count(word => candidateWords.Contains(word, StringComparer.OrdinalIgnoreCase));
+                if (score > 0)
+                    ranked.Add(Tuple.Create(option, score));
+            }
+
+            if (ranked.Count == 0)
+                return false;
+            var best = ranked.Max(x => x.Item2);
+            var winners = ranked.Where(x => x.Item2 == best).ToList();
+            if (winners.Count != 1)
+                return false;
+            command = winners[0].Item1.Command;
+            return true;
+        }
+
+        private void ClearPendingVoiceClarification()
+        {
+            _pendingVoiceClarificationPhrase = null;
+            _pendingVoiceClarificationExpiresAt = DateTimeOffset.MinValue;
+            _pendingVoiceClarificationSelections.Clear();
+            _pendingVoiceClarificationOptions = new List<VoiceTargetOption>();
+        }
+
+        private string BuildVoiceClarificationPrompt(IList<VoiceTargetOption> options)
+        {
+            var lines = new List<string>
+            {
+                "Неоднозначная команда. Нажмите кнопку микрофона ещё раз и ответьте: «первое», «второе» или назовите страницу/устройство."
+            };
+            for (var i = 0; i < options.Count; i++)
+                lines.Add((i + 1) + ". " + options[i].DisplayText);
+            lines.Add("Чтобы отменить всю команду, скажите «отмена».");
+            return string.Join("\n", lines.ToArray());
         }
 
         private async void Voice_CommandRecognized(object sender, string text)
@@ -1077,35 +2643,175 @@ namespace ESP32AIControl.WP81
             await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, async delegate
             {
                 VoiceResultText.Text = "Распознано: " + text;
+                VoiceStatusText.Text = VoiceResultText.Text;
+                MarfaVoiceResultText.Text = VoiceResultText.Text;
                 try
                 {
-                    var parsed = _voiceParser.Parse(text);
-                    if (parsed == null)
+                    ParsedVoiceCommand parsed = null;
+                    if (!string.IsNullOrWhiteSpace(_pendingVoiceClarificationPhrase) &&
+                        _pendingVoiceClarificationExpiresAt <= DateTimeOffset.Now)
                     {
-                        Log("VOICE: команда не распознана.");
-                        return;
+                        ClearPendingVoiceClarification();
+                        Log("VOICE CLARIFICATION: время ожидания ответа истекло; прежняя команда отменена.");
                     }
 
-                    ValidateCommand(parsed.Command);
-
-                    if (parsed.ExecuteAt.HasValue)
+                    if (!string.IsNullOrWhiteSpace(_pendingVoiceClarificationPhrase))
                     {
-                        await _scheduler.ScheduleAsync(parsed.Command, parsed.ExecuteAt.Value);
-                        await RefreshScheduleAsync();
-                        Log("VOICE SCHEDULE: " + parsed.Command + " @ " + parsed.ExecuteAt.Value);
+                        if (IsVoiceClarificationCancel(text))
+                        {
+                            ClearPendingVoiceClarification();
+                            VoiceStatusText.Text = "Уточнение отменено. Ничего не отправлено.";
+                            MarfaVoiceResultText.Text = VoiceStatusText.Text;
+                            VoiceResultText.Text = VoiceStatusText.Text;
+                            Log("VOICE: пользователь отменил голосовое уточнение; команды не отправлены.");
+                            return;
+                        }
+
+                        _pendingVoiceClarificationExpiresAt = DateTimeOffset.Now.AddMinutes(2);
+                        string selectedCommand;
+                        if (!TrySelectVoiceClarification(text, _pendingVoiceClarificationOptions, out selectedCommand))
+                        {
+                            var prompt = BuildVoiceClarificationPrompt(_pendingVoiceClarificationOptions);
+                            VoiceStatusText.Text = "Не удалось однозначно понять ответ. " + prompt;
+                            MarfaVoiceResultText.Text = VoiceStatusText.Text;
+                            VoiceResultText.Text = VoiceStatusText.Text;
+                            Log("VOICE CLARIFICATION: ответ не сопоставлен однозначно: " + text);
+                            return;
+                        }
+
+                        var replacePreviousChoice = !string.IsNullOrWhiteSpace(_voiceParser.LastReason) &&
+                            _voiceParser.LastReason.IndexOf("больше не доступен", StringComparison.OrdinalIgnoreCase) >= 0;
+                        if (replacePreviousChoice && _pendingVoiceClarificationSelections.Count > 0)
+                            _pendingVoiceClarificationSelections[_pendingVoiceClarificationSelections.Count - 1] = selectedCommand;
+                        else
+                            _pendingVoiceClarificationSelections.Add(selectedCommand);
+
+                        Log("VOICE CLARIFICATION: selected " + selectedCommand);
+                        parsed = _voiceParser.Parse(
+                            _pendingVoiceClarificationPhrase, _pendingVoiceClarificationSelections);
                     }
                     else
                     {
-                        var plan = _commandExecutor.BuildPlan(parsed.Command);
-                        for (var p = 0; p < plan.Actions.Count; p++)
+                        parsed = _voiceParser.Parse(text, null);
+                        if (parsed == null && _voiceParser.LastAmbiguousOptions != null &&
+                            _voiceParser.LastAmbiguousOptions.Count > 0)
                         {
-                            var planned = plan.Actions[p];
-                            Log("PLAN " + (planned.IsDependency ? "DEP " : "ACT ") + planned.Command +
-                                (string.IsNullOrEmpty(planned.Reason) ? string.Empty : " | " + planned.Reason));
+                            _pendingVoiceClarificationPhrase = text;
+                            _pendingVoiceClarificationExpiresAt = DateTimeOffset.Now.AddMinutes(2);
+                            _pendingVoiceClarificationOptions = _voiceParser.LastAmbiguousOptions.ToList();
+                            VoiceStatusText.Text = BuildVoiceClarificationPrompt(_pendingVoiceClarificationOptions);
+                            MarfaVoiceResultText.Text = VoiceStatusText.Text;
+                            VoiceResultText.Text = VoiceStatusText.Text;
+                            Log("VOICE CLARIFICATION: ожидаю голосовой выбор для фразы: " + text);
+                            return;
+                        }
+                    }
+
+                    if (parsed == null)
+                    {
+                        var options = _voiceParser.LastAmbiguousOptions;
+                        if (options != null && options.Count > 0 &&
+                            !string.IsNullOrWhiteSpace(_pendingVoiceClarificationPhrase))
+                        {
+                            if (_pendingVoiceClarificationSelections.Count > 5)
+                            {
+                                ClearPendingVoiceClarification();
+                                VoiceStatusText.Text = "Слишком много уточнений. Ничего не отправлено.";
+                                MarfaVoiceResultText.Text = VoiceStatusText.Text;
+                                VoiceResultText.Text = VoiceStatusText.Text;
+                                return;
+                            }
+
+                            _pendingVoiceClarificationOptions = options.ToList();
+                            VoiceStatusText.Text = BuildVoiceClarificationPrompt(_pendingVoiceClarificationOptions);
+                            MarfaVoiceResultText.Text = VoiceStatusText.Text;
+                            VoiceResultText.Text = VoiceStatusText.Text;
+                            Log("VOICE CLARIFICATION: требуется ещё один выбор.");
+                            return;
                         }
 
-                        await _commandExecutor.ExecuteAsync(parsed.Command);
-                        Log("VOICE EXECUTE: " + parsed.Command);
+                        var reason = string.IsNullOrWhiteSpace(_voiceParser.LastReason)
+                            ? "Команда не распознана или элемент не найден."
+                            : _voiceParser.LastReason;
+                        ClearPendingVoiceClarification();
+                        VoiceStatusText.Text = reason;
+                        MarfaVoiceResultText.Text = reason;
+                        VoiceResultText.Text = reason;
+                        Log("VOICE: " + reason);
+                        return;
+                    }
+
+                    var commands = parsed.Commands != null && parsed.Commands.Count > 0
+                        ? parsed.Commands
+                        : new List<string> { parsed.Command };
+                    ClearPendingVoiceClarification();
+
+                    for (var i = 0; i < commands.Count; i++)
+                        ValidateCommand(commands[i]);
+
+                    if (parsed.RequiresConfirmation)
+                    {
+                        var confirmationText = parsed.ConfirmationText;
+                        if (string.IsNullOrWhiteSpace(confirmationText))
+                            confirmationText = "Выполнить команды:\n" + string.Join("\n", commands.ToArray());
+                        var dialog = new Windows.UI.Popups.MessageDialog(
+                            confirmationText,
+                            "Подтверждение Марфы");
+                        dialog.Commands.Add(new Windows.UI.Popups.UICommand("Выполнить"));
+                        dialog.Commands.Add(new Windows.UI.Popups.UICommand("Отмена"));
+                        dialog.DefaultCommandIndex = 0;
+                        dialog.CancelCommandIndex = 1;
+                        var selection = await dialog.ShowAsync();
+                        if (selection == null || !string.Equals(selection.Label, "Выполнить", StringComparison.Ordinal))
+                        {
+                            VoiceStatusText.Text = "Команда отменена.";
+                            MarfaVoiceResultText.Text = "Команда отменена.";
+                            Log("VOICE: пользователь отменил выполнение.");
+                            return;
+                        }
+                    }
+
+                    if (parsed.ExecuteAt.HasValue)
+                    {
+                        await _scheduler.ScheduleAsync(commands[0], parsed.ExecuteAt.Value);
+                        await RefreshScheduleAsync();
+                        Log("VOICE SCHEDULE: " + commands[0] + " @ " + parsed.ExecuteAt.Value);
+                    }
+                    else
+                    {
+                        for (var i = 0; i < commands.Count; i++)
+                        {
+                            var plan = _commandExecutor.BuildPlan(commands[i]);
+                            if (plan == null || plan.Actions == null || plan.Actions.Count == 0)
+                                throw new InvalidOperationException("Не удалось построить план для команды: " + commands[i]);
+
+                            for (var p = 0; p < plan.Actions.Count; p++)
+                            {
+                                var planned = plan.Actions[p];
+                                Log("PLAN " + (planned.IsDependency ? "DEP " : "ACT ") + planned.Command +
+                                    (string.IsNullOrEmpty(planned.Reason) ? string.Empty : " | " + planned.Reason));
+                            }
+                        }
+
+                        var executed = 0;
+                        try
+                        {
+                            for (var i = 0; i < commands.Count; i++)
+                            {
+                                await _commandExecutor.ExecuteAsync(commands[i]);
+                                executed++;
+                                Log("VOICE EXECUTE " + executed + "/" + commands.Count + ": " + commands[i]);
+                            }
+                            VoiceStatusText.Text = "Выполнено действий: " + executed;
+                            MarfaVoiceResultText.Text = VoiceStatusText.Text;
+                        }
+                        catch
+                        {
+                            if (executed > 0)
+                                Log("VOICE PARTIAL: выполнено " + executed + " из " + commands.Count +
+                                    ". Остальные команды остановлены после ошибки.");
+                            throw;
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -1150,6 +2856,22 @@ namespace ESP32AIControl.WP81
             public StackPanel Container { get; set; }
             public TextBlock Title { get; set; }
             public TextBlock ValueText { get; set; }
+            public Border Shell { get; set; }
+            public Border ValueBadge { get; set; }
+            public Slider SliderControl { get; set; }
+            public CheckBox SwitchControl { get; set; }
+            public TextBox InputControl { get; set; }
+            public TextBlock UnitText { get; set; }
+            public ComboBox SelectControl { get; set; }
+            public ProgressBar ProgressControl { get; set; }
+            public Canvas GaugeCanvas { get; set; }
+            public bool IsFillGauge { get; set; }
+            public Canvas InlineChartCanvas { get; set; }
+            public IList<Tuple<double?, double?, double?>> InlineChartSamples { get; set; }
+            public bool InlineChartLoading { get; set; }
+            public DateTimeOffset LastInlineChartRefresh { get; set; }
+            public DatePicker DateControl { get; set; }
+            public TimePicker TimeControl { get; set; }
             public FrameworkElement Control { get; set; }
         }
 

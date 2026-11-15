@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Windows.System.Threading;
 using Windows.Networking.Sockets;
 using Windows.Storage.Streams;
 
@@ -12,10 +14,17 @@ namespace ESP32AIControl.WP81.Core.Mqtt
         private DataWriter _writer;
         private MqttPacketReader _reader;
         private ushort _packetId = 1;
+        private readonly object _packetIdGate = new object();
+        private readonly object _publishAckGate = new object();
+        private readonly Dictionary<ushort, TaskCompletionSource<bool>> _pendingPublishAcks =
+            new Dictionary<ushort, TaskCompletionSource<bool>>();
         private bool _running;
+        private int _pingOutstanding;
+        private long _pingSentUtcTicks;
         private ushort _pendingSubscribeId;
         private TaskCompletionSource<bool> _subscribeCompletion;
         private Task _receiveLoopTask;
+        private ThreadPoolTimer _keepAliveTimer;
         private readonly SemaphoreSlim _writeGate = new SemaphoreSlim(1, 1);
 
         public event EventHandler<MqttMessageEventArgs> MessageReceived;
@@ -32,6 +41,8 @@ namespace ESP32AIControl.WP81.Core.Mqtt
         {
             if (_running)
                 return;
+            if (State == MqttConnectionState.Connecting)
+                throw new InvalidOperationException("MQTT connection is already being established.");
 
             SetState(MqttConnectionState.Connecting);
             _socket = new StreamSocket();
@@ -50,6 +61,10 @@ namespace ESP32AIControl.WP81.Core.Mqtt
 
                 _running = true;
                 SetState(MqttConnectionState.Connected);
+                // MQTT 3.1.1 keep-alive is 60 seconds in CONNECT. Send PINGREQ
+                // well before the broker deadline so an idle dashboard stays connected.
+                _keepAliveTimer = ThreadPoolTimer.CreatePeriodicTimer(
+                    KeepAliveTick, TimeSpan.FromSeconds(25));
                 _receiveLoopTask = ReceiveLoopAsync();
             }
             catch
@@ -73,7 +88,11 @@ namespace ESP32AIControl.WP81.Core.Mqtt
             try
             {
                 await WriteAsync(MqttPacketWriter.SubscribePacket(id, topicFilter, qos));
-                var success = await _subscribeCompletion.Task;
+                var completion = _subscribeCompletion.Task;
+                var completed = await Task.WhenAny(completion, Task.Delay(TimeSpan.FromSeconds(15)));
+                if (!object.ReferenceEquals(completed, completion))
+                    throw new TimeoutException("MQTT SUBACK was not received within 15 seconds.");
+                var success = await completion;
                 if (!success)
                     throw new InvalidOperationException("MQTT SUBSCRIBE was rejected.");
             }
@@ -87,7 +106,59 @@ namespace ESP32AIControl.WP81.Core.Mqtt
         public async Task PublishAsync(string topic, string payload, byte qos, bool retain)
         {
             EnsureConnected();
-            await WriteAsync(MqttPacketWriter.PublishPacket(topic, payload, qos, retain, NextPacketId()));
+            if (qos > 1)
+                throw new ArgumentOutOfRangeException("qos", "Only MQTT QoS 0 and 1 are supported.");
+
+            var packetId = qos == 0 ? (ushort)0 : NextPacketId();
+            TaskCompletionSource<bool> acknowledgement = null;
+            if (qos == 1)
+            {
+                acknowledgement = new TaskCompletionSource<bool>();
+                lock (_publishAckGate)
+                {
+                    while (_pendingPublishAcks.ContainsKey(packetId))
+                        packetId = NextPacketId();
+                    _pendingPublishAcks.Add(packetId, acknowledgement);
+                }
+            }
+
+            try
+            {
+                await WriteAsync(MqttPacketWriter.PublishPacket(topic, payload, qos, retain, packetId));
+                if (acknowledgement == null)
+                    return;
+
+                var completed = await Task.WhenAny(
+                    acknowledgement.Task,
+                    Task.Delay(TimeSpan.FromSeconds(15)));
+
+                if (!object.ReferenceEquals(completed, acknowledgement.Task) &&
+                    !acknowledgement.Task.IsCompleted)
+                {
+                    // Do not report a QoS 1 publish as successful when the broker
+                    // never acknowledged it. Close the uncertain session so the
+                    // service follows its normal reconnect path.
+                    Close();
+                    throw new TimeoutException("MQTT PUBACK was not received within 15 seconds.");
+                }
+
+                if (!await acknowledgement.Task)
+                    throw new InvalidOperationException("MQTT publish was interrupted before PUBACK.");
+            }
+            catch
+            {
+                if (acknowledgement != null)
+                {
+                    lock (_publishAckGate)
+                    {
+                        TaskCompletionSource<bool> current;
+                        if (_pendingPublishAcks.TryGetValue(packetId, out current) &&
+                            object.ReferenceEquals(current, acknowledgement))
+                            _pendingPublishAcks.Remove(packetId);
+                    }
+                }
+                throw;
+            }
         }
 
         public async Task DisconnectAsync()
@@ -135,9 +206,13 @@ namespace ESP32AIControl.WP81.Core.Mqtt
                     break;
 
                 case 13:
+                    // PINGRESP: the keep-alive exchange is complete.
+                    Interlocked.Exchange(ref _pingOutstanding, 0);
+                    Interlocked.Exchange(ref _pingSentUtcTicks, 0);
                     break;
 
                 case 4:
+                    HandlePubAck(packet);
                     break;
             }
         }
@@ -176,6 +251,23 @@ namespace ESP32AIControl.WP81.Core.Mqtt
                 handler(this, new MqttMessageEventArgs(topic, payload, qos));
         }
 
+        private void HandlePubAck(MqttPacket packet)
+        {
+            if (packet.Body.Length < 2)
+                return;
+
+            var id = (ushort)((packet.Body[0] << 8) | packet.Body[1]);
+            TaskCompletionSource<bool> completion = null;
+            lock (_publishAckGate)
+            {
+                if (_pendingPublishAcks.TryGetValue(id, out completion))
+                    _pendingPublishAcks.Remove(id);
+            }
+
+            if (completion != null)
+                completion.TrySetResult(true);
+        }
+
         private void HandleSubAck(MqttPacket packet)
         {
             if (packet.Body.Length < 3 || _subscribeCompletion == null)
@@ -187,6 +279,38 @@ namespace ESP32AIControl.WP81.Core.Mqtt
 
             var granted = packet.Body[2];
             _subscribeCompletion.TrySetResult(granted != 0x80);
+        }
+
+        private async void KeepAliveTick(ThreadPoolTimer timer)
+        {
+            if (!_running) return;
+
+            if (Interlocked.CompareExchange(ref _pingOutstanding, 0, 0) != 0)
+            {
+                var sentAt = Interlocked.Read(ref _pingSentUtcTicks);
+                if (sentAt > 0 &&
+                    DateTime.UtcNow.Ticks - sentAt >= TimeSpan.FromSeconds(50).Ticks)
+                {
+                    // A silent/broken TCP connection may still accept writes.
+                    // Require PINGRESP so the service can reconnect instead of
+                    // remaining stuck in Connected forever.
+                    Close();
+                }
+                return;
+            }
+
+            Interlocked.Exchange(ref _pingSentUtcTicks, DateTime.UtcNow.Ticks);
+            Interlocked.Exchange(ref _pingOutstanding, 1);
+            try
+            {
+                await WriteAsync(MqttPacketWriter.PingReq());
+            }
+            catch
+            {
+                Interlocked.Exchange(ref _pingOutstanding, 0);
+                Interlocked.Exchange(ref _pingSentUtcTicks, 0);
+                Close();
+            }
         }
 
         private async Task WriteAsync(byte[] bytes)
@@ -210,10 +334,15 @@ namespace ESP32AIControl.WP81.Core.Mqtt
 
         private ushort NextPacketId()
         {
-            if (_packetId == 0)
-                _packetId = 1;
+            lock (_packetIdGate)
+            {
+                if (_packetId == 0)
+                    _packetId = 1;
 
-            return _packetId++;
+                var id = _packetId;
+                _packetId = id == ushort.MaxValue ? (ushort)1 : (ushort)(id + 1);
+                return id;
+            }
         }
 
         private void EnsureConnected()
@@ -224,6 +353,7 @@ namespace ESP32AIControl.WP81.Core.Mqtt
 
         private void SetState(MqttConnectionState state)
         {
+            if (State == state) return;
             State = state;
             var handler = ConnectionStateChanged;
             if (handler != null)
@@ -233,10 +363,28 @@ namespace ESP32AIControl.WP81.Core.Mqtt
         private void Close()
         {
             _running = false;
+            Interlocked.Exchange(ref _pingOutstanding, 0);
+            Interlocked.Exchange(ref _pingSentUtcTicks, 0);
+            if (_keepAliveTimer != null)
+            {
+                try { _keepAliveTimer.Cancel(); } catch { }
+                _keepAliveTimer = null;
+            }
 
             var completion = _subscribeCompletion;
             if (completion != null)
                 completion.TrySetResult(false);
+
+            List<TaskCompletionSource<bool>> interruptedPublishes =
+                new List<TaskCompletionSource<bool>>();
+            lock (_publishAckGate)
+            {
+                foreach (var pending in _pendingPublishAcks.Values)
+                    interruptedPublishes.Add(pending);
+                _pendingPublishAcks.Clear();
+            }
+            foreach (var pending in interruptedPublishes)
+                pending.TrySetResult(false);
 
             try { if (_writer != null) _writer.DetachStream(); } catch { }
             try { if (_socket != null) _socket.Dispose(); } catch { }

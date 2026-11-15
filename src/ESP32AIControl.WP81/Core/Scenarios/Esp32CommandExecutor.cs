@@ -52,14 +52,16 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                 var action = plan.Actions[i];
                 var current = _devices.Get(action.DeviceId, action.WidgetId);
 
-                if (current != null && AreValuesEqual(current.Value, action.Value))
+                var momentaryAction = IsMomentaryAction(current);
+                if (current != null && !momentaryAction &&
+                    AreValuesEqual(current.Value, action.Value))
                     continue;
 
-                await ExecuteActionAsync(action);
+                await ExecuteActionAsync(action, momentaryAction);
             }
         }
 
-        private async Task ExecuteActionAsync(ScenarioAction action)
+        private async Task ExecuteActionAsync(ScenarioAction action, bool momentaryAction)
         {
             if (_mqtt.State != MqttConnectionState.Connected)
                 throw new InvalidOperationException("MQTT не подключён.");
@@ -68,6 +70,12 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                 action.DeviceId,
                 action.WidgetId,
                 action.Value);
+
+            // Button/action widgets are edge-triggered commands, not persistent
+            // state. Repeated presses must always publish, even when the last
+            // reported value already equals the command; no state echo is required.
+            if (momentaryAction)
+                return;
 
             var confirmed = await WaitForStateAsync(
                 action.DeviceId,
@@ -85,6 +93,18 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                 throw new InvalidOperationException(
                     prefix + ": " + description + " (" + action.Command + ")");
             }
+        }
+
+        private static bool IsMomentaryAction(WidgetState state)
+        {
+            if (state == null)
+                return false;
+
+            var type = (state.WidgetType ?? string.Empty).ToLowerInvariant();
+            var definition = (state.DefinitionName ?? string.Empty).ToLowerInvariant();
+            return type == "button" || type == "action" || type == "buttonout" ||
+                   type == "buttonin" || type == "pushbutton" ||
+                   definition == "button" || definition == "vbtn" || definition == "btn";
         }
 
         private async Task<bool> WaitForStateAsync(

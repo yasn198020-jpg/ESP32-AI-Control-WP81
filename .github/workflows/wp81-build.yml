@@ -1,10 +1,8 @@
 name: WP81 Build
 
+# Local-only project workflow. No automatic build is started by pushes or pull requests.
+# Keep a manual entry point for maintainers who explicitly choose to run it.
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
   workflow_dispatch:
 
 jobs:

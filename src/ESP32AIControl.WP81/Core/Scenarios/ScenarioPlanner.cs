@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using ESP32AIControl.WP81.Models;
 using ESP32AIControl.WP81.Core.State;
 
@@ -76,6 +77,11 @@ namespace ESP32AIControl.WP81.Core.Scenarios
 
         public ScenarioPlan BuildPlan(string command)
         {
+            if (_scenarioAnalyzer != null && _scenarioAnalyzer.HasUnsupportedRules)
+                throw new InvalidOperationException(
+                    "В активном сценарии есть условие, которое планировщик зависимостей не может безопасно разобрать. " +
+                    "Команда не отправлена, чтобы не пропустить обязательное действие.");
+
             var plan = new ScenarioPlan();
             var commands = SplitCommands(command);
 
@@ -101,12 +107,24 @@ namespace ESP32AIControl.WP81.Core.Scenarios
 
         private bool TryAddReverseScenarioPlan(ScenarioPlan plan, ScenarioAction target)
         {
+            // Reverse actuator scenarios model binary open/close states only.
+            // Treating an arbitrary numeric setpoint as "close" could select
+            // an unrelated actuator from the same script.
+            if (!IsValue(target.Value, "0") && !IsValue(target.Value, "1"))
+                return false;
+
             var targetState = _devices.Get(target.DeviceId, target.WidgetId);
 
             if (targetState == null || _scenarioAnalyzer == null || !_scenarioAnalyzer.HasRules)
                 return false;
 
             var analysis = _scenarioAnalyzer.AnalyzeControl(targetState, target.Value, _devices);
+            if (analysis != null && !analysis.IsComplete)
+                throw new InvalidOperationException(
+                    "Не удалось построить полный и однозначный план зависимостей сценария для " +
+                    (string.IsNullOrWhiteSpace(targetState.Description) ? target.WidgetId : targetState.Description) +
+                    ". Проверьте условия и промежуточные переменные сценария; команда не отправлена.");
+
             if (analysis == null || string.IsNullOrEmpty(analysis.ActuatorVariable))
                 return false;
 
@@ -156,7 +174,7 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             var widgets = _devices.GetWidgetsSnapshot();
             var targetPage = targetState == null ? string.Empty : (targetState.Page ?? string.Empty);
             var targetDescription = targetState == null ? string.Empty : (targetState.Description ?? string.Empty);
-            WidgetState candidate = null;
+            var bestCandidates = new List<WidgetState>();
             var bestScore = 0;
 
             for (var i = 0; i < widgets.Count; i++)
@@ -170,10 +188,32 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                 if (string.Equals(w.DeviceId, target.DeviceId, StringComparison.OrdinalIgnoreCase)) score += 2;
                 if (HasAny(w.Description, ManualWords)) score += 2;
                 if (score == 0) continue;
-                if (score > bestScore) { bestScore = score; candidate = w; }
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    bestCandidates.Clear();
+                    bestCandidates.Add(w);
+                }
+                else if (score == bestScore)
+                {
+                    bestCandidates.Add(w);
+                }
             }
 
-            if (candidate == null || !IsValue(candidate.Value, "0")) return;
+            if (bestCandidates.Count == 0) return;
+            if (bestCandidates.Count > 1)
+            {
+                var requiresChange = bestCandidates.Any(x => IsValue(x.Value, "0"));
+                if (requiresChange)
+                    throw new InvalidOperationException(
+                        "Не удалось однозначно определить переключатель автоматического режима для " +
+                        (string.IsNullOrWhiteSpace(targetDescription) ? target.WidgetId : targetDescription) +
+                        ". Уточните виджет автоматического режима; команда не отправлена.");
+                return;
+            }
+
+            var candidate = bestCandidates[0];
+            if (!IsValue(candidate.Value, "0")) return;
             if (ContainsAction(plan, candidate.DeviceId, candidate.Id, "1")) return;
 
             plan.Actions.Add(new ScenarioAction

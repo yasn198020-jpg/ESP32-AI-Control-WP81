@@ -10,8 +10,14 @@ namespace ESP32AIControl.WP81.Core.State
         private readonly Dictionary<string, WidgetState> _widgets =
             new Dictionary<string, WidgetState>();
 
-        private readonly Dictionary<string, DateTimeOffset> _lastUpdates =
-            new Dictionary<string, DateTimeOffset>();
+        private sealed class UpdateStamp
+        {
+            public string Value;
+            public DateTimeOffset UpdatedAt;
+        }
+
+        private readonly Dictionary<string, UpdateStamp> _lastUpdates =
+            new Dictionary<string, UpdateStamp>();
 
         // IoTManager element IDs are globally unique across ESPs. The index
         // lets scenario code resolve "btn43" to the real widget/device without
@@ -91,7 +97,18 @@ namespace ESP32AIControl.WP81.Core.State
                         Description = message.Description,
                         WidgetType = message.WidgetType,
                         Page = message.Page,
-                        Order = message.Order
+                        Order = message.Order,
+                        Unit = message.Unit,
+                        Minimum = message.Minimum,
+                        Maximum = message.Maximum,
+                        Step = message.Step,
+                        WarningMinimum = message.WarningMinimum,
+                        WarningMaximum = message.WarningMaximum,
+                        DefinitionName = message.DefinitionName,
+                        ScaleFactor = message.ScaleFactor,
+                        Options = message.Options,
+                        ConfigJson = message.RawPayload,
+                        ColorConfig = ExtractColorConfig(message.RawPayload)
                     };
                     _widgets[key] = state;
                 }
@@ -104,6 +121,20 @@ namespace ESP32AIControl.WP81.Core.State
                     state.Description = message.Description;
                 if (!string.IsNullOrEmpty(message.WidgetType))
                     state.WidgetType = message.WidgetType;
+                if (!string.IsNullOrEmpty(message.Unit)) state.Unit = message.Unit;
+                if (!string.IsNullOrEmpty(message.Minimum)) state.Minimum = message.Minimum;
+                if (!string.IsNullOrEmpty(message.Maximum)) state.Maximum = message.Maximum;
+                if (!string.IsNullOrEmpty(message.Step)) state.Step = message.Step;
+                if (!string.IsNullOrEmpty(message.WarningMinimum)) state.WarningMinimum = message.WarningMinimum;
+                if (!string.IsNullOrEmpty(message.WarningMaximum)) state.WarningMaximum = message.WarningMaximum;
+                if (!string.IsNullOrEmpty(message.DefinitionName)) state.DefinitionName = message.DefinitionName;
+                if (!string.IsNullOrEmpty(message.ScaleFactor)) state.ScaleFactor = message.ScaleFactor;
+                if (message.Options != null) state.Options = message.Options;
+                if (!string.IsNullOrEmpty(message.RawPayload) && message.Kind == Esp32MessageKind.Config)
+                {
+                    state.ConfigJson = message.RawPayload;
+                    state.ColorConfig = ExtractColorConfig(message.RawPayload);
+                }
                 if (!string.IsNullOrEmpty(message.Page))
                     state.Page = message.Page;
                 if (message.Order != 0)
@@ -116,6 +147,8 @@ namespace ESP32AIControl.WP81.Core.State
                         return;
 
                     state.Value = message.Value;
+                    if (!string.IsNullOrEmpty(message.RawPayload))
+                        state.StatusPayload = message.RawPayload;
                     state.UpdatedAt = DateTimeOffset.Now;
                 }
             }
@@ -123,6 +156,13 @@ namespace ESP32AIControl.WP81.Core.State
             var handler = WidgetChanged;
             if (handler != null)
                 handler(this, state.Clone());
+        }
+
+        private static string ExtractColorConfig(string json)
+        {
+            if (string.IsNullOrEmpty(json)) return string.Empty;
+            var match = System.Text.RegularExpressions.Regex.Match(json, "\\\"color\\\"\\s*:\\s*(\\[[^\\]]*\\]|\\\"[^\\\"]*\\\")");
+            return match.Success ? match.Groups[1].Value : string.Empty;
         }
 
         private void UpdateWidgetIdIndex(string widgetId, string key)
@@ -147,16 +187,25 @@ namespace ESP32AIControl.WP81.Core.State
 
         private bool IsDuplicate(string key, string value)
         {
-            var stampKey = key + "|" + (value ?? string.Empty);
-            DateTimeOffset previous;
+            var normalizedValue = value ?? string.Empty;
+            var now = DateTimeOffset.Now;
+            UpdateStamp previous;
 
-            if (_lastUpdates.TryGetValue(stampKey, out previous))
+            if (_lastUpdates.TryGetValue(key, out previous))
             {
-                if ((DateTimeOffset.Now - previous).TotalMilliseconds < 750)
+                if (string.Equals(previous.Value, normalizedValue, StringComparison.Ordinal) &&
+                    (now - previous.UpdatedAt).TotalMilliseconds < 750)
                     return true;
             }
 
-            _lastUpdates[stampKey] = DateTimeOffset.Now;
+            // Keep one recent stamp per widget instead of one dictionary entry
+            // per distinct sensor value; otherwise frequently changing sensors
+            // grow this cache for the lifetime of the application.
+            _lastUpdates[key] = new UpdateStamp
+            {
+                Value = normalizedValue,
+                UpdatedAt = now
+            };
             return false;
         }
     }

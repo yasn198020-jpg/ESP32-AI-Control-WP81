@@ -14,25 +14,39 @@ namespace ESP32AIControl.WP81.Core.Voice
         {
             if (_recognizer != null) return;
 
-            _recognizer = new SpeechRecognizer();
-            await _recognizer.CompileConstraintsAsync();
+            var recognizer = new SpeechRecognizer();
+            _recognizer = recognizer;
+            try
+            {
+                await recognizer.CompileConstraintsAsync();
 
-            var result = await _recognizer.RecognizeAsync();
-            var text = result == null ? string.Empty : result.Text;
+                if (!object.ReferenceEquals(_recognizer, recognizer))
+                    return;
 
-            var handler = CommandRecognized;
-            if (handler != null && !string.IsNullOrWhiteSpace(text))
-                handler(this, text);
+                var result = await recognizer.RecognizeAsync();
+                if (!object.ReferenceEquals(_recognizer, recognizer))
+                    return;
 
-            await StopListeningAsync();
+                var text = result == null ? string.Empty : result.Text;
+                var handler = CommandRecognized;
+                if (handler != null && !string.IsNullOrWhiteSpace(text))
+                    handler(this, text);
+            }
+            finally
+            {
+                if (object.ReferenceEquals(_recognizer, recognizer))
+                    _recognizer = null;
+                try { recognizer.Dispose(); } catch { }
+            }
         }
 
         public Task StopListeningAsync()
         {
-            if (_recognizer != null)
+            var recognizer = _recognizer;
+            _recognizer = null;
+            if (recognizer != null)
             {
-                _recognizer.Dispose();
-                _recognizer = null;
+                try { recognizer.Dispose(); } catch { }
             }
             return Task.FromResult(true);
         }

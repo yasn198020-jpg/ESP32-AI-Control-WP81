@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Windows.System.Threading;
 using Windows.Storage;
@@ -16,9 +17,14 @@ namespace ESP32AIControl.WP81.Core.Scheduling
         private const string FileName = "scheduled-commands.json";
         private readonly ICommandExecutor _executor;
         private readonly object _gate = new object();
+        private readonly SemaphoreSlim _saveGate = new SemaphoreSlim(1, 1);
+        private readonly SemaphoreSlim _loadGate = new SemaphoreSlim(1, 1);
+        private readonly SemaphoreSlim _mutationGate = new SemaphoreSlim(1, 1);
+        private readonly HashSet<string> _mutating = new HashSet<string>(StringComparer.Ordinal);
         private readonly List<ScheduledCommand> _items = new List<ScheduledCommand>();
         private ThreadPoolTimer _timer;
         private bool _loaded;
+        private int _tickRunning;
 
         public event EventHandler<ScheduledCommand> TaskChanged;
 
@@ -30,25 +36,47 @@ namespace ESP32AIControl.WP81.Core.Scheduling
         public async Task InitializeAsync()
         {
             await LoadAsync();
-            if (_timer == null)
-                _timer = ThreadPoolTimer.CreatePeriodicTimer(Tick, TimeSpan.FromSeconds(5));
+            lock (_gate)
+            {
+                if (_timer == null)
+                    _timer = ThreadPoolTimer.CreatePeriodicTimer(Tick, TimeSpan.FromSeconds(5));
+            }
         }
 
         public async Task<string> ScheduleAsync(string command, DateTimeOffset executeAt)
         {
             await EnsureLoadedAsync();
+            if (string.IsNullOrWhiteSpace(command))
+                throw new ArgumentException("Команда для расписания не может быть пустой.", "command");
 
             var item = new ScheduledCommand
             {
                 Id = Guid.NewGuid().ToString("N"),
-                Command = command,
+                Command = command.Trim(),
                 ExecuteAt = executeAt,
                 Status = "Scheduled",
                 CreatedAt = DateTimeOffset.Now
             };
 
-            lock (_gate) _items.Add(item);
-            await SaveAsync();
+            await _mutationGate.WaitAsync();
+            try
+            {
+                lock (_gate) _items.Add(item);
+                try
+                {
+                    await SaveAsync();
+                }
+                catch
+                {
+                    lock (_gate) _items.RemoveAll(x => x.Id == item.Id);
+                    throw;
+                }
+            }
+            finally
+            {
+                _mutationGate.Release();
+            }
+
             RaiseChanged(item);
             return item.Id;
         }
@@ -56,56 +84,126 @@ namespace ESP32AIControl.WP81.Core.Scheduling
         public async Task UpdateAsync(string id, string command, DateTimeOffset executeAt)
         {
             await EnsureLoadedAsync();
-            ScheduledCommand item = null;
+            if (string.IsNullOrWhiteSpace(command))
+                throw new ArgumentException("Команда для расписания не может быть пустой.", "command");
 
-            lock (_gate)
+            await _mutationGate.WaitAsync();
+            try
             {
-                for (var i = 0; i < _items.Count; i++)
+                ScheduledCommand item = null;
+                string previousCommand = null;
+                DateTimeOffset previousExecuteAt = DateTimeOffset.MinValue;
+                string previousStatus = null;
+                string previousError = null;
+
+                lock (_gate)
                 {
-                    if (_items[i].Id == id)
+                    for (var i = 0; i < _items.Count; i++)
                     {
-                        item = _items[i];
-                        break;
+                        if (_items[i].Id == id)
+                        {
+                            item = _items[i];
+                            break;
+                        }
                     }
+
+                    if (item == null) throw new InvalidOperationException("Задача не найдена.");
+                    if (item.Status == "Completed" || item.Status == "Cancelled")
+                        throw new InvalidOperationException("Завершённую задачу нельзя изменить.");
+                    if (item.Status == "Executing")
+                        throw new InvalidOperationException("Команда уже выполняется. Изменить её сейчас нельзя.");
+                    if (!_mutating.Add(id))
+                        throw new InvalidOperationException("Эта задача уже изменяется.");
+
+                    previousCommand = item.Command;
+                    previousExecuteAt = item.ExecuteAt;
+                    previousStatus = item.Status;
+                    previousError = item.LastError;
+                    item.Command = command.Trim();
+                    item.ExecuteAt = executeAt;
+                    item.Status = "Scheduled";
+                    item.LastError = null;
                 }
 
-                if (item == null) throw new InvalidOperationException("Задача не найдена.");
-                if (item.Status == "Completed" || item.Status == "Cancelled")
-                    throw new InvalidOperationException("Завершённую задачу нельзя изменить.");
+                try
+                {
+                    await SaveAsync();
+                }
+                catch
+                {
+                    lock (_gate)
+                    {
+                        item.Command = previousCommand;
+                        item.ExecuteAt = previousExecuteAt;
+                        item.Status = previousStatus;
+                        item.LastError = previousError;
+                    }
+                    throw;
+                }
+                finally
+                {
+                    lock (_gate) _mutating.Remove(id);
+                }
 
-                item.Command = command;
-                item.ExecuteAt = executeAt;
-                item.Status = "Scheduled";
-                item.LastError = null;
+                RaiseChanged(item);
             }
-
-            await SaveAsync();
-            RaiseChanged(item);
+            finally
+            {
+                _mutationGate.Release();
+            }
         }
 
         public async Task CancelAsync(string taskId)
         {
             await EnsureLoadedAsync();
-            ScheduledCommand item = null;
-
-            lock (_gate)
+            await _mutationGate.WaitAsync();
+            try
             {
-                for (var i = 0; i < _items.Count; i++)
+                ScheduledCommand item = null;
+                string previousStatus = null;
+
+                lock (_gate)
                 {
-                    if (_items[i].Id == taskId)
+                    for (var i = 0; i < _items.Count; i++)
                     {
-                        item = _items[i];
-                        break;
+                        if (_items[i].Id == taskId)
+                        {
+                            item = _items[i];
+                            break;
+                        }
                     }
+
+                    if (item == null) return;
+                    if (item.Status == "Completed" || item.Status == "Cancelled") return;
+                    if (item.Status == "Executing")
+                        throw new InvalidOperationException("Команда уже выполняется и не может быть отменена.");
+                    if (!_mutating.Add(taskId))
+                        throw new InvalidOperationException("Эта задача уже изменяется.");
+
+                    previousStatus = item.Status;
+                    item.Status = "Cancelled";
                 }
 
-                if (item == null) return;
-                if (item.Status == "Completed" || item.Status == "Cancelled") return;
-                item.Status = "Cancelled";
-            }
+                try
+                {
+                    await SaveAsync();
+                }
+                catch
+                {
+                    lock (_gate) item.Status = previousStatus;
+                    throw;
+                }
+                finally
+                {
+                    lock (_gate) _mutating.Remove(taskId);
+                }
 
-            await SaveAsync();
-            RaiseChanged(item);
+                RaiseChanged(item);
+            }
+            finally
+            {
+                _mutationGate.Release();
+            }
         }
 
         public async Task<IList<ScheduledCommand>> GetAllAsync()
@@ -126,53 +224,178 @@ namespace ESP32AIControl.WP81.Core.Scheduling
 
         private async void Tick(ThreadPoolTimer timer)
         {
-            List<ScheduledCommand> due = new List<ScheduledCommand>();
+            if (Interlocked.Exchange(ref _tickRunning, 1) != 0)
+                return;
 
-            lock (_gate)
+            ScheduledCommand activeClaim = null;
+            try
             {
-                var now = DateTimeOffset.Now;
-                foreach (var item in _items)
+                while (true)
                 {
-                    if (item.Status == "Scheduled" && item.ExecuteAt <= now)
+                    ScheduledCommand next = null;
+                    var claimFailed = false;
+
+                    await _mutationGate.WaitAsync();
+                    try
                     {
-                        item.Status = "Executing";
-                        due.Add(item.Clone());
+                        lock (_gate)
+                        {
+                            var now = DateTimeOffset.Now;
+                            foreach (var item in _items)
+                            {
+                                if (item.Status == "Scheduled" &&
+                                    !_mutating.Contains(item.Id) &&
+                                    item.ExecuteAt <= now)
+                                {
+                                    item.Status = "Executing";
+                                    next = item.Clone();
+                                    activeClaim = next;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (next != null)
+                        {
+                            try
+                            {
+                                // Claim and persist exactly one task before sending it.
+                                // Tasks later in the queue remain Scheduled if the app stops.
+                                await SaveAsync();
+                            }
+                            catch (Exception persistenceError)
+                            {
+                                lock (_gate)
+                                {
+                                    var item = FindUnsafe(next.Id);
+                                    if (item != null && item.Status == "Executing")
+                                    {
+                                        item.Status = "Scheduled";
+                                        item.LastError = "Не удалось сохранить состояние очереди: " + persistenceError.Message;
+                                    }
+                                }
+                                claimFailed = true;
+                            }
+                        }
                     }
+                    finally
+                    {
+                        _mutationGate.Release();
+                    }
+
+                    if (next == null)
+                        break;
+
+                    var original = Find(next.Id);
+                    if (claimFailed)
+                    {
+                        if (original != null) RaiseChanged(original);
+                        activeClaim = null;
+                        break;
+                    }
+
+                    var completed = false;
+                    string executionError = null;
+                    try
+                    {
+                        await _executor.ExecuteAsync(next.Command);
+                        completed = true;
+                    }
+                    catch (Exception ex)
+                    {
+                        executionError = ex.Message;
+                    }
+
+                    await _mutationGate.WaitAsync();
+                    try
+                    {
+                        lock (_gate)
+                        {
+                            if (original != null && original.Status == "Executing")
+                            {
+                                if (completed)
+                                {
+                                    original.Status = "Completed";
+                                    original.CompletedAt = DateTimeOffset.Now;
+                                    original.LastError = null;
+                                }
+                                else
+                                {
+                                    original.Status = "Failed";
+                                    original.CompletedAt = DateTimeOffset.Now;
+                                    original.LastError = executionError;
+                                }
+                            }
+                        }
+
+                        try
+                        {
+                            await SaveAsync();
+                        }
+                        catch (Exception persistenceError)
+                        {
+                            lock (_gate)
+                            {
+                                if (original != null && original.Status == "Completed")
+                                    original.LastError = "Команда выполнена, но результат не удалось сохранить: " + persistenceError.Message;
+                                else if (original != null && original.Status == "Failed")
+                                    original.LastError = (original.LastError ?? string.Empty) +
+                                        " Не удалось сохранить итоговый статус: " + persistenceError.Message;
+                            }
+                        }
+                    }
+                    finally
+                    {
+                        _mutationGate.Release();
+                    }
+
+                    if (original != null) RaiseChanged(original);
+                    activeClaim = null;
                 }
             }
-
-            if (due.Count == 0) return;
-
-            await SaveAsync();
-
-            foreach (var copy in due)
+            catch (Exception ex)
             {
-                ScheduledCommand original = Find(copy.Id);
-                if (original == null) continue;
-
-                try
+                // Never let an async-void timer exception escape the ThreadPool callback.
+                // Only the single claimed task can be reset; later tasks were never claimed.
+                if (activeClaim != null)
                 {
-                    await _executor.ExecuteAsync(copy.Command);
-                    lock (_gate)
+                    await _mutationGate.WaitAsync();
+                    try
                     {
-                        original.Status = "Completed";
-                        original.CompletedAt = DateTimeOffset.Now;
-                        original.LastError = null;
+                        var item = Find(activeClaim.Id);
+                        if (item != null)
+                        {
+                            lock (_gate)
+                            {
+                                if (item.Status == "Executing")
+                                {
+                                    item.Status = "Scheduled";
+                                    item.LastError = "Ошибка планировщика: " + ex.Message;
+                                }
+                            }
+                        }
+                        try { await SaveAsync(); } catch { }
                     }
-                }
-                catch (Exception ex)
-                {
-                    lock (_gate)
+                    finally
                     {
-                        original.Status = "Failed";
-                        original.CompletedAt = DateTimeOffset.Now;
-                        original.LastError = ex.Message;
+                        _mutationGate.Release();
                     }
-                }
 
-                await SaveAsync();
-                RaiseChanged(original);
+                    var changed = Find(activeClaim.Id);
+                    if (changed != null) RaiseChanged(changed);
+                }
             }
+            finally
+            {
+                Interlocked.Exchange(ref _tickRunning, 0);
+            }
+        }
+
+        private ScheduledCommand FindUnsafe(string id)
+        {
+            for (var i = 0; i < _items.Count; i++)
+                if (_items[i].Id == id) return _items[i];
+            return null;
         }
 
         private ScheduledCommand Find(string id)
@@ -192,71 +415,116 @@ namespace ESP32AIControl.WP81.Core.Scheduling
 
         private async Task LoadAsync()
         {
-            if (_loaded) return;
-
-            StorageFile file;
+            await _loadGate.WaitAsync();
             try
             {
-                file = await ApplicationData.Current.LocalFolder.GetFileAsync(FileName);
-            }
-            catch (FileNotFoundException)
-            {
-                _loaded = true;
-                return;
-            }
+                if (_loaded) return;
 
-            var json = await FileIO.ReadTextAsync(file);
-            if (!string.IsNullOrWhiteSpace(json))
-            {
-                using (var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(json)))
+                var folder = ApplicationData.Current.LocalFolder;
+                StorageFile file;
+                try
                 {
-                    var serializer = new DataContractJsonSerializer(typeof(List<ScheduledCommand>));
-                    var list = serializer.ReadObject(stream) as List<ScheduledCommand>;
-                    if (list != null)
+                    file = await folder.GetFileAsync(FileName);
+                }
+                catch (FileNotFoundException)
+                {
+                    // A temporary file is never treated as committed state.
+                    // If the atomic rename did not complete, the previous snapshot
+                    // remains authoritative (or the queue was not yet committed).
+                    _loaded = true;
+                    return;
+                }
+
+                var json = await FileIO.ReadTextAsync(file);
+                var recoveredInterruptedExecution = false;
+                if (!string.IsNullOrWhiteSpace(json))
+                {
+                    using (var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(json)))
                     {
-                        lock (_gate)
+                        var serializer = new DataContractJsonSerializer(typeof(List<ScheduledCommand>));
+                        var list = serializer.ReadObject(stream) as List<ScheduledCommand>;
+                        if (list != null)
                         {
-                            _items.Clear();
-                            foreach (var item in list)
+                            lock (_gate)
                             {
-                                if (item.Status == "Executing")
-                                    item.Status = "Scheduled";
-                                _items.Add(item);
+                                _items.Clear();
+                                foreach (var item in list)
+                                {
+                                    if (item.Status == "Executing")
+                                    {
+                                        // The command may have reached the device before the app was closed.
+                                        // Never replay it automatically: its physical result is unknown.
+                                        item.Status = "Failed";
+                                        item.CompletedAt = DateTimeOffset.Now;
+                                        item.LastError = "Приложение было закрыто во время выполнения. Результат неизвестен; проверьте устройство перед повтором.";
+                                        recoveredInterruptedExecution = true;
+                                    }
+                                    _items.Add(item);
+                                }
                             }
                         }
                     }
                 }
-            }
 
-            _loaded = true;
+                _loaded = true;
+                if (recoveredInterruptedExecution)
+                    await SaveAsync();
+            }
+            finally
+            {
+                _loadGate.Release();
+            }
         }
 
         private async Task SaveAsync()
         {
-            List<ScheduledCommand> snapshot = new List<ScheduledCommand>();
-            lock (_gate)
+            await _saveGate.WaitAsync();
+            try
             {
-                foreach (var item in _items)
-                    snapshot.Add(item.Clone());
+                List<ScheduledCommand> snapshot = new List<ScheduledCommand>();
+                lock (_gate)
+                {
+                    foreach (var item in _items)
+                        snapshot.Add(item.Clone());
+                }
+
+                using (var stream = new MemoryStream())
+                {
+                    var serializer = new DataContractJsonSerializer(typeof(List<ScheduledCommand>));
+                    serializer.WriteObject(stream, snapshot);
+                    var json = System.Text.Encoding.UTF8.GetString(stream.ToArray(), 0, (int)stream.Length);
+
+                    var folder = ApplicationData.Current.LocalFolder;
+                    var temporaryFile = await folder.CreateFileAsync(
+                        FileName + ".tmp", CreationCollisionOption.ReplaceExisting);
+                    await FileIO.WriteTextAsync(temporaryFile, json);
+
+                    // Replace the committed snapshot only after the complete
+                    // temporary file has been written. If rename fails, the previous
+                    // snapshot remains intact and the uncommitted temp file is ignored.
+                    await temporaryFile.RenameAsync(FileName, NameCollisionOption.ReplaceExisting);
+                }
             }
-
-            using (var stream = new MemoryStream())
+            finally
             {
-                var serializer = new DataContractJsonSerializer(typeof(List<ScheduledCommand>));
-                serializer.WriteObject(stream, snapshot);
-                var json = System.Text.Encoding.UTF8.GetString(stream.ToArray(), 0, (int)stream.Length);
-
-                var file = await ApplicationData.Current.LocalFolder.CreateFileAsync(
-                    FileName, CreationCollisionOption.ReplaceExisting);
-                await FileIO.WriteTextAsync(file, json);
+                _saveGate.Release();
             }
         }
 
         private void RaiseChanged(ScheduledCommand item)
         {
             var handler = TaskChanged;
-            if (handler != null)
+            if (handler == null) return;
+
+            try
+            {
                 handler(this, item.Clone());
+            }
+            catch
+            {
+                // UI notification failures must not turn a successfully persisted
+                // queue operation into an apparent storage failure for the caller.
+            }
         }
     }
 }
