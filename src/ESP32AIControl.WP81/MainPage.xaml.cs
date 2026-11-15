@@ -84,7 +84,7 @@ namespace ESP32AIControl.WP81
             _scenarioMonitor = new ScenarioDeviationMonitor(_devices);
             _scenarioMonitor.DeviationsChanged += ScenarioMonitor_DeviationsChanged;
             _voice = new Wp81VoiceCommandService();
-            _voiceParser = new VoiceCommandParser(string.Empty, string.Empty);
+            _voiceParser = new VoiceCommandParser(string.Empty, string.Empty, _devices);
 
             _mqtt.MessageReceived += Mqtt_MessageReceived;
             _mqtt.ConnectionStateChanged += Mqtt_ConnectionStateChanged;
@@ -297,7 +297,8 @@ namespace ESP32AIControl.WP81
 
                 _voiceParser = new VoiceCommandParser(
                     _appSettings.VoiceOpenCommand,
-                    _appSettings.VoiceCloseCommand);
+                    _appSettings.VoiceCloseCommand,
+                    _devices);
                 ApplyScenarioProfilesToEngine();
 
                 await _settingsStore.SaveAsync(_appSettings);
@@ -331,7 +332,8 @@ namespace ESP32AIControl.WP81
 
             _voiceParser = new VoiceCommandParser(
                 _appSettings.VoiceOpenCommand,
-                _appSettings.VoiceCloseCommand);
+                _appSettings.VoiceCloseCommand,
+                _devices);
         }
 
         private void ApplySettingsToUi()
@@ -2395,11 +2397,36 @@ namespace ESP32AIControl.WP81
                     var parsed = _voiceParser.Parse(text);
                     if (parsed == null)
                     {
-                        Log("VOICE: команда не распознана.");
+                        var reason = string.IsNullOrWhiteSpace(_voiceParser.LastReason)
+                            ? "Команда не распознана или элемент не найден."
+                            : _voiceParser.LastReason;
+                        VoiceStatusText.Text = reason;
+                        MarfaVoiceResultText.Text = reason;
+                        VoiceResultText.Text = reason;
+                        Log("VOICE: " + reason);
                         return;
                     }
 
                     ValidateCommand(parsed.Command);
+
+                    if (parsed.RequiresConfirmation)
+                    {
+                        var dialog = new Windows.UI.Popups.MessageDialog(
+                            parsed.ConfirmationText ?? ("Выполнить " + parsed.Command + "?"),
+                            "Подтверждение Марфы");
+                        dialog.Commands.Add(new Windows.UI.Popups.UICommand("Выполнить"));
+                        dialog.Commands.Add(new Windows.UI.Popups.UICommand("Отмена"));
+                        dialog.DefaultCommandIndex = 0;
+                        dialog.CancelCommandIndex = 1;
+                        var selection = await dialog.ShowAsync();
+                        if (selection == null || !string.Equals(selection.Label, "Выполнить", StringComparison.Ordinal))
+                        {
+                            VoiceStatusText.Text = "Команда отменена.";
+                            MarfaVoiceResultText.Text = "Команда отменена.";
+                            Log("VOICE: пользователь отменил выполнение.");
+                            return;
+                        }
+                    }
 
                     if (parsed.ExecuteAt.HasValue)
                     {
