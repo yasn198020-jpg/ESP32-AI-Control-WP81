@@ -98,7 +98,10 @@ namespace ESP32AIControl.WP81.Core.State
                         Step = message.Step,
                         WarningMinimum = message.WarningMinimum,
                         WarningMaximum = message.WarningMaximum,
-                        DefinitionName = message.DefinitionName
+                        DefinitionName = message.DefinitionName,
+                        ScaleFactor = message.ScaleFactor,
+                        Options = message.Options,
+                        ConfigJson = message.RawPayload
                     };
                     _widgets[key] = state;
                 }
@@ -118,6 +121,9 @@ namespace ESP32AIControl.WP81.Core.State
                 if (!string.IsNullOrEmpty(message.WarningMinimum)) state.WarningMinimum = message.WarningMinimum;
                 if (!string.IsNullOrEmpty(message.WarningMaximum)) state.WarningMaximum = message.WarningMaximum;
                 if (!string.IsNullOrEmpty(message.DefinitionName)) state.DefinitionName = message.DefinitionName;
+                if (!string.IsNullOrEmpty(message.ScaleFactor)) state.ScaleFactor = message.ScaleFactor;
+                if (message.Options != null) state.Options = message.Options;
+                if (!string.IsNullOrEmpty(message.RawPayload) && message.Kind == Esp32MessageKind.Config) state.ConfigJson = message.RawPayload;
                 if (!string.IsNullOrEmpty(message.Page))
                     state.Page = message.Page;
                 if (message.Order != 0)
