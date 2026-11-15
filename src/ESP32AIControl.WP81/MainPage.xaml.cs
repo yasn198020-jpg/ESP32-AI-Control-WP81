@@ -214,6 +214,14 @@ namespace ESP32AIControl.WP81
             LogText.Text = string.Empty;
         }
 
+        private void CopyLogButton_Click(object sender, RoutedEventArgs e)
+        {
+            var package = new Windows.ApplicationModel.DataTransfer.DataPackage();
+            package.SetText(LogText.Text ?? string.Empty);
+            Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(package);
+            SettingsStatus.Text = "Журнал скопирован в буфер обмена.";
+        }
+
         private async void ConnectButton_Click(object sender, RoutedEventArgs e)
         {
             try
