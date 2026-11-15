@@ -57,10 +57,12 @@ namespace ESP32AIControl.WP81.Core.Scenarios
         public string TargetValue { get; set; }
         public string ActuatorVariable { get; set; }
         public string ActuatorValue { get; set; }
+        public bool IsComplete { get; set; }
         public IList<ScenarioDependency> Dependencies { get; private set; }
 
         public ScenarioAnalysis()
         {
+            IsComplete = true;
             Dependencies = new List<ScenarioDependency>();
         }
     }
@@ -392,7 +394,10 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                 targetState.DeviceId,
                 new HashSet<string>(StringComparer.OrdinalIgnoreCase));
 
-            return analysis;
+            // A prerequisite comparison other than equality cannot yet be
+            // converted into a deterministic control value. Do not return a
+            // partial plan that might omit a required interlock.
+            return analysis.IsComplete ? analysis : null;
         }
 
         private ScenarioAnalysis FindActuatorPath(
@@ -540,7 +545,10 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                     continue;
 
                 if (!string.Equals(condition.Operator, "==", StringComparison.Ordinal))
+                {
+                    analysis.IsComplete = false;
                     continue;
+                }
 
                 var state = ResolveOnDevice(condition.Variable, devices, deviceId);
 
