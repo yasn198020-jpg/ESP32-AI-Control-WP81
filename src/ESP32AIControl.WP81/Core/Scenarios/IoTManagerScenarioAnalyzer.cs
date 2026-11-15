@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Text.RegularExpressions;
 using ESP32AIControl.WP81.Models;
 using ESP32AIControl.WP81.Core.State;
@@ -98,9 +99,172 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             if (string.IsNullOrWhiteSpace(script))
                 return;
 
+            // Prefer the same expression grammar used by runtime scenario
+            // verification. Keep the legacy parser as a compatibility fallback
+            // for older exports that do not match the structured IF/THEN form.
+            var compiled = ScenarioLanguageParser.Compile(script);
+            if (compiled.Errors.Count == 0 && compiled.Rules.Count > 0)
+            {
+                for (var r = 0; r < compiled.Rules.Count; r++)
+                {
+                    var sourceRule = compiled.Rules[r];
+                    var rule = new ScenarioRule();
+                    CollectPlannerConditions(sourceRule.Condition, rule.Conditions, false);
+
+                    for (var a = 0; a < sourceRule.Actions.Count; a++)
+                    {
+                        var sourceAction = sourceRule.Actions[a];
+                        var value = GetStaticActionValue(sourceAction.Expression);
+                        if (value == null)
+                            continue;
+
+                        var assignment = new ScenarioAssignment
+                        {
+                            Variable = sourceAction.TargetId,
+                            Operator = sourceAction.Operator,
+                            Value = value
+                        };
+
+                        for (var conditionIndex = 0; conditionIndex < rule.Conditions.Count; conditionIndex++)
+                        {
+                            var condition = rule.Conditions[conditionIndex];
+                            assignment.Conditions.Add(new ScenarioCondition
+                            {
+                                Variable = condition.Variable,
+                                Operator = condition.Operator,
+                                Value = condition.Value
+                            });
+                        }
+
+                        rule.Assignments.Add(assignment);
+                    }
+
+                    if (rule.Assignments.Count > 0)
+                        _rules.Add(rule);
+                }
+
+                if (_rules.Count > 0)
+                    return;
+            }
+
             var sections = ExtractScenarioSections(script);
             for (var i = 0; i < sections.Count; i++)
                 ParseBlock(sections[i], 0, sections[i].Length, new List<ScenarioCondition>(), _rules);
+        }
+
+        private static void CollectPlannerConditions(
+            ScenarioExpression expression,
+            IList<ScenarioCondition> output,
+            bool inverted)
+        {
+            var unary = expression as ScenarioUnaryExpression;
+            if (unary != null)
+            {
+                if (unary.Operator == "!")
+                    CollectPlannerConditions(unary.Expression, output, !inverted);
+                return;
+            }
+
+            var binary = expression as ScenarioBinaryExpression;
+            if (binary == null)
+                return;
+
+            if (binary.Operator == "&" && !inverted)
+            {
+                CollectPlannerConditions(binary.Left, output, false);
+                CollectPlannerConditions(binary.Right, output, false);
+                return;
+            }
+
+            if (binary.Operator == "|" )
+                return;
+
+            var leftVariable = binary.Left as ScenarioVariableExpression;
+            var rightVariable = binary.Right as ScenarioVariableExpression;
+            string variable = null;
+            string value = null;
+            string op = binary.Operator;
+
+            if (leftVariable != null)
+            {
+                variable = leftVariable.Name;
+                value = GetStaticActionValue(binary.Right);
+            }
+            else if (rightVariable != null)
+            {
+                variable = rightVariable.Name;
+                value = GetStaticActionValue(binary.Left);
+                op = ReverseComparison(op);
+            }
+
+            if (string.IsNullOrEmpty(variable) || value == null)
+                return;
+
+            if (inverted)
+                op = InvertComparison(op);
+            if (op == null)
+                return;
+
+            for (var i = 0; i < output.Count; i++)
+                if (string.Equals(output[i].Variable, variable, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(output[i].Operator, op, StringComparison.Ordinal) &&
+                    string.Equals(output[i].Value, value, StringComparison.OrdinalIgnoreCase))
+                    return;
+
+            output.Add(new ScenarioCondition
+            {
+                Variable = variable,
+                Operator = op,
+                Value = value
+            });
+        }
+
+        private static string GetStaticActionValue(ScenarioExpression expression)
+        {
+            var number = expression as ScenarioNumberExpression;
+            if (number != null)
+                return number.Value.ToString("G", CultureInfo.InvariantCulture);
+
+            var text = expression as ScenarioTextExpression;
+            if (text != null)
+                return text.Value;
+
+            var unary = expression as ScenarioUnaryExpression;
+            if (unary != null && (unary.Operator == "-" || unary.Operator == "+"))
+            {
+                var inner = unary.Expression as ScenarioNumberExpression;
+                if (inner != null)
+                    return (unary.Operator == "-" ? -inner.Value : inner.Value)
+                        .ToString("G", CultureInfo.InvariantCulture);
+            }
+
+            return null;
+        }
+
+        private static string ReverseComparison(string op)
+        {
+            switch (op)
+            {
+                case "<": return ">";
+                case "<=": return ">=";
+                case ">": return "<";
+                case ">=": return "<=";
+                default: return op;
+            }
+        }
+
+        private static string InvertComparison(string op)
+        {
+            switch (op)
+            {
+                case "==": return "!=";
+                case "!=": return "==";
+                case "<": return ">=";
+                case "<=": return ">";
+                case ">": return "<=";
+                case ">=": return "<";
+                default: return null;
+            }
         }
 
         public ScenarioAnalysis AnalyzeControl(
