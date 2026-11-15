@@ -107,6 +107,12 @@ namespace ESP32AIControl.WP81.Core.Scenarios
 
         private bool TryAddReverseScenarioPlan(ScenarioPlan plan, ScenarioAction target)
         {
+            // Reverse actuator scenarios model binary open/close states only.
+            // Treating an arbitrary numeric setpoint as "close" could select
+            // an unrelated actuator from the same script.
+            if (!IsValue(target.Value, "0") && !IsValue(target.Value, "1"))
+                return false;
+
             var targetState = _devices.Get(target.DeviceId, target.WidgetId);
 
             if (targetState == null || _scenarioAnalyzer == null || !_scenarioAnalyzer.HasRules)
