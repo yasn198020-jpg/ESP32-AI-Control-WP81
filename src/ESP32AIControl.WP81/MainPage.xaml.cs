@@ -2513,7 +2513,16 @@ namespace ESP32AIControl.WP81
                             return;
                         }
 
-                        selectedAmbiguousCommands.Add(selectedCommand);
+                        var replacePreviousChoice = !string.IsNullOrWhiteSpace(_voiceParser.LastReason) &&
+                            _voiceParser.LastReason.IndexOf("больше не доступен", StringComparison.OrdinalIgnoreCase) >= 0;
+                        if (replacePreviousChoice && selectedAmbiguousCommands.Count > 0)
+                            selectedAmbiguousCommands[selectedAmbiguousCommands.Count - 1] = selectedCommand;
+                        else
+                            selectedAmbiguousCommands.Add(selectedCommand);
+
+                        Log("VOICE CLARIFICATION: selected " + selectedCommand);
+                        VoiceStatusText.Text = "Проверяю выбранные устройства…";
+                        MarfaVoiceResultText.Text = VoiceStatusText.Text;
                         if (selectedAmbiguousCommands.Count > 5)
                         {
                             VoiceStatusText.Text = "Слишком много неоднозначных действий. Ничего не отправлено.";
