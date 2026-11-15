@@ -21,6 +21,7 @@ namespace ESP32AIControl.WP81.Models
         public string ScaleFactor { get; set; }
         public string[] Options { get; set; }
         public string ConfigJson { get; set; }
+        public string ColorConfig { get; set; }
         public DateTimeOffset UpdatedAt { get; set; }
 
         public string Key
@@ -49,6 +50,7 @@ namespace ESP32AIControl.WP81.Models
                 ScaleFactor = ScaleFactor,
                 Options = Options,
                 ConfigJson = ConfigJson,
+                ColorConfig = ColorConfig,
                 UpdatedAt = UpdatedAt
             };
         }
