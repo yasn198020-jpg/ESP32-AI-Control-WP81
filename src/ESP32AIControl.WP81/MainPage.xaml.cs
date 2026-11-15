@@ -451,13 +451,6 @@ namespace ESP32AIControl.WP81
             }
         }
 
-        private void ClearScenarioButton_Click(object sender, RoutedEventArgs e)
-        {
-            ScenarioTextBox.Text = string.Empty;
-            ScenarioPlanText.Text = "Поле очищено. Сохранённый сценарий не изменён — нажмите «Сохранить сценарий», чтобы заменить его.";
-            ScenarioStatus.Text = "Редактор очищен; сохранённые настройки не изменены.";
-        }
-
         private async void SaveScenarioButton_Click(object sender, RoutedEventArgs e)
         {
             try
