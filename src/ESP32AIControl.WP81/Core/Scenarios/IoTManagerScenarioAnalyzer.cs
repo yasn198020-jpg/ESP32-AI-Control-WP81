@@ -428,9 +428,12 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             {
                 var evaluated = new List<string>();
                 var complete = true;
-                var actionTargets = new HashSet<string>(
-                    rule.Assignments.Select(item => item.Variable),
-                    StringComparer.OrdinalIgnoreCase);
+                var actionTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var action in rule.Assignments)
+                {
+                    if (action != null && !string.IsNullOrWhiteSpace(action.Variable))
+                        actionTargets.Add(action.Variable);
+                }
 
                 foreach (var assignment in rule.Assignments)
                 {
