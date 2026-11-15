@@ -6,6 +6,7 @@ namespace ESP32AIControl.WP81.Core.Mqtt
 {
     internal sealed class MqttPacketReader
     {
+        private const int MaximumPacketSize = 8 * 1024 * 1024;
         private readonly DataReader _reader;
 
         public MqttPacketReader(IInputStream input)
@@ -36,6 +37,9 @@ namespace ESP32AIControl.WP81.Core.Mqtt
                 bytesUsed++;
             }
             while ((encoded & 128) != 0);
+
+            if (remaining < 0 || remaining > MaximumPacketSize)
+                throw new InvalidOperationException("MQTT packet exceeds the 8 MB safety limit.");
 
             if (remaining == 0)
                 return new MqttPacket(header, new byte[0]);
