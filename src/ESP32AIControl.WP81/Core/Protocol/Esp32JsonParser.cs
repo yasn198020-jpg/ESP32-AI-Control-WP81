@@ -39,7 +39,6 @@ namespace ESP32AIControl.WP81.Core.Protocol
             [DataMember(Name="val")] public object Value { get; set; }
             [DataMember(Name="unit")] public string Unit { get; set; }
             [DataMember(Name="after")] public string After { get; set; }
-            [DataMember(Name="color")] public object Color { get; set; }
             [DataMember(Name="min")] public object Minimum { get; set; }
             [DataMember(Name="max")] public object Maximum { get; set; }
             [DataMember(Name="step")] public object Step { get; set; }
