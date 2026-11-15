@@ -497,7 +497,7 @@
                                    Margin="0,4,0,10"/>
                         <TextBlock x:Name="JournalStatusText" Text="" Foreground="#FF9E9E9E" Margin="0,0,0,6"/>
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,8">
-                            <Button Content="Копировать" Click="CopyLogButton_Click" Margin="0,0,8,0"/>
+                            <Button Content="Поделиться" Click="CopyLogButton_Click" Margin="0,0,8,0"/>
                             <Button Content="Очистить" Click="ClearLogButton_Click"/>
                         </StackPanel>
                         <Border Background="#FF17181D"
