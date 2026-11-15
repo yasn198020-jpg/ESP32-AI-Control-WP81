@@ -434,8 +434,9 @@ namespace ESP32AIControl.WP81.Core.Scheduling
                 {
                     try
                     {
-                        // A process interruption between replacing the old snapshot
-                        // and renaming the completed temporary snapshot is recoverable.
+                        // A process interruption between deleting the previous
+                        // snapshot and renaming the completed temporary snapshot
+                        // is recoverable on the next launch.
                         file = await folder.GetFileAsync(FileName + ".tmp");
                         recoveredTemporarySnapshot = true;
                     }
@@ -448,36 +449,36 @@ namespace ESP32AIControl.WP81.Core.Scheduling
 
                 var json = await FileIO.ReadTextAsync(file);
                 var recoveredInterruptedExecution = false;
-            if (!string.IsNullOrWhiteSpace(json))
-            {
-                using (var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(json)))
+                if (!string.IsNullOrWhiteSpace(json))
                 {
-                    var serializer = new DataContractJsonSerializer(typeof(List<ScheduledCommand>));
-                    var list = serializer.ReadObject(stream) as List<ScheduledCommand>;
-                    if (list != null)
+                    using (var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(json)))
                     {
-                        lock (_gate)
+                        var serializer = new DataContractJsonSerializer(typeof(List<ScheduledCommand>));
+                        var list = serializer.ReadObject(stream) as List<ScheduledCommand>;
+                        if (list != null)
                         {
-                            _items.Clear();
-                            foreach (var item in list)
+                            lock (_gate)
                             {
-                                if (item.Status == "Executing")
+                                _items.Clear();
+                                foreach (var item in list)
                                 {
-                                    // The command may have reached the device before the app was closed.
-                                    // Never replay it automatically: its physical result is unknown.
-                                    item.Status = "Failed";
-                                    item.CompletedAt = DateTimeOffset.Now;
-                                    item.LastError = "Приложение было закрыто во время выполнения. Результат неизвестен; проверьте устройство перед повтором.";
-                                    recoveredInterruptedExecution = true;
+                                    if (item.Status == "Executing")
+                                    {
+                                        // The command may have reached the device before the app was closed.
+                                        // Never replay it automatically: its physical result is unknown.
+                                        item.Status = "Failed";
+                                        item.CompletedAt = DateTimeOffset.Now;
+                                        item.LastError = "Приложение было закрыто во время выполнения. Результат неизвестен; проверьте устройство перед повтором.";
+                                        recoveredInterruptedExecution = true;
+                                    }
+                                    _items.Add(item);
                                 }
-                                _items.Add(item);
                             }
                         }
                     }
                 }
-            }
 
-            _loaded = true;
+                _loaded = true;
                 if (recoveredInterruptedExecution || recoveredTemporarySnapshot)
                     await SaveAsync();
             }
