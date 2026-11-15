@@ -127,7 +127,7 @@ namespace ESP32AIControl.WP81.Core.Voice
                 }
                 var prefix = text.Substring(action.Index, prefixEnd - action.Index);
                 var tail = text.Substring(prefixEnd);
-                var targets = Regex.Split(tail, @"(?:\s+и\s+|\s*,\s*|\s+плюс\s+|\s+а также\s+|\s+and\s+)",
+                var targets = Regex.Split(tail, @"(?:\s+и\s+|,\s*|\s+плюс\s+|\s+а также\s+|\s+and\s+)",
                     RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
                 if (targets.Length <= 1)
