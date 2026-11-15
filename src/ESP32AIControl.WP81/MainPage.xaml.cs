@@ -1552,6 +1552,7 @@ namespace ESP32AIControl.WP81
                     System.Text.RegularExpressions.RegexOptions.IgnoreCase));
 
             var seriesValues = new List<List<double>>();
+            var seriesIndexes = new List<int>();
             for (var seriesIndex = 0; seriesIndex < 3; seriesIndex++)
             {
                 var values = new List<double>();
@@ -1563,7 +1564,10 @@ namespace ESP32AIControl.WP81
                         values.Add(value.Value);
                 }
                 if (values.Count > 0)
+                {
                     seriesValues.Add(values);
+                    seriesIndexes.Add(seriesIndex);
+                }
             }
 
             if (seriesValues.Count == 0)
@@ -1595,17 +1599,17 @@ namespace ESP32AIControl.WP81
             for (var seriesIndex = 0; seriesIndex < seriesValues.Count; seriesIndex++)
             {
                 var values = seriesValues[seriesIndex];
+                var sourceIndex = seriesIndexes[seriesIndex];
                 var color = colors[seriesIndex % colors.Length];
                 if (isBar)
                 {
                     var groupWidth = plotWidth / Math.Max(1, samples.Count);
                     var barWidth = Math.Max(1.0, groupWidth / seriesValues.Count - 1.0);
-                    var valueIndex = 0;
                     for (var sampleIndex = 0; sampleIndex < samples.Count; sampleIndex++)
                     {
                         var sample = samples[sampleIndex];
-                        var value = seriesIndex == 0 ? sample.Item1 :
-                            (seriesIndex == 1 ? sample.Item2 : sample.Item3);
+                        var value = sourceIndex == 0 ? sample.Item1 :
+                            (sourceIndex == 1 ? sample.Item2 : sample.Item3);
                         if (!value.HasValue) continue;
                         var x = left + sampleIndex * groupWidth + seriesIndex * barWidth;
                         var normalized = (value.Value - min) / (max - min);
@@ -1619,7 +1623,6 @@ namespace ESP32AIControl.WP81
                         Canvas.SetLeft(bar, x);
                         Canvas.SetTop(bar, top + plotHeight - barHeight);
                         canvas.Children.Add(bar);
-                        valueIndex++;
                     }
                 }
                 else
@@ -1633,8 +1636,8 @@ namespace ESP32AIControl.WP81
                     var pointIndex = 0;
                     foreach (var sample in samples)
                     {
-                        var value = seriesIndex == 0 ? sample.Item1 :
-                            (seriesIndex == 1 ? sample.Item2 : sample.Item3);
+                        var value = sourceIndex == 0 ? sample.Item1 :
+                            (sourceIndex == 1 ? sample.Item2 : sample.Item3);
                         if (!value.HasValue) continue;
                         var x = left + (samples.Count == 1 ? plotWidth / 2.0 :
                             plotWidth * pointIndex / Math.Max(1, values.Count - 1));
