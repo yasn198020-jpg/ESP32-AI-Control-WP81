@@ -98,6 +98,14 @@ namespace ESP32AIControl.WP81.Core.Voice
                     .Select(NormalizeWord).Where(x => !string.IsNullOrEmpty(x))
                     .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
+                var isButton = IsMomentaryButton(widget);
+                if (isButton)
+                {
+                    var buttonIntent = DetectIntent(Tokenize(widget.Description));
+                    if (!string.Equals(buttonIntent, intent, StringComparison.Ordinal))
+                        continue;
+                }
+
                 var titleMatches = CountMatches(targetTokens, titleTokens);
                 var idMatches = CountMatches(targetTokens, idTokens);
                 if (titleMatches == 0 && idMatches == 0)
@@ -155,22 +163,22 @@ namespace ESP32AIControl.WP81.Core.Voice
             {
                 var token = tokens[i].ToLowerInvariant();
                 if (IsOneOf(token, "открой", "откройте", "открыть", "открывай", "открывайте",
-                    "открыл", "открыла", "открыли", "открою", "откроет", "open"))
+                    "открыл", "открыла", "открыли", "открою", "откроет", "открытие", "открывание", "open"))
                     intents.Add("open");
                 else if (IsOneOf(token, "закрой", "закройте", "закрыть", "закрывай", "закрывайте",
-                    "закрыл", "закрыла", "закрыли", "закрою", "закроет", "close", "shut"))
+                    "закрыл", "закрыла", "закрыли", "закрою", "закроет", "закрытие", "закрывание", "close", "shut"))
                     intents.Add("close");
                 else if (IsOneOf(token, "включи", "включите", "включить", "включай", "включайте",
-                    "вруби", "врубите", "зажги", "зажгите", "запитай") ||
+                    "включение", "вруби", "врубите", "зажги", "зажгите", "запитай") ||
                     (hasTurn && token == "on"))
                     intents.Add("on");
                 else if (IsOneOf(token, "выключи", "выключите", "выключить", "выключай", "выключайте",
-                    "выруби", "вырубите", "погаси", "погасите", "отруби") ||
+                    "выключение", "выруби", "вырубите", "погаси", "погасите", "отруби") ||
                     (hasTurn && token == "off"))
                     intents.Add("off");
-                else if (IsOneOf(token, "запусти", "запустите", "запустить", "запускать", "start"))
+                else if (IsOneOf(token, "запусти", "запустите", "запустить", "запускать", "запуск", "start"))
                     intents.Add("start");
-                else if (IsOneOf(token, "останови", "остановите", "остановить", "прекрати", "прекратите", "stop"))
+                else if (IsOneOf(token, "останови", "остановите", "остановить", "остановка", "прекрати", "прекратите", "stop"))
                     intents.Add("stop");
             }
 
