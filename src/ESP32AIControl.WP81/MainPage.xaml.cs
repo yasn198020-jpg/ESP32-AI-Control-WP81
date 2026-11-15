@@ -38,6 +38,7 @@ namespace ESP32AIControl.WP81
         private readonly Esp32CommandExecutor _commandExecutor;
         private readonly ScheduledCommandService _scheduler;
         private readonly ScenarioProfileStore _scenarioStore;
+        private readonly ScenarioDeviationMonitor _scenarioMonitor;
         private readonly List<ScenarioProfile> _scenarioProfiles = new List<ScenarioProfile>();
         private readonly Wp81VoiceCommandService _voice;
         private VoiceCommandParser _voiceParser;
@@ -80,6 +81,8 @@ namespace ESP32AIControl.WP81
             _commandExecutor = new Esp32CommandExecutor(_mqtt, _devices);
             _scheduler = new ScheduledCommandService(_commandExecutor);
             _scenarioStore = new ScenarioProfileStore();
+            _scenarioMonitor = new ScenarioDeviationMonitor(_devices);
+            _scenarioMonitor.DeviationsChanged += ScenarioMonitor_DeviationsChanged;
             _voice = new Wp81VoiceCommandService();
             _voiceParser = new VoiceCommandParser(string.Empty, string.Empty);
 
@@ -417,16 +420,36 @@ namespace ESP32AIControl.WP81
         {
             try
             {
-                _commandExecutor.SetScenarioScript(ScenarioTextBox.Text ?? string.Empty);
-
-                var ruleCount = _commandExecutor.GetScenarioRuleCount();
+                var source = ScenarioTextBox.Text ?? string.Empty;
+                var compiled = ScenarioLanguageParser.Compile(source);
                 var report = new List<string>();
-                report.Add("Найдено правил: " + ruleCount.ToString(CultureInfo.InvariantCulture));
-                if (ruleCount == 0)
-                    report.Add("Правила не найдены. Проверьте наличие блока scenario=> и условия if / then.");
+                report.Add("Полный разбор IoT-сценария: " +
+                    compiled.Rules.Count.ToString(CultureInfo.InvariantCulture) + " правил.");
+                report.Add("Идентификаторов: " +
+                    compiled.Identifiers.Count.ToString(CultureInfo.InvariantCulture) + ".");
 
-                var open = VoiceOpenCommandBox.Text.Trim();
-                var close = VoiceCloseCommandBox.Text.Trim();
+                if (compiled.Errors.Count > 0)
+                {
+                    report.Add("Ошибки синтаксиса:");
+                    for (var i = 0; i < compiled.Errors.Count; i++)
+                        report.Add("• " + compiled.Errors[i]);
+                    ScenarioPlanText.Text = string.Join(Environment.NewLine, report);
+                    ScenarioStatus.Text = "Сценарий не прошёл проверку. Сохранение заблокировано.";
+                    Log("SCENARIO TEST INVALID: " + string.Join(" | ", compiled.Errors.ToArray()));
+                    return;
+                }
+
+                if (compiled.Rules.Count == 0)
+                {
+                    report.Add("Не найдены правила IF / THEN с действиями.");
+                    ScenarioPlanText.Text = string.Join(Environment.NewLine, report);
+                    ScenarioStatus.Text = "В сценарии нет исполняемых правил.";
+                    return;
+                }
+
+                _commandExecutor.SetScenarioScript(source);
+                var open = (VoiceOpenCommandBox.Text ?? string.Empty).Trim();
+                var close = (VoiceCloseCommandBox.Text ?? string.Empty).Trim();
 
                 if (!string.IsNullOrEmpty(open))
                     report.Add(LogScenarioPlan("OPEN", open));
@@ -435,12 +458,13 @@ namespace ESP32AIControl.WP81
                     report.Add(LogScenarioPlan("CLOSE", close));
 
                 if (string.IsNullOrEmpty(open) && string.IsNullOrEmpty(close))
-                    report.Add("Команды открытия и закрытия не настроены. Планирование команд пропущено.");
+                    report.Add("Команды открытия и закрытия не настроены. Проверка обратного плана пропущена.");
 
                 ScenarioPlanText.Text = string.Join(Environment.NewLine + Environment.NewLine, report);
-                ScenarioStatus.Text = "Проверка завершена. Найдено правил: " +
-                    ruleCount.ToString(CultureInfo.InvariantCulture) + ".";
-                Log("SCENARIO TEST COMPLETE: rules=" + ruleCount.ToString(CultureInfo.InvariantCulture));
+                ScenarioStatus.Text = "Проверка завершена. Правил: " +
+                    compiled.Rules.Count.ToString(CultureInfo.InvariantCulture) + ".";
+                Log("SCENARIO TEST COMPLETE: rules=" +
+                    compiled.Rules.Count.ToString(CultureInfo.InvariantCulture));
                 ApplyScenarioProfilesToEngine();
             }
             catch (Exception ex)
@@ -459,6 +483,13 @@ namespace ESP32AIControl.WP81
                 var source = ScenarioTextBox.Text ?? string.Empty;
                 if (string.IsNullOrWhiteSpace(source))
                     throw new InvalidOperationException("Содержимое сценария пустое.");
+
+                var validation = ScenarioLanguageParser.Compile(source);
+                if (validation.Errors.Count > 0)
+                    throw new InvalidOperationException(
+                        "Ошибки синтаксиса: " + string.Join("; ", validation.Errors.ToArray()));
+                if (validation.Rules.Count == 0)
+                    throw new InvalidOperationException("В сценарии нет правил IF / THEN с действиями.");
 
                 var title = (ScenarioTitleBox.Text ?? string.Empty).Trim();
                 if (string.IsNullOrWhiteSpace(title))
@@ -673,6 +704,42 @@ namespace ESP32AIControl.WP81
             _appSettings.IoTManagerScenario = string.Join(
                 Environment.NewLine + Environment.NewLine, activeScripts);
             _commandExecutor.SetScenarioScript(_appSettings.IoTManagerScenario);
+            _scenarioMonitor.SetProfiles(_scenarioProfiles);
+        }
+
+        private async void ScenarioMonitor_DeviationsChanged(
+            object sender,
+            ScenarioDeviationChangedEventArgs e)
+        {
+            await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, delegate
+            {
+                var lines = new List<string>();
+                var diagnostics = _scenarioMonitor.Diagnostics;
+                if (diagnostics.Count > 0)
+                {
+                    lines.Add("Ошибки сценариев:");
+                    for (var i = 0; i < diagnostics.Count; i++)
+                        lines.Add("• " + diagnostics[i]);
+                }
+
+                if (e == null || e.Deviations.Count == 0)
+                {
+                    lines.Add(diagnostics.Count == 0
+                        ? "Отклонений от активных сценариев нет. Контроль выполняется по MQTT-обновлениям."
+                        : "Проверка отклонений включена только для сценариев без ошибок.");
+                }
+                else
+                {
+                    lines.Add("Активные отклонения: " +
+                        e.Deviations.Count.ToString(CultureInfo.InvariantCulture));
+                    foreach (var deviation in e.Deviations.Take(12))
+                        lines.Add("• " + deviation.Message);
+                    if (e.Deviations.Count > 12)
+                        lines.Add("… и ещё " + (e.Deviations.Count - 12).ToString(CultureInfo.InvariantCulture));
+                }
+
+                ScenarioDeviationText.Text = string.Join(Environment.NewLine, lines);
+            });
         }
 
         private string LogScenarioPlan(string name, string command)
@@ -723,6 +790,18 @@ namespace ESP32AIControl.WP81
             catch (Exception ex)
             {
                 Log("HISTORY ERROR: " + ex.Message);
+            }
+
+            try
+            {
+                _scenarioMonitor.Observe();
+            }
+            catch (Exception ex)
+            {
+                await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, delegate
+                {
+                    Log("SCENARIO MONITOR ERROR: " + ex.Message);
+                });
             }
 
             await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, delegate
