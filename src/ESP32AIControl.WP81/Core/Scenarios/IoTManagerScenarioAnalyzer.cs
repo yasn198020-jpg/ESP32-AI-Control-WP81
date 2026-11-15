@@ -24,6 +24,7 @@ namespace ESP32AIControl.WP81.Core.Scenarios
         public string Variable { get; set; }
         public string Operator { get; set; }
         public string Value { get; set; }
+        internal ScenarioExpression Expression { get; set; }
         public IList<ScenarioCondition> Conditions { get; private set; }
 
         public ScenarioAssignment()
@@ -116,29 +117,19 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                         continue;
 
                     var actions = new List<ScenarioAssignment>();
-                    var allActionsStatic = sourceRule.Actions.Count > 0;
                     for (var a = 0; a < sourceRule.Actions.Count; a++)
                     {
                         var sourceAction = sourceRule.Actions[a];
-                        var value = GetStaticActionValue(sourceAction.Expression);
-                        if (value == null)
-                        {
-                            allActionsStatic = false;
-                            break;
-                        }
-
                         actions.Add(new ScenarioAssignment
                         {
                             Variable = sourceAction.TargetId,
                             Operator = sourceAction.Operator,
-                            Value = value
+                            Value = GetStaticActionValue(sourceAction.Expression),
+                            Expression = sourceAction.Expression
                         });
                     }
 
-                    // Dynamic action expressions cannot be represented as a
-                    // fixed dependency value. Exclude the whole rule rather
-                    // than planning only a subset of its physical actions.
-                    if (!allActionsStatic || actions.Count == 0)
+                    if (actions.Count == 0)
                         continue;
 
                     foreach (var alternative in alternatives)
@@ -158,7 +149,8 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                             {
                                 Variable = sourceAction.Variable,
                                 Operator = sourceAction.Operator,
-                                Value = sourceAction.Value
+                                Value = sourceAction.Value,
+                                Expression = sourceAction.Expression
                             };
                             foreach (var condition in rule.Conditions)
                                 assignment.Conditions.Add(new ScenarioCondition
@@ -384,6 +376,8 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             if (!HasRules || targetState == null || devices == null)
                 return null;
 
+            ResolveActionValues(devices);
+
             var analysis = FindActuatorPath(targetState, targetValue, devices);
             if (analysis == null)
                 return null;
@@ -398,6 +392,50 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             // converted into a deterministic control value. Do not return a
             // partial plan that might omit a required interlock.
             return analysis.IsComplete ? analysis : null;
+        }
+
+        private void ResolveActionValues(DeviceRepository devices)
+        {
+            if (devices == null)
+                return;
+
+            var variables = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var widgets = devices.GetWidgetsSnapshot();
+            foreach (var widget in widgets)
+            {
+                if (widget == null || string.IsNullOrWhiteSpace(widget.Id))
+                    continue;
+                variables[widget.Id] = widget.Value ?? string.Empty;
+            }
+
+            foreach (var rule in _rules)
+            {
+                var evaluated = new List<string>();
+                var complete = true;
+
+                foreach (var assignment in rule.Assignments)
+                {
+                    if (assignment.Expression == null)
+                    {
+                        evaluated.Add(assignment.Value);
+                        if (assignment.Value == null)
+                            complete = false;
+                        continue;
+                    }
+
+                    var value = ScenarioLanguageEvaluator.AsComparableText(
+                        ScenarioLanguageEvaluator.Evaluate(assignment.Expression, variables));
+                    evaluated.Add(value);
+                    if (value == null)
+                        complete = false;
+                }
+
+                // A rule is a group of simultaneous actions. If even one
+                // action cannot be resolved from the current device snapshot,
+                // suppress every action from that rule in dependency planning.
+                for (var i = 0; i < rule.Assignments.Count; i++)
+                    rule.Assignments[i].Value = complete ? evaluated[i] : null;
+            }
         }
 
         private ScenarioAnalysis FindActuatorPath(
