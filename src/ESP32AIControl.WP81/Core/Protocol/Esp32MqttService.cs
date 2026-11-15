@@ -63,11 +63,10 @@ namespace ESP32AIControl.WP81.Core.Protocol
             }
             catch
             {
-                lock (_reconnectSync)
-                {
-                    _reconnectEnabled = false;
-                    CancelReconnectTimerLocked();
-                }
+                // A failed first connection attempt must not silently disable
+                // automatic recovery. Only an explicit DisconnectAsync turns
+                // reconnect off.
+                ScheduleReconnect();
                 throw;
             }
             finally
