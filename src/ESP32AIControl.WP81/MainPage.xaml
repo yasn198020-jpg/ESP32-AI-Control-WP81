@@ -400,7 +400,7 @@
                                    FontSize="25"
                                    FontWeight="SemiBold"
                                    Foreground="#FFF5F5F5"/>
-                        <TextBlock Text="Импортируйте блок scenario=> из export.json. Анализатор WP81 сохранит зависимости и блокировки при подготовке команды."
+                        <TextBlock Text="Импортируйте блок scenario=> из export.json. Проверка понимает вложенные IF/THEN/ELSE, выражения и время; после получения MQTT-данных отслеживает отклонения от активных сценариев."
                                    TextWrapping="Wrap"
                                    Foreground="#FFBDBDBD"
                                    Margin="0,4,0,10"/>
