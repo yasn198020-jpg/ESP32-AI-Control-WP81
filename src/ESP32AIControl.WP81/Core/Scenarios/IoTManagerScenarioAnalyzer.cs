@@ -219,6 +219,12 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                 foreach (var leftClause in left)
                     foreach (var rightClause in right)
                     {
+                        // Avoid exponential expansion on pathological scripts.
+                        // The runtime evaluator still handles the full expression;
+                        // the planner simply declines an oversized dependency graph.
+                        if (product.Count >= 256)
+                            return null;
+
                         var clause = CloneConditions(leftClause);
                         foreach (var condition in rightClause)
                             AddUniqueCondition(clause, condition);
@@ -229,6 +235,11 @@ namespace ESP32AIControl.WP81.Core.Scenarios
 
             if (binary != null)
             {
+                if (binary.Operator != "==" && binary.Operator != "!=" &&
+                    binary.Operator != "<" && binary.Operator != "<=" &&
+                    binary.Operator != ">" && binary.Operator != ">=")
+                    return null;
+
                 var leftVariable = binary.Left as ScenarioVariableExpression;
                 var rightVariable = binary.Right as ScenarioVariableExpression;
                 string variable = null;
