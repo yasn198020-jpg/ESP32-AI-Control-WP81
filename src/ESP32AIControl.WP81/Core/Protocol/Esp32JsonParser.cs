@@ -38,6 +38,8 @@ namespace ESP32AIControl.WP81.Core.Protocol
             [DataMember(Name="order")] public int Order { get; set; }
             [DataMember(Name="val")] public object Value { get; set; }
             [DataMember(Name="unit")] public string Unit { get; set; }
+            [DataMember(Name="after")] public string After { get; set; }
+            [DataMember(Name="color")] public object Color { get; set; }
             [DataMember(Name="min")] public object Minimum { get; set; }
             [DataMember(Name="max")] public object Maximum { get; set; }
             [DataMember(Name="step")] public object Step { get; set; }
@@ -109,7 +111,7 @@ namespace ESP32AIControl.WP81.Core.Protocol
                 Page = dto.Page,
                 Order = dto.Order,
                 Value = ValueToString(dto.Value),
-                Unit = dto.Unit,
+                Unit = First(dto.Unit, dto.After),
                 Minimum = First(ValueToString(dto.Minimum), ValueToString(dto.MinimumAlias)),
                 Maximum = First(ValueToString(dto.Maximum), ValueToString(dto.MaximumAlias)),
                 Step = First(ValueToString(dto.Step), ValueToString(dto.StepAlias)),
