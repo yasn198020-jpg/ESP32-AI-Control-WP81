@@ -7,7 +7,6 @@ namespace ESP32AIControl.WP81.Models
     {
         [DataMember] public string Id { get; set; }
         [DataMember] public string Title { get; set; }
-        [DataMember] public string SensorIds { get; set; }
         [DataMember] public string Source { get; set; }
         [DataMember] public bool Enabled { get; set; }
 
@@ -17,7 +16,6 @@ namespace ESP32AIControl.WP81.Models
             {
                 Id = Id,
                 Title = Title,
-                SensorIds = SensorIds,
                 Source = Source,
                 Enabled = Enabled
             };
