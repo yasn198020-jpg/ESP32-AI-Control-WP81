@@ -162,7 +162,6 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                     if (_pending.TryGetValue(pair.Key, out pending))
                     {
                         pending.Deviation.Actual = pair.Value.Actual;
-                        pending.Deviation.Since = pending.Deviation.Since;
                     }
                     else
                     {
