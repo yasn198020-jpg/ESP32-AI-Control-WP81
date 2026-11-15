@@ -540,9 +540,12 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             {
                 var condition = selected.Conditions[i];
 
-                if (string.Equals(condition.Variable, analysis.TargetVariable, StringComparison.OrdinalIgnoreCase) &&
-                    ConditionMatchesValue(condition, analysis.TargetValue))
+                if (string.Equals(condition.Variable, analysis.TargetVariable, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!ConditionMatchesValue(condition, analysis.TargetValue))
+                        analysis.IsComplete = false;
                     continue;
+                }
 
                 if (!string.Equals(condition.Operator, "==", StringComparison.Ordinal))
                 {
