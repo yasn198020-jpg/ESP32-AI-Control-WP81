@@ -492,7 +492,6 @@
             </Button>
             <Button x:Name="NavMarfaButton"
                     Grid.Column="1"
-                    Style="{StaticResource BottomNavigationButtonStyle}"
                     Click="MarfaNavigation_Click" Background="Transparent" BorderThickness="0" Padding="0" MinWidth="0" Foreground="#FFBDBDBD">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                     <TextBlock Text="🎙" FontSize="21" TextAlignment="Center"/>
@@ -501,7 +500,6 @@
             </Button>
             <Button x:Name="NavCommandsButton"
                     Grid.Column="2"
-                    Style="{StaticResource BottomNavigationButtonStyle}"
                     Click="CommandsNavigation_Click" Background="Transparent" BorderThickness="0" Padding="0" MinWidth="0" Foreground="#FFBDBDBD">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                     <TextBlock Text="🎤" FontSize="21" TextAlignment="Center"/>
@@ -510,7 +508,6 @@
             </Button>
             <Button x:Name="NavHistoryButton"
                     Grid.Column="3"
-                    Style="{StaticResource BottomNavigationButtonStyle}"
                     Click="HistoryNavigation_Click" Background="Transparent" BorderThickness="0" Padding="0" MinWidth="0" Foreground="#FFBDBDBD">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                     <TextBlock Text="📊" FontSize="21" TextAlignment="Center"/>
@@ -519,7 +516,6 @@
             </Button>
             <Button x:Name="NavPendingButton"
                     Grid.Column="4"
-                    Style="{StaticResource BottomNavigationButtonStyle}"
                     Click="PendingNavigation_Click" Background="Transparent" BorderThickness="0" Padding="0" MinWidth="0" Foreground="#FFBDBDBD">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                     <TextBlock Text="⏱" FontSize="21" TextAlignment="Center"/>
