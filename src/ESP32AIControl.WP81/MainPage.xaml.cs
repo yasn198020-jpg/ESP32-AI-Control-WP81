@@ -2485,7 +2485,7 @@ namespace ESP32AIControl.WP81
         private static string NormalizeClarificationWord(string value)
         {
             var word = (value ?? string.Empty).ToLowerInvariant().Trim();
-            if (word.Length > 5)
+            if (word.Length > 3)
             {
                 var endings = new[] { "иями", "ями", "ами", "ого", "ему", "ому",
                     "ах", "ях", "ам", "ям", "ой", "ей", "ом", "ем", "а", "я", "е", "и", "ы", "у", "ю" };
