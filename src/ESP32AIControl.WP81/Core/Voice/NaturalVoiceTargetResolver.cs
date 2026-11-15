@@ -90,8 +90,8 @@ namespace ESP32AIControl.WP81.Core.Voice
                         ? actionSpans[i + 1].Index
                         : text.Length;
                     var clause = text.Substring(start, end - start)
-                        .Trim(' ', '\\t', ',', ';', '.', '!', '?');
-                    clause = Regex.Replace(clause, @"\\s+(?:и|а|затем|после этого|далее)\\s*$", string.Empty,
+                        .Trim(' ', \t, ',', ';', '.', '!', '?');
+                    clause = Regex.Replace(clause, @"\s+(?:и|а|затем|после этого|далее)\s*$", string.Empty,
                         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
                     string clauseReason;
                     var command = ResolveSingleCommand(clause, out clauseReason);
@@ -114,7 +114,7 @@ namespace ESP32AIControl.WP81.Core.Voice
                 var action = actionSpans[0];
                 var prefix = text.Substring(action.Index, action.Length);
                 var tail = text.Substring(action.Index + action.Length);
-                var targets = Regex.Split(tail, @"\\s+(?:и|,|плюс|а также)\\s+",
+                var targets = Regex.Split(tail, @"\s+(?:и|,|плюс|а также)\s+",
                     RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
                 if (targets.Length <= 1)
