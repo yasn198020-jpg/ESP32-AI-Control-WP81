@@ -533,11 +533,11 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             {
                 var condition = selected.Conditions[i];
 
-                if (!string.Equals(condition.Operator, "==", StringComparison.Ordinal))
+                if (string.Equals(condition.Variable, analysis.TargetVariable, StringComparison.OrdinalIgnoreCase) &&
+                    ConditionMatchesValue(condition, analysis.TargetValue))
                     continue;
 
-                if (string.Equals(condition.Variable, analysis.TargetVariable, StringComparison.OrdinalIgnoreCase) &&
-                    IsValue(condition.Value, analysis.TargetValue))
+                if (!string.Equals(condition.Operator, "==", StringComparison.Ordinal))
                     continue;
 
                 var state = ResolveOnDevice(condition.Variable, devices, deviceId);
@@ -748,15 +748,48 @@ namespace ESP32AIControl.WP81.Core.Scenarios
 
             for (var i = 0; i < conditions.Count; i++)
             {
-                var c = conditions[i];
-
-                if (string.Equals(c.Variable, variable, StringComparison.OrdinalIgnoreCase) &&
-                    string.Equals(c.Operator, "==", StringComparison.Ordinal) &&
-                    IsValue(c.Value, value))
+                var condition = conditions[i];
+                if (string.Equals(condition.Variable, variable, StringComparison.OrdinalIgnoreCase) &&
+                    ConditionMatchesValue(condition, value))
                     return true;
             }
 
             return false;
+        }
+
+        private static bool ConditionMatchesValue(ScenarioCondition condition, string value)
+        {
+            if (condition == null)
+                return false;
+
+            var actual = (value ?? string.Empty).Trim();
+            var expected = (condition.Value ?? string.Empty).Trim();
+            double actualNumber;
+            double expectedNumber;
+            int comparison;
+
+            if (double.TryParse(actual.Replace(',', '.'), NumberStyles.Float,
+                    CultureInfo.InvariantCulture, out actualNumber) &&
+                double.TryParse(expected.Replace(',', '.'), NumberStyles.Float,
+                    CultureInfo.InvariantCulture, out expectedNumber))
+            {
+                comparison = actualNumber.CompareTo(expectedNumber);
+            }
+            else
+            {
+                comparison = string.Compare(actual, expected, StringComparison.OrdinalIgnoreCase);
+            }
+
+            switch (condition.Operator)
+            {
+                case "==": return comparison == 0;
+                case "!=": return comparison != 0;
+                case "<": return comparison < 0;
+                case "<=": return comparison <= 0;
+                case ">": return comparison > 0;
+                case ">=": return comparison >= 0;
+                default: return false;
+            }
         }
 
         private static bool IsValue(string first, string second)
