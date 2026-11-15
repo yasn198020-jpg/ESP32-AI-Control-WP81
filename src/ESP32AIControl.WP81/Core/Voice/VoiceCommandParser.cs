@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using System.Text.RegularExpressions;
+using ESP32AIControl.WP81.Core.State;
 
 namespace ESP32AIControl.WP81.Core.Voice
 {
@@ -8,6 +9,8 @@ namespace ESP32AIControl.WP81.Core.Voice
     {
         public string Command { get; set; }
         public DateTimeOffset? ExecuteAt { get; set; }
+        public bool RequiresConfirmation { get; set; }
+        public string ConfirmationText { get; set; }
     }
 
     public sealed class VoiceCommandParser
@@ -16,24 +19,38 @@ namespace ESP32AIControl.WP81.Core.Voice
 
         private readonly string _openCommand;
         private readonly string _closeCommand;
+        private readonly NaturalVoiceTargetResolver _naturalResolver;
 
-        public VoiceCommandParser(string openCommand, string closeCommand)
+        public string LastReason { get; private set; }
+
+        public VoiceCommandParser(
+            string openCommand,
+            string closeCommand,
+            DeviceRepository devices = null)
         {
             _openCommand = openCommand ?? string.Empty;
             _closeCommand = closeCommand ?? string.Empty;
+            _naturalResolver = devices == null ? null : new NaturalVoiceTargetResolver(devices);
         }
 
         public ParsedVoiceCommand Parse(string text)
         {
+            LastReason = null;
             if (string.IsNullOrWhiteSpace(text))
+            {
+                LastReason = "Пустая голосовая команда.";
                 return null;
+            }
 
             var original = text.Trim();
             var normalized = Regex.Replace(original.ToLowerInvariant(), @"[,.!?;:]+", " ");
 
             // Do not turn a negative or contradictory phrase into a physical action.
             if (ContainsNegativeIntent(normalized))
+            {
+                LastReason = "В команде есть отрицание. Ничего не отправлено.";
                 return null;
+            }
 
             var asksOpen = ContainsAny(normalized,
                 "открой теплиц", "открыть теплиц", "open greenhouse");
@@ -41,13 +58,23 @@ namespace ESP32AIControl.WP81.Core.Voice
                 "закрой теплиц", "закрыть теплиц", "close greenhouse");
 
             if (asksOpen && asksClose)
+            {
+                LastReason = "Команда одновременно содержит открытие и закрытие. Ничего не отправлено.";
                 return null;
+            }
 
             var command = string.Empty;
-            if (asksOpen)
+            var requiresConfirmation = false;
+            if (asksOpen && !string.IsNullOrWhiteSpace(_openCommand))
+            {
                 command = _openCommand;
-            else if (asksClose)
+                requiresConfirmation = true;
+            }
+            else if (asksClose && !string.IsNullOrWhiteSpace(_closeCommand))
+            {
                 command = _closeCommand;
+                requiresConfirmation = true;
+            }
             else
             {
                 // Match the original utterance so case-sensitive MQTT IDs and values
@@ -57,10 +84,23 @@ namespace ESP32AIControl.WP81.Core.Voice
                     RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
                 if (direct.Success)
                     command = direct.Groups[1].Value + "=" + direct.Groups[2].Value;
+
+                if (string.IsNullOrWhiteSpace(command) && _naturalResolver != null)
+                {
+                    string reason;
+                    command = _naturalResolver.ResolveCommand(original, out reason);
+                    if (!string.IsNullOrWhiteSpace(reason))
+                        LastReason = reason;
+                    requiresConfirmation = !string.IsNullOrWhiteSpace(command);
+                }
             }
 
             if (string.IsNullOrWhiteSpace(command))
+            {
+                if (string.IsNullOrWhiteSpace(LastReason))
+                    LastReason = "Не удалось однозначно определить команду или управляемый элемент.";
                 return null;
+            }
 
             var hasDelayMarker = Regex.IsMatch(normalized, @"(?:через|in)\s+",
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
@@ -68,12 +108,20 @@ namespace ESP32AIControl.WP81.Core.Voice
 
             // A malformed or excessively long delay must not degrade into immediate execution.
             if (hasDelayMarker && !executeAt.HasValue)
+            {
+                LastReason = "Не удалось разобрать задержку. Команда не будет выполнена сразу.";
                 return null;
+            }
 
             return new ParsedVoiceCommand
             {
                 Command = command.Trim(),
-                ExecuteAt = executeAt
+                ExecuteAt = executeAt,
+                RequiresConfirmation = requiresConfirmation,
+                ConfirmationText = requiresConfirmation
+                    ? "Марфа предлагает выполнить команду:\n" + command.Trim() +
+                      (executeAt.HasValue ? "\nВремя: " + executeAt.Value.ToString("g") : string.Empty)
+                    : string.Empty
             };
         }
 
@@ -82,7 +130,10 @@ namespace ESP32AIControl.WP81.Core.Voice
             return ContainsAny(text,
                 "не открывай", "не открывать", "не надо открывать", "не нужно открывать",
                 "не закрывай", "не закрывать", "не надо закрывать", "не нужно закрывать",
-                "don't open", "do not open", "don't close", "do not close");
+                "не включай", "не включить", "не выключай", "не выключить",
+                "не запускай", "не запускать", "не останавливай", "не останавливать",
+                "don't open", "do not open", "don't close", "do not close",
+                "don't turn on", "don't turn off", "do not turn on", "do not turn off");
         }
 
         private static bool ContainsAny(string text, params string[] phrases)
