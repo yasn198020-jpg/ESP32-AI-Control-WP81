@@ -36,8 +36,11 @@ namespace ESP32AIControl.WP81.Core.Scheduling
         public async Task InitializeAsync()
         {
             await LoadAsync();
-            if (_timer == null)
-                _timer = ThreadPoolTimer.CreatePeriodicTimer(Tick, TimeSpan.FromSeconds(5));
+            lock (_gate)
+            {
+                if (_timer == null)
+                    _timer = ThreadPoolTimer.CreatePeriodicTimer(Tick, TimeSpan.FromSeconds(5));
+            }
         }
 
         public async Task<string> ScheduleAsync(string command, DateTimeOffset executeAt)
@@ -519,8 +522,17 @@ namespace ESP32AIControl.WP81.Core.Scheduling
         private void RaiseChanged(ScheduledCommand item)
         {
             var handler = TaskChanged;
-            if (handler != null)
+            if (handler == null) return;
+
+            try
+            {
                 handler(this, item.Clone());
+            }
+            catch
+            {
+                // UI notification failures must not turn a successfully persisted
+                // queue operation into an apparent storage failure for the caller.
+            }
         }
     }
 }
