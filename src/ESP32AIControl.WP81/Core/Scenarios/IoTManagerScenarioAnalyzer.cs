@@ -99,52 +99,84 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             if (string.IsNullOrWhiteSpace(script))
                 return;
 
-            // Prefer the same expression grammar used by runtime scenario
-            // verification. Keep the legacy parser as a compatibility fallback
-            // for older exports that do not match the structured IF/THEN form.
+            // The planner uses conjunctions of simple comparisons. Expand
+            // boolean expressions to DNF so OR branches become independent
+            // planner rules instead of being silently dropped (which used to
+            // turn "A == 1 | B == 1" into an unconditional actuator action).
             var compiled = ScenarioLanguageParser.Compile(script);
             if (compiled.Errors.Count == 0 && compiled.Rules.Count > 0)
             {
                 for (var r = 0; r < compiled.Rules.Count; r++)
                 {
                     var sourceRule = compiled.Rules[r];
-                    var rule = new ScenarioRule();
-                    CollectPlannerConditions(sourceRule.Condition, rule.Conditions, false);
+                    var alternatives = ExpandPlannerConditions(sourceRule.Condition, false);
+                    if (alternatives == null || alternatives.Count == 0)
+                        continue;
 
+                    var actions = new List<ScenarioAssignment>();
+                    var allActionsStatic = sourceRule.Actions.Count > 0;
                     for (var a = 0; a < sourceRule.Actions.Count; a++)
                     {
                         var sourceAction = sourceRule.Actions[a];
                         var value = GetStaticActionValue(sourceAction.Expression);
                         if (value == null)
-                            continue;
+                        {
+                            allActionsStatic = false;
+                            break;
+                        }
 
-                        var assignment = new ScenarioAssignment
+                        actions.Add(new ScenarioAssignment
                         {
                             Variable = sourceAction.TargetId,
                             Operator = sourceAction.Operator,
                             Value = value
-                        };
+                        });
+                    }
 
-                        for (var conditionIndex = 0; conditionIndex < rule.Conditions.Count; conditionIndex++)
-                        {
-                            var condition = rule.Conditions[conditionIndex];
-                            assignment.Conditions.Add(new ScenarioCondition
+                    // Dynamic action expressions cannot be represented as a
+                    // fixed dependency value. Exclude the whole rule rather
+                    // than planning only a subset of its physical actions.
+                    if (!allActionsStatic || actions.Count == 0)
+                        continue;
+
+                    foreach (var alternative in alternatives)
+                    {
+                        var rule = new ScenarioRule();
+                        foreach (var condition in alternative)
+                            rule.Conditions.Add(new ScenarioCondition
                             {
                                 Variable = condition.Variable,
                                 Operator = condition.Operator,
                                 Value = condition.Value
                             });
+
+                        foreach (var sourceAction in actions)
+                        {
+                            var assignment = new ScenarioAssignment
+                            {
+                                Variable = sourceAction.Variable,
+                                Operator = sourceAction.Operator,
+                                Value = sourceAction.Value
+                            };
+                            foreach (var condition in rule.Conditions)
+                                assignment.Conditions.Add(new ScenarioCondition
+                                {
+                                    Variable = condition.Variable,
+                                    Operator = condition.Operator,
+                                    Value = condition.Value
+                                });
+                            rule.Assignments.Add(assignment);
                         }
 
-                        rule.Assignments.Add(assignment);
+                        if (rule.Assignments.Count > 0)
+                            _rules.Add(rule);
                     }
-
-                    if (rule.Assignments.Count > 0)
-                        _rules.Add(rule);
                 }
 
-                if (_rules.Count > 0)
-                    return;
+                // A syntactically valid modern script must not fall through to
+                // the legacy regex parser: unsupported expressions are safer
+                // to omit from dependency planning than to misread.
+                return;
             }
 
             var sections = ExtractScenarioSections(script);
@@ -152,70 +184,132 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                 ParseBlock(sections[i], 0, sections[i].Length, new List<ScenarioCondition>(), _rules);
         }
 
-        private static void CollectPlannerConditions(
+        // Returns disjunctive normal form: each inner list is an AND clause;
+        // the outer list joins those clauses with OR. Null means that the
+        // expression is valid at runtime but cannot be represented safely by
+        // the dependency planner.
+        private static List<List<ScenarioCondition>> ExpandPlannerConditions(
             ScenarioExpression expression,
-            IList<ScenarioCondition> output,
             bool inverted)
         {
             var unary = expression as ScenarioUnaryExpression;
             if (unary != null)
-            {
-                if (unary.Operator == "!")
-                    CollectPlannerConditions(unary.Expression, output, !inverted);
-                return;
-            }
+                return unary.Operator == "!"
+                    ? ExpandPlannerConditions(unary.Expression, !inverted)
+                    : null;
 
             var binary = expression as ScenarioBinaryExpression;
-            if (binary == null)
-                return;
-
-            if (binary.Operator == "&" && !inverted)
+            if (binary != null && (binary.Operator == "&" || binary.Operator == "|"))
             {
-                CollectPlannerConditions(binary.Left, output, false);
-                CollectPlannerConditions(binary.Right, output, false);
-                return;
+                var isAnd = (binary.Operator == "&") != inverted;
+                var left = ExpandPlannerConditions(binary.Left, inverted);
+                var right = ExpandPlannerConditions(binary.Right, inverted);
+                if (left == null || right == null)
+                    return null;
+
+                if (!isAnd)
+                {
+                    var union = new List<List<ScenarioCondition>>();
+                    union.AddRange(left);
+                    union.AddRange(right);
+                    return union;
+                }
+
+                var product = new List<List<ScenarioCondition>>();
+                foreach (var leftClause in left)
+                    foreach (var rightClause in right)
+                    {
+                        var clause = CloneConditions(leftClause);
+                        foreach (var condition in rightClause)
+                            AddUniqueCondition(clause, condition);
+                        product.Add(clause);
+                    }
+                return product;
             }
 
-            if (binary.Operator == "|" )
-                return;
-
-            var leftVariable = binary.Left as ScenarioVariableExpression;
-            var rightVariable = binary.Right as ScenarioVariableExpression;
-            string variable = null;
-            string value = null;
-            string op = binary.Operator;
-
-            if (leftVariable != null)
+            if (binary != null)
             {
-                variable = leftVariable.Name;
-                value = GetStaticActionValue(binary.Right);
+                var leftVariable = binary.Left as ScenarioVariableExpression;
+                var rightVariable = binary.Right as ScenarioVariableExpression;
+                string variable = null;
+                string value = null;
+                var op = binary.Operator;
+
+                if (leftVariable != null)
+                {
+                    variable = leftVariable.Name;
+                    value = GetStaticActionValue(binary.Right);
+                }
+                else if (rightVariable != null)
+                {
+                    variable = rightVariable.Name;
+                    value = GetStaticActionValue(binary.Left);
+                    op = ReverseComparison(op);
+                }
+
+                if (string.IsNullOrEmpty(variable) || value == null)
+                    return null;
+
+                if (inverted)
+                    op = InvertComparison(op);
+                if (op == null)
+                    return null;
+
+                var clause = new List<ScenarioCondition>();
+                clause.Add(new ScenarioCondition { Variable = variable, Operator = op, Value = value });
+                return new List<List<ScenarioCondition>> { clause };
             }
-            else if (rightVariable != null)
+
+            var number = expression as ScenarioNumberExpression;
+            if (number != null)
             {
-                variable = rightVariable.Name;
-                value = GetStaticActionValue(binary.Left);
-                op = ReverseComparison(op);
+                var truth = Math.Abs(number.Value) > 0.000001;
+                return truth != inverted
+                    ? new List<List<ScenarioCondition>> { new List<ScenarioCondition>() }
+                    : new List<List<ScenarioCondition>>();
             }
 
-            if (string.IsNullOrEmpty(variable) || value == null)
-                return;
+            var literal = expression as ScenarioVariableExpression;
+            if (literal != null &&
+                (string.Equals(literal.Name, "true", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(literal.Name, "false", StringComparison.OrdinalIgnoreCase)))
+            {
+                var truth = string.Equals(literal.Name, "true", StringComparison.OrdinalIgnoreCase);
+                return truth != inverted
+                    ? new List<List<ScenarioCondition>> { new List<ScenarioCondition>() }
+                    : new List<List<ScenarioCondition>>();
+            }
 
-            if (inverted)
-                op = InvertComparison(op);
-            if (op == null)
-                return;
+            return null;
+        }
 
-            for (var i = 0; i < output.Count; i++)
-                if (string.Equals(output[i].Variable, variable, StringComparison.OrdinalIgnoreCase) &&
-                    string.Equals(output[i].Operator, op, StringComparison.Ordinal) &&
-                    string.Equals(output[i].Value, value, StringComparison.OrdinalIgnoreCase))
+        private static List<ScenarioCondition> CloneConditions(IList<ScenarioCondition> source)
+        {
+            var result = new List<ScenarioCondition>();
+            foreach (var item in source)
+                result.Add(new ScenarioCondition
+                {
+                    Variable = item.Variable,
+                    Operator = item.Operator,
+                    Value = item.Value
+                });
+            return result;
+        }
+
+        private static void AddUniqueCondition(
+            IList<ScenarioCondition> output,
+            ScenarioCondition condition)
+        {
+            foreach (var existing in output)
+                if (string.Equals(existing.Variable, condition.Variable, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(existing.Operator, condition.Operator, StringComparison.Ordinal) &&
+                    string.Equals(existing.Value, condition.Value, StringComparison.OrdinalIgnoreCase))
                     return;
-
             output.Add(new ScenarioCondition
             {
-                Variable = variable,
-                Operator = op,
-                Value = value
+                Variable = condition.Variable,
+                Operator = condition.Operator,
+                Value = condition.Value
             });
         }
 
