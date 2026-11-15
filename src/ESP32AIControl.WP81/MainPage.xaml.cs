@@ -507,10 +507,12 @@ namespace ESP32AIControl.WP81
             };
 
             var type = NormalizeType(state.WidgetType);
-            var isSwitch = type == "switch" || type == "toggle" ||
-                           type == "checkbox" || type == "vbutton";
-            var isAction = type == "button" || type == "action" || type == "buttonout";
-            var isSlider = type == "slider" || type == "range" || type == "inputdgt";
+            var definition = NormalizeType(state.DefinitionName);
+            var isSwitch = type == "switch" || type == "toggle" || type == "checkbox" || type == "vbutton" || type == "inputbool";
+            var isAction = type == "button" || type == "action" || type == "buttonout" || type == "buttonin" || type == "pushbutton";
+            var isSlider = type == "slider" || type == "range" || type == "inputdgt" || type == "inputint" || type == "inputfloat" || definition == "inputdgt";
+            var isInput = !isSwitch && !isAction && !isSlider &&
+                          (type == "input" || type == "inputtext" || type == "text" || type == "inputstr" || type == "inputstring");
 
             var shell = new Border
             {
@@ -521,6 +523,7 @@ namespace ESP32AIControl.WP81
                 CornerRadius = new CornerRadius(12)
             };
 
+            visual.Shell = shell;
             var row = new Grid();
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(32) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -573,6 +576,7 @@ namespace ESP32AIControl.WP81
                 check.Checked += delegate { PublishSwitchValue(visual, true); };
                 check.Unchecked += delegate { PublishSwitchValue(visual, false); };
                 visual.Control = check;
+                visual.SwitchControl = check;
                 Grid.SetColumn(check, 2);
                 row.Children.Add(check);
                 visual.ValueText.Visibility = Visibility.Collapsed;
@@ -610,13 +614,15 @@ namespace ESP32AIControl.WP81
             }
             else if (isSlider)
             {
+                var minimum = ReadWidgetNumber(state.Minimum, 0);
+                var maximum = ReadWidgetNumber(state.Maximum, 100);
+                if (maximum <= minimum) maximum = minimum + 100;
+                var step = ReadWidgetNumber(state.Step, 1);
+                if (step <= 0) step = 1;
                 var slider = new Slider
                 {
-                    Minimum = 0,
-                    Maximum = 100,
-                    StepFrequency = 1,
-                    Width = 280,
-                    HorizontalAlignment = HorizontalAlignment.Stretch,
+                    Minimum = minimum, Maximum = maximum, StepFrequency = step,
+                    Width = 280, HorizontalAlignment = HorizontalAlignment.Stretch,
                     Margin = new Thickness(34, 2, 0, 0)
                 };
                 slider.ValueChanged += async delegate(object s, RangeBaseValueChangedEventArgs ev)
@@ -625,7 +631,32 @@ namespace ESP32AIControl.WP81
                     await PublishControl(visual, ev.NewValue.ToString(CultureInfo.InvariantCulture));
                 };
                 visual.Control = slider;
+                visual.SliderControl = slider;
                 visual.Container.Children.Add(slider);
+                visual.UnitText = new TextBlock
+                {
+                    Text = string.IsNullOrWhiteSpace(state.Unit) ? string.Empty : state.Unit,
+                    FontSize = 11,
+                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 156, 163, 175)),
+                    Margin = new Thickness(34, 0, 0, 0)
+                };
+                visual.Container.Children.Add(visual.UnitText);
+            }
+            else if (isInput)
+            {
+                var inputRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(34, 4, 0, 0) };
+                var input = new TextBox { Text = state.Value ?? string.Empty, Width = 210, MinWidth = 100, FontSize = 16 };
+                var send = new Button { Content = "Отправить", Margin = new Thickness(8, 0, 0, 0), MinWidth = 100 };
+                send.Click += async delegate
+                {
+                    var value = input.Text == null ? string.Empty : input.Text.Trim();
+                    if (!string.IsNullOrEmpty(value)) await PublishControl(visual, value);
+                };
+                visual.InputControl = input;
+                visual.Control = input;
+                inputRow.Children.Add(input);
+                inputRow.Children.Add(send);
+                visual.Container.Children.Add(inputRow);
             }
             else if (!isSwitch)
             {
@@ -668,7 +699,11 @@ namespace ESP32AIControl.WP81
             }
 
             _syncingControls = true;
-            try { ApplyValueToVisual(visual, state.Value); }
+            try
+            {
+                ApplyValueToVisual(visual, state.Value);
+                ApplyWidgetThresholdStyle(visual, state);
+            }
             finally { _syncingControls = false; }
         }
 
@@ -774,14 +809,14 @@ namespace ESP32AIControl.WP81
             if (visual.ValueText != null)
                 visual.ValueText.Text = string.IsNullOrEmpty(value) ? "—" : value;
 
-            var check = visual.Control as CheckBox;
+            var check = visual.SwitchControl;
             if (check != null)
             {
                 check.IsChecked = ParseBoolean(value);
                 return;
             }
 
-            var slider = visual.Control as Slider;
+            var slider = visual.SliderControl;
             if (slider != null)
             {
                 double number;
@@ -789,6 +824,43 @@ namespace ESP32AIControl.WP81
                     NumberStyles.Float, CultureInfo.InvariantCulture, out number))
                     slider.Value = Math.Max(slider.Minimum, Math.Min(slider.Maximum, number));
             }
+
+            if (visual.InputControl != null && visual.InputControl.FocusState == FocusState.Unfocused)
+                visual.InputControl.Text = value ?? string.Empty;
+        }
+
+        private static double ReadWidgetNumber(string value, double fallback)
+        {
+            double result;
+            if (double.TryParse((value ?? string.Empty).Replace(',', '.'), NumberStyles.Float,
+                CultureInfo.InvariantCulture, out result)) return result;
+            return fallback;
+        }
+
+        private void ApplyWidgetThresholdStyle(WidgetVisual visual, WidgetState state)
+        {
+            if (visual == null || visual.Shell == null) return;
+            var number = ReadWidgetNumber(state.Value, double.NaN);
+            var low = ReadWidgetNumber(state.WarningMinimum, double.NaN);
+            var high = ReadWidgetNumber(state.WarningMaximum, double.NaN);
+            var warning = !double.IsNaN(number) &&
+                ((!double.IsNaN(low) && number < low) || (!double.IsNaN(high) && number > high));
+            visual.Shell.Background = new SolidColorBrush(warning
+                ? Windows.UI.Color.FromArgb(255, 65, 43, 39)
+                : Windows.UI.Color.FromArgb(255, 43, 43, 43));
+            visual.Shell.BorderBrush = new SolidColorBrush(warning
+                ? Windows.UI.Color.FromArgb(255, 190, 95, 65)
+                : Windows.UI.Color.FromArgb(255, 57, 59, 68));
+            if (visual.ValueText != null)
+                visual.ValueText.Foreground = new SolidColorBrush(warning
+                    ? Windows.UI.Color.FromArgb(255, 255, 190, 150)
+                    : Windows.UI.Colors.White);
+            if (visual.UnitText != null)
+                visual.UnitText.Text = (state.Value ?? "—") +
+                    (string.IsNullOrWhiteSpace(state.Unit) ? string.Empty : " " + state.Unit) +
+                    (visual.SliderControl == null ? string.Empty : "  ·  " +
+                    visual.SliderControl.Minimum.ToString(CultureInfo.InvariantCulture) + "–" +
+                    visual.SliderControl.Maximum.ToString(CultureInfo.InvariantCulture));
         }
 
         private static bool ParseBoolean(string value)
@@ -1263,6 +1335,11 @@ namespace ESP32AIControl.WP81
             public StackPanel Container { get; set; }
             public TextBlock Title { get; set; }
             public TextBlock ValueText { get; set; }
+            public Border Shell { get; set; }
+            public Slider SliderControl { get; set; }
+            public CheckBox SwitchControl { get; set; }
+            public TextBox InputControl { get; set; }
+            public TextBlock UnitText { get; set; }
             public FrameworkElement Control { get; set; }
         }
 
