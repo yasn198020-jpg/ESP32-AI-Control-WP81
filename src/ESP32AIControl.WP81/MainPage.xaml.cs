@@ -43,6 +43,7 @@ namespace ESP32AIControl.WP81
         private readonly Wp81VoiceCommandService _voice;
         private VoiceCommandParser _voiceParser;
         private string _pendingVoiceClarificationPhrase;
+        private DateTimeOffset _pendingVoiceClarificationExpiresAt;
         private readonly List<string> _pendingVoiceClarificationSelections = new List<string>();
         private IList<VoiceTargetOption> _pendingVoiceClarificationOptions =
             new List<VoiceTargetOption>();
@@ -2584,6 +2585,7 @@ namespace ESP32AIControl.WP81
         private void ClearPendingVoiceClarification()
         {
             _pendingVoiceClarificationPhrase = null;
+            _pendingVoiceClarificationExpiresAt = DateTimeOffset.MinValue;
             _pendingVoiceClarificationSelections.Clear();
             _pendingVoiceClarificationOptions = new List<VoiceTargetOption>();
         }
@@ -2610,6 +2612,13 @@ namespace ESP32AIControl.WP81
                 try
                 {
                     ParsedVoiceCommand parsed = null;
+                    if (!string.IsNullOrWhiteSpace(_pendingVoiceClarificationPhrase) &&
+                        _pendingVoiceClarificationExpiresAt <= DateTimeOffset.Now)
+                    {
+                        ClearPendingVoiceClarification();
+                        Log("VOICE CLARIFICATION: время ожидания ответа истекло; прежняя команда отменена.");
+                    }
+
                     if (!string.IsNullOrWhiteSpace(_pendingVoiceClarificationPhrase))
                     {
                         if (IsVoiceClarificationCancel(text))
@@ -2651,6 +2660,7 @@ namespace ESP32AIControl.WP81
                             _voiceParser.LastAmbiguousOptions.Count > 0)
                         {
                             _pendingVoiceClarificationPhrase = text;
+                            _pendingVoiceClarificationExpiresAt = DateTimeOffset.Now.AddMinutes(2);
                             _pendingVoiceClarificationOptions = _voiceParser.LastAmbiguousOptions.ToList();
                             VoiceStatusText.Text = BuildVoiceClarificationPrompt(_pendingVoiceClarificationOptions);
                             MarfaVoiceResultText.Text = VoiceStatusText.Text;
