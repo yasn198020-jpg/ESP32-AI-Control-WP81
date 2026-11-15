@@ -357,11 +357,24 @@ namespace ESP32AIControl.WP81
 
         private void ReadMqttSettingsFromUi()
         {
-            _settings.Host = HostBox.Text.Trim();
-            _settings.Port = PortBox.Text.Trim();
-            _settings.Prefix = PrefixBox.Text.Trim().Trim('/');
-            _settings.UserName = UserNameBox.Text.Trim();
-            _settings.Password = PasswordBox.Password;
+            var host = (HostBox.Text ?? string.Empty).Trim();
+            var portText = (PortBox.Text ?? string.Empty).Trim();
+            var prefix = (PrefixBox.Text ?? string.Empty).Trim().Trim('/');
+            int port;
+
+            if (string.IsNullOrWhiteSpace(host))
+                throw new InvalidOperationException("Укажите адрес MQTT-сервера.");
+            if (!int.TryParse(portText, NumberStyles.Integer, CultureInfo.InvariantCulture, out port) ||
+                port < 1 || port > 65535)
+                throw new InvalidOperationException("Порт MQTT должен быть числом от 1 до 65535.");
+            if (string.IsNullOrWhiteSpace(prefix))
+                throw new InvalidOperationException("Укажите MQTT prefix.");
+
+            _settings.Host = host;
+            _settings.Port = port.ToString(CultureInfo.InvariantCulture);
+            _settings.Prefix = prefix;
+            _settings.UserName = (UserNameBox.Text ?? string.Empty).Trim();
+            _settings.Password = PasswordBox.Password ?? string.Empty;
         }
 
         private async void ImportScenarioButton_Click(object sender, RoutedEventArgs e)
@@ -1684,9 +1697,14 @@ namespace ESP32AIControl.WP81
 
                 await _scheduler.ScheduleAsync(command, executeAt);
                 await RefreshScheduleAsync();
+                ScheduleStatusText.Text = "Задача добавлена: " + executeAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss");
                 Log("SCHEDULE ADD: " + command + " @ " + executeAt);
             }
-            catch (Exception ex) { Log("SCHEDULE ERROR: " + ex.Message); }
+            catch (Exception ex)
+            {
+                ScheduleStatusText.Text = "Не удалось добавить задачу: " + ex.Message;
+                Log("SCHEDULE ERROR: " + ex.Message);
+            }
         }
 
         private async void UpdateScheduleButton_Click(object sender, RoutedEventArgs e)
@@ -1703,9 +1721,14 @@ namespace ESP32AIControl.WP81
 
                 await _scheduler.UpdateAsync(selected.Id, command, executeAt);
                 await RefreshScheduleAsync();
+                ScheduleStatusText.Text = "Задача обновлена.";
                 Log("SCHEDULE UPDATE: " + selected.Id);
             }
-            catch (Exception ex) { Log("SCHEDULE ERROR: " + ex.Message); }
+            catch (Exception ex)
+            {
+                ScheduleStatusText.Text = "Не удалось изменить задачу: " + ex.Message;
+                Log("SCHEDULE ERROR: " + ex.Message);
+            }
         }
 
         private async void CancelScheduleButton_Click(object sender, RoutedEventArgs e)
@@ -1716,8 +1739,35 @@ namespace ESP32AIControl.WP81
                 if (selected == null) return;
                 await _scheduler.CancelAsync(selected.Id);
                 await RefreshScheduleAsync();
+                ScheduleStatusText.Text = "Задача отменена.";
             }
-            catch (Exception ex) { Log("SCHEDULE ERROR: " + ex.Message); }
+            catch (Exception ex)
+            {
+                ScheduleStatusText.Text = "Не удалось отменить задачу: " + ex.Message;
+                Log("SCHEDULE ERROR: " + ex.Message);
+            }
+        }
+
+        private async void RetryScheduleButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var selected = SelectedSchedule();
+                if (selected == null)
+                    throw new InvalidOperationException("Сначала выберите задачу.");
+                if (!string.Equals(selected.Status, "Failed", StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("Повторить можно только задачу со статусом «Ошибка».");
+
+                await _scheduler.UpdateAsync(selected.Id, selected.Command, DateTimeOffset.Now.AddMinutes(1));
+                await RefreshScheduleAsync();
+                ScheduleStatusText.Text = "Повтор запланирован примерно через минуту.";
+                Log("SCHEDULE RETRY: " + selected.Id);
+            }
+            catch (Exception ex)
+            {
+                ScheduleStatusText.Text = "Повтор не выполнен: " + ex.Message;
+                Log("SCHEDULE RETRY ERROR: " + ex.Message);
+            }
         }
 
         private async void RefreshScheduleButton_Click(object sender, RoutedEventArgs e)
@@ -1735,10 +1785,26 @@ namespace ESP32AIControl.WP81
             {
                 _scheduleRows.Add(item);
                 ScheduleList.Items.Add(
-                    item.Status + " | " +
+                    FormatScheduleStatus(item.Status) + " | " +
                     item.ExecuteAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss") +
                     " | " + item.Command +
                     (string.IsNullOrEmpty(item.LastError) ? string.Empty : " | " + item.LastError));
+            }
+
+            if (items.Count == 0)
+                ScheduleStatusText.Text = "Список пока пуст. Добавьте команду и время выполнения.";
+        }
+
+        private static string FormatScheduleStatus(string status)
+        {
+            switch ((status ?? string.Empty).ToLowerInvariant())
+            {
+                case "scheduled": return "Ожидает";
+                case "executing": return "Выполняется";
+                case "completed": return "Выполнено";
+                case "cancelled": return "Отменено";
+                case "failed": return "Ошибка";
+                default: return string.IsNullOrEmpty(status) ? "Неизвестно" : status;
             }
         }
 
@@ -1759,6 +1825,9 @@ namespace ESP32AIControl.WP81
             ScheduleCommandBox.Text = item.Command;
             ScheduleDate.Date = new DateTimeOffset(item.ExecuteAt.LocalDateTime.Date);
             ScheduleTime.Time = item.ExecuteAt.LocalDateTime.TimeOfDay;
+            ScheduleStatusText.Text = FormatScheduleStatus(item.Status) + " • " +
+                item.ExecuteAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss") +
+                (string.IsNullOrWhiteSpace(item.LastError) ? string.Empty : Environment.NewLine + item.LastError);
         }
 
         private ScheduledCommand SelectedSchedule()
@@ -1777,8 +1846,16 @@ namespace ESP32AIControl.WP81
         private static void ValidateCommand(string command)
         {
             var parts = (command ?? string.Empty).Split(new[] { '=' }, 2);
-            if (parts.Length != 2 || parts[0].Trim().IndexOf('/') <= 0)
+            if (parts.Length != 2)
                 throw new InvalidOperationException("Формат: device/widget=value");
+
+            var target = parts[0].Trim();
+            var value = parts[1].Trim();
+            var separator = target.IndexOf('/');
+            if (separator <= 0 || separator >= target.Length - 1 ||
+                target.IndexOf('/', separator + 1) >= 0 ||
+                target.Any(char.IsWhiteSpace) || string.IsNullOrWhiteSpace(value))
+                throw new InvalidOperationException("Укажите ID устройства, ID виджета и непустое значение: device/widget=value");
         }
 
         private async void VoiceButton_Click(object sender, RoutedEventArgs e)
