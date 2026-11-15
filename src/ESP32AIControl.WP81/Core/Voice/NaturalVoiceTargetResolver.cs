@@ -45,6 +45,120 @@ namespace ESP32AIControl.WP81.Core.Voice
 
         public string ResolveCommand(string phrase, out string reason)
         {
+            return ResolveSingleCommand(phrase, out reason);
+        }
+
+        public IList<string> ResolveCommands(string phrase, out string reason)
+        {
+            reason = null;
+            var result = new List<string>();
+            var text = phrase ?? string.Empty;
+            var matches = Regex.Matches(text, @"[a-z0-9]+|[а-яё]+",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            var actionSpans = new List<Match>();
+
+            for (var i = 0; i < matches.Count; i++)
+            {
+                var token = matches[i].Value;
+                if (!IsActionToken(token))
+                    continue;
+
+                // In the English construction "turn on/off", on/off is part
+                // of the same intent, not the start of another action.
+                if ((string.Equals(token, "on", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(token, "off", StringComparison.OrdinalIgnoreCase)) &&
+                    i > 0 && string.Equals(matches[i - 1].Value, "turn", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                actionSpans.Add(matches[i]);
+            }
+
+            if (actionSpans.Count == 0)
+            {
+                var single = ResolveSingleCommand(text, out reason);
+                if (!string.IsNullOrWhiteSpace(single))
+                    result.Add(single);
+                return result;
+            }
+
+            if (actionSpans.Count > 1)
+            {
+                for (var i = 0; i < actionSpans.Count; i++)
+                {
+                    var start = actionSpans[i].Index;
+                    var end = i + 1 < actionSpans.Count
+                        ? actionSpans[i + 1].Index
+                        : text.Length;
+                    var clause = text.Substring(start, end - start)
+                        .Trim(' ', '\\t', ',', ';', '.', '!', '?');
+                    clause = Regex.Replace(clause, @"\\s+(?:и|а|затем|после этого|далее)\\s*$", string.Empty,
+                        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+                    string clauseReason;
+                    var command = ResolveSingleCommand(clause, out clauseReason);
+                    if (string.IsNullOrWhiteSpace(command))
+                    {
+                        reason = "Не удалось безопасно разобрать всю фразу. " +
+                            (string.IsNullOrWhiteSpace(clauseReason) ? "Уточните каждое действие отдельно." : clauseReason);
+                        return new List<string>();
+                    }
+                    result.Add(command);
+                    if (result.Count > 5)
+                    {
+                        reason = "За одну фразу можно выполнить не более пяти действий.";
+                        return new List<string>();
+                    }
+                }
+            }
+            else
+            {
+                var action = actionSpans[0];
+                var prefix = text.Substring(action.Index, action.Length);
+                var tail = text.Substring(action.Index + action.Length);
+                var targets = Regex.Split(tail, @"\\s+(?:и|,|плюс|а также)\\s+",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+                if (targets.Length <= 1)
+                {
+                    var single = ResolveSingleCommand(text, out reason);
+                    if (!string.IsNullOrWhiteSpace(single))
+                        result.Add(single);
+                    return result;
+                }
+
+                foreach (var target in targets)
+                {
+                    if (string.IsNullOrWhiteSpace(target))
+                    {
+                        reason = "В списке устройств есть пустой элемент. Ничего не отправлено.";
+                        return new List<string>();
+                    }
+
+                    string targetReason;
+                    var command = ResolveSingleCommand(prefix + " " + target, out targetReason);
+                    if (string.IsNullOrWhiteSpace(command))
+                    {
+                        reason = "Не удалось найти все устройства из фразы. " +
+                            (string.IsNullOrWhiteSpace(targetReason) ? "Уточните названия устройств." : targetReason);
+                        return new List<string>();
+                    }
+                    result.Add(command);
+                    if (result.Count > 5)
+                    {
+                        reason = "За одну фразу можно выполнить не более пяти действий.";
+                        return new List<string>();
+                    }
+                }
+            }
+
+            var unique = new List<string>();
+            foreach (var command in result)
+                if (!unique.Contains(command, StringComparer.OrdinalIgnoreCase))
+                    unique.Add(command);
+            return unique;
+        }
+
+        private string ResolveSingleCommand(string phrase, out string reason)
+        {
             reason = null;
             // Strip only an explicitly parsed delay so widget numbers such as
             // "окно 2" remain available to resolve the correct control.
