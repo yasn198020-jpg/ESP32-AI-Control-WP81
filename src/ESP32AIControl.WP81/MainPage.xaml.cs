@@ -510,8 +510,8 @@ namespace ESP32AIControl.WP81
 
             var type = NormalizeType(state.WidgetType);
             var definition = NormalizeType(state.DefinitionName);
-            var isSwitch = type == "switch" || type == "toggle" || type == "checkbox" || type == "vbutton" || type == "inputbool";
-            var isAction = type == "button" || type == "action" || type == "buttonout" || type == "buttonin" || type == "pushbutton";
+            var isSwitch = type == "switch" || type == "toggle" || type == "checkbox" || type == "vbutton" || type == "inputbool" || definition == "toggle";
+            var isAction = type == "button" || type == "action" || type == "buttonout" || type == "buttonin" || type == "pushbutton" || definition == "button" || definition == "vbtn" || definition == "btn";
             var isRange = definition == "range" || definition == "rangeservo" || type == "range" || type == "rangeservo";
             var isSlider = isRange || type == "slider";
             var isNumericInput = definition == "inputdgt" || type == "inputdgt" || type == "inputint" || type == "inputfloat" || type == "number";
@@ -766,7 +766,8 @@ namespace ESP32AIControl.WP81
 
         private void UpdateWidgetVisual(WidgetState state)
         {
-            if (state == null || string.IsNullOrEmpty(state.Id))
+            if (state == null || string.IsNullOrEmpty(state.Id) ||
+                string.Equals(state.DefinitionName, "nil", StringComparison.OrdinalIgnoreCase))
                 return;
 
             WidgetVisual visual;
@@ -787,6 +788,9 @@ namespace ESP32AIControl.WP81
                      !string.Equals(visual.State.Maximum, state.Maximum, StringComparison.Ordinal) ||
                      !string.Equals(visual.State.Step, state.Step, StringComparison.Ordinal) ||
                      !string.Equals(visual.State.Unit, state.Unit, StringComparison.Ordinal) ||
+                     !string.Equals(visual.State.ScaleFactor, state.ScaleFactor, StringComparison.Ordinal) ||
+                     !string.Equals(visual.State.Options == null ? string.Empty : string.Join("|", visual.State.Options), state.Options == null ? string.Empty : string.Join("|", state.Options), StringComparison.Ordinal) ||
+                     !string.Equals(visual.State.ColorConfig, state.ColorConfig, StringComparison.Ordinal) ||
                      !string.Equals(visual.State.WarningMinimum, state.WarningMinimum, StringComparison.Ordinal) ||
                      !string.Equals(visual.State.WarningMaximum, state.WarningMaximum, StringComparison.Ordinal));
                 if (configurationChanged)
@@ -1014,6 +1018,49 @@ namespace ESP32AIControl.WP81
             if (ContainsComboValue(GraphWidgetBox, state.Key)) GraphWidgetBox.SelectedItem = state.Key;
             ShowSection(2);
             BuildGraphButton_Click(this, new RoutedEventArgs());
+        }
+
+        private static Windows.UI.Color ResolveWidgetColor(string raw, double value)
+        {
+            var fallback = Windows.UI.Color.FromArgb(255, 144, 202, 249);
+            if (double.IsNaN(value) || string.IsNullOrWhiteSpace(raw)) return fallback;
+            var text = raw.Trim();
+            if (text.StartsWith("[", StringComparison.Ordinal))
+            {
+                var matches = System.Text.RegularExpressions.Regex.Matches(text,
+                    "\\{[^}]*\\\"level\\\"\\s*:\\s*(-?[0-9]+(?:\\.[0-9]+)?)[^}]*\\\"value\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"[^}]*\\}");
+                var selectedLevel = double.NegativeInfinity;
+                var selectedColor = string.Empty;
+                foreach (System.Text.RegularExpressions.Match match in matches)
+                {
+                    double level;
+                    if (double.TryParse(match.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out level) && level <= value && level >= selectedLevel)
+                    { selectedLevel = level; selectedColor = match.Groups[2].Value; }
+                }
+                text = selectedColor;
+            }
+            if (text.Length == 7 && text[0] == '#')
+            {
+                byte r, g, b;
+                if (byte.TryParse(text.Substring(1, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out r) &&
+                    byte.TryParse(text.Substring(3, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out g) &&
+                    byte.TryParse(text.Substring(5, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out b))
+                    return Windows.UI.Color.FromArgb(255, r, g, b);
+            }
+            switch (text.ToLowerInvariant())
+            {
+                case "red": return Windows.UI.Colors.Red;
+                case "green": return Windows.UI.Colors.Green;
+                case "blue": return Windows.UI.Colors.Blue;
+                case "orange": return Windows.UI.Colors.Orange;
+                case "yellow": return Windows.UI.Colors.Yellow;
+                case "white": return Windows.UI.Colors.White;
+                case "gray": case "grey": return Windows.UI.Colors.Gray;
+                case "lime": return Windows.UI.Colors.Lime;
+                case "cyan": return Windows.UI.Colors.Cyan;
+                case "magenta": return Windows.UI.Colors.Magenta;
+            }
+            return fallback;
         }
 
         private static double ReadWidgetNumber(string value, double fallback)
