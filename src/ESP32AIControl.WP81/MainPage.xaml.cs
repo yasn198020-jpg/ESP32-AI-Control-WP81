@@ -979,25 +979,28 @@ namespace ESP32AIControl.WP81
             var text = raw.Trim();
             if (text.StartsWith("[", StringComparison.Ordinal))
             {
-                var matches = System.Text.RegularExpressions.Regex.Matches(text,
-                    "\\{[^}]*\\\"level\\\"\\s*:\\s*(-?[0-9]+(?:\\.[0-9]+)?)[^}]*\\\"value\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"[^}]*\\}");
+                var objects = System.Text.RegularExpressions.Regex.Matches(text, "\\{[^}]*\\}");
                 var selectedLevel = double.NegativeInfinity;
                 var selectedColor = string.Empty;
-                foreach (System.Text.RegularExpressions.Match match in matches)
+                foreach (System.Text.RegularExpressions.Match item in objects)
                 {
+                    var levelMatch = System.Text.RegularExpressions.Regex.Match(item.Value, "\\\"level\\\"\\s*:\\s*(-?[0-9]+(?:\\.[0-9]+)?)");
+                    var colorMatch = System.Text.RegularExpressions.Regex.Match(item.Value, "\\\"value\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"");
                     double level;
-                    if (double.TryParse(match.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out level) && level <= value && level >= selectedLevel)
-                    { selectedLevel = level; selectedColor = match.Groups[2].Value; }
+                    if (levelMatch.Success && colorMatch.Success && double.TryParse(levelMatch.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out level) && level <= value && level >= selectedLevel)
+                    { selectedLevel = level; selectedColor = colorMatch.Groups[1].Value; }
                 }
                 text = selectedColor;
             }
-            if (text.Length == 7 && text[0] == '#')
+            if ((text.Length == 7 || text.Length == 9) && text[0] == '#')
             {
-                byte r, g, b;
-                if (byte.TryParse(text.Substring(1, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out r) &&
-                    byte.TryParse(text.Substring(3, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out g) &&
-                    byte.TryParse(text.Substring(5, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out b))
-                    return Windows.UI.Color.FromArgb(255, r, g, b);
+                byte a = 255, r, g, b;
+                var offset = text.Length == 9 ? 3 : 1;
+                if (text.Length == 9 && !byte.TryParse(text.Substring(1, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out a)) a = 255;
+                if (byte.TryParse(text.Substring(offset, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out r) &&
+                    byte.TryParse(text.Substring(offset + 2, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out g) &&
+                    byte.TryParse(text.Substring(offset + 4, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out b))
+                    return Windows.UI.Color.FromArgb(a, r, g, b);
             }
             switch (text.ToLowerInvariant())
             {
@@ -1024,7 +1027,7 @@ namespace ESP32AIControl.WP81
         {
             if (state == null) return;
             if (ContainsComboValue(GraphWidgetBox, state.Key)) GraphWidgetBox.SelectedItem = state.Key;
-            ShowSection(2);
+            ShowSection(3);
             BuildGraphButton_Click(this, new RoutedEventArgs());
         }
 
