@@ -45,6 +45,11 @@ namespace ESP32AIControl.WP81.Core.Protocol
             [DataMember(Name="maxWarning")] public object WarningMaximum { get; set; }
             [DataMember(Name="definition")] public string Definition { get; set; }
             [DataMember(Name="definitionName")] public string DefinitionName { get; set; }
+            [DataMember(Name="k")] public object ScaleFactor { get; set; }
+            [DataMember(Name="options")] public string[] Options { get; set; }
+            [DataMember(Name="maxValue")] public object MaximumAlias { get; set; }
+            [DataMember(Name="minValue")] public object MinimumAlias { get; set; }
+            [DataMember(Name="stepValue")] public object StepAlias { get; set; }
         }
 
         public static Esp32Message Parse(Esp32MessageKind kind, string topic, string payload, Esp32TopicParser topics)
@@ -99,18 +104,20 @@ namespace ESP32AIControl.WP81.Core.Protocol
                 Topic = topic,
                 DeviceId = parts.Length >= 1 ? parts[0] : string.Empty,
                 WidgetId = widgetId,
-                Description = First(dto.Description, dto.Label, dto.Name),
+                Description = First(dto.Description, dto.Label),
                 WidgetType = First(dto.Widget, dto.Subtype, dto.Type),
                 Page = dto.Page,
                 Order = dto.Order,
                 Value = ValueToString(dto.Value),
                 Unit = dto.Unit,
-                Minimum = ValueToString(dto.Minimum),
-                Maximum = ValueToString(dto.Maximum),
-                Step = ValueToString(dto.Step),
+                Minimum = First(ValueToString(dto.Minimum), ValueToString(dto.MinimumAlias)),
+                Maximum = First(ValueToString(dto.Maximum), ValueToString(dto.MaximumAlias)),
+                Step = First(ValueToString(dto.Step), ValueToString(dto.StepAlias)),
                 WarningMinimum = ValueToString(dto.WarningMinimum),
                 WarningMaximum = ValueToString(dto.WarningMaximum),
-                DefinitionName = First(dto.DefinitionName, dto.Definition),
+                DefinitionName = First(dto.DefinitionName, dto.Definition, dto.Name),
+                ScaleFactor = ValueToString(dto.ScaleFactor),
+                Options = dto.Options,
                 RawPayload = payload
             };
         }
