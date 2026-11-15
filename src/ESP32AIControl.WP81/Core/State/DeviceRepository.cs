@@ -141,6 +141,8 @@ namespace ESP32AIControl.WP81.Core.State
                         return;
 
                     state.Value = message.Value;
+                    if (!string.IsNullOrEmpty(message.RawPayload))
+                        state.StatusPayload = message.RawPayload;
                     state.UpdatedAt = DateTimeOffset.Now;
                 }
             }
