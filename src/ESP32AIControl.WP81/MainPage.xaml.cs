@@ -154,20 +154,21 @@ namespace ESP32AIControl.WP81
             switch (MainPivot.SelectedIndex)
             {
                 case 0: PageTitleText.Text = "Главная"; break;
-                case 1: PageTitleText.Text = "Команды"; break;
-                case 2: PageTitleText.Text = "История и графики"; break;
-                case 3: PageTitleText.Text = "Отложенные команды"; break;
-                case 4: PageTitleText.Text = "Настройки"; break;
-                case 5: PageTitleText.Text = "Сценарии"; break;
-                case 6: PageTitleText.Text = "Журнал"; break;
+                case 1: PageTitleText.Text = "Марфа"; break;
+                case 2: PageTitleText.Text = "Команды"; break;
+                case 3: PageTitleText.Text = "История и графики"; break;
+                case 4: PageTitleText.Text = "Отложенные команды"; break;
+                case 5: PageTitleText.Text = "Настройки"; break;
+                case 6: PageTitleText.Text = "Сценарии"; break;
+                case 7: PageTitleText.Text = "Журнал"; break;
                 default: PageTitleText.Text = "ESP32 AI Control"; break;
             }
 
             SetNavigationButtonState(NavHomeButton, MainPivot.SelectedIndex == 0);
-            SetNavigationButtonState(NavCommandsButton, MainPivot.SelectedIndex == 1);
-            SetNavigationButtonState(NavHistoryButton, MainPivot.SelectedIndex == 2);
-            SetNavigationButtonState(NavPendingButton, MainPivot.SelectedIndex == 3);
-            SetNavigationButtonState(NavMarfaButton, false);
+            SetNavigationButtonState(NavMarfaButton, MainPivot.SelectedIndex == 1);
+            SetNavigationButtonState(NavCommandsButton, MainPivot.SelectedIndex == 2);
+            SetNavigationButtonState(NavHistoryButton, MainPivot.SelectedIndex == 3);
+            SetNavigationButtonState(NavPendingButton, MainPivot.SelectedIndex == 4);
         }
 
         private void SetNavigationButtonState(Button button, bool selected)
@@ -187,25 +188,26 @@ namespace ESP32AIControl.WP81
             NavigationPopup.IsOpen = !NavigationPopup.IsOpen;
         }
 
-        private void MenuScenarios_Click(object sender, RoutedEventArgs e) { ShowSection(5); }
-        private void MenuJournal_Click(object sender, RoutedEventArgs e) { ShowSection(6); }
-        private void MenuSettings_Click(object sender, RoutedEventArgs e) { ShowSection(4); }
-        private void MenuHistory_Click(object sender, RoutedEventArgs e) { ShowSection(2); }
-        private void MenuPending_Click(object sender, RoutedEventArgs e) { ShowSection(3); }
+        private void MenuScenarios_Click(object sender, RoutedEventArgs e) { ShowSection(6); }
+        private void MenuJournal_Click(object sender, RoutedEventArgs e) { ShowSection(7); }
+        private void MenuSettings_Click(object sender, RoutedEventArgs e) { ShowSection(5); }
+        private void MenuHistory_Click(object sender, RoutedEventArgs e) { ShowSection(3); }
+        private void MenuPending_Click(object sender, RoutedEventArgs e) { ShowSection(4); }
 
-        private void CommandsNavigation_Click(object sender, RoutedEventArgs e) { ShowSection(1); }
-        private void HistoryNavigation_Click(object sender, RoutedEventArgs e) { ShowSection(2); }
-        private void PendingNavigation_Click(object sender, RoutedEventArgs e) { ShowSection(3); }
+        private void CommandsNavigation_Click(object sender, RoutedEventArgs e) { ShowSection(2); }
+        private void HistoryNavigation_Click(object sender, RoutedEventArgs e) { ShowSection(3); }
+        private void PendingNavigation_Click(object sender, RoutedEventArgs e) { ShowSection(4); }
         private void MarfaNavigation_Click(object sender, RoutedEventArgs e)
         {
             ShowSection(1);
             VoiceButton_Click(sender, e);
         }
+        private void MarfaListenButton_Click(object sender, RoutedEventArgs e) { VoiceButton_Click(sender, e); }
 
         private void NavigateHome_Click(object sender, RoutedEventArgs e) { ShowSection(0); }
-        private void NavigateGraphs_Click(object sender, RoutedEventArgs e) { ShowSection(2); }
-        private void NavigateTasks_Click(object sender, RoutedEventArgs e) { ShowSection(3); }
-        private void NavigateSettings_Click(object sender, RoutedEventArgs e) { ShowSection(4); }
+        private void NavigateGraphs_Click(object sender, RoutedEventArgs e) { ShowSection(3); }
+        private void NavigateTasks_Click(object sender, RoutedEventArgs e) { ShowSection(4); }
+        private void NavigateSettings_Click(object sender, RoutedEventArgs e) { ShowSection(5); }
 
         private void ClearLogButton_Click(object sender, RoutedEventArgs e)
         {
@@ -1367,20 +1369,24 @@ namespace ESP32AIControl.WP81
             {
                 VoiceButton.IsEnabled = false;
                 CommandVoiceButton.IsEnabled = false;
+                MarfaListenButton.IsEnabled = false;
                 VoiceResultText.Text = "Слушаю…";
                 VoiceStatusText.Text = "Марфа слушает…";
+                MarfaVoiceResultText.Text = "Марфа слушает…";
                 await _voice.StartListeningAsync();
             }
             catch (Exception ex)
             {
                 VoiceResultText.Text = "Ошибка голоса: " + ex.Message;
                 VoiceStatusText.Text = VoiceResultText.Text;
+                MarfaVoiceResultText.Text = VoiceResultText.Text;
                 Log("VOICE ERROR: " + ex.Message);
             }
             finally
             {
                 VoiceButton.IsEnabled = true;
                 CommandVoiceButton.IsEnabled = true;
+                MarfaListenButton.IsEnabled = true;
                 await _voice.StopListeningAsync();
             }
         }
@@ -1391,6 +1397,7 @@ namespace ESP32AIControl.WP81
             {
                 VoiceResultText.Text = "Распознано: " + text;
                 VoiceStatusText.Text = VoiceResultText.Text;
+                MarfaVoiceResultText.Text = VoiceResultText.Text;
                 try
                 {
                     var parsed = _voiceParser.Parse(text);
