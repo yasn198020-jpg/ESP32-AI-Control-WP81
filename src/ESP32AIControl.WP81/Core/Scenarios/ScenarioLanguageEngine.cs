@@ -149,7 +149,7 @@ namespace ESP32AIControl.WP81.Core.Scenarios
         public static ScenarioLanguageModel Compile(string source)
         {
             var result = new ScenarioLanguageModel();
-            var normalized = Regex.Replace(source ?? string.Empty, @"(?im)^\s*scenario\s*=>\s*", string.Empty);
+            var normalized = NormalizeSource(source);
             IList<string> lexerErrors;
             var tokens = Tokenize(normalized, out lexerErrors);
             foreach (var error in lexerErrors)
@@ -165,6 +165,23 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             var semantic = new ScenarioLanguageParser(tokens, new List<string>());
             semantic.BuildRules(statements, result);
             return result;
+        }
+
+        private static string NormalizeSource(string source)
+        {
+            var input = source ?? string.Empty;
+            var markers = Regex.Matches(input, @"(?im)^\s*scenario\s*=>");
+            if (markers.Count == 0) return input;
+
+            var sections = new List<string>();
+            for (var i = 0; i < markers.Count; i++)
+            {
+                var start = markers[i].Index + markers[i].Length;
+                var end = i + 1 < markers.Count ? markers[i + 1].Index : input.Length;
+                if (end > start)
+                    sections.Add(input.Substring(start, end - start));
+            }
+            return string.Join(Environment.NewLine, sections.ToArray());
         }
 
         private static IList<ScenarioToken> Tokenize(string source, out IList<string> errors)
