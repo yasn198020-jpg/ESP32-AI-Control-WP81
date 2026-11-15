@@ -2407,12 +2407,20 @@ namespace ESP32AIControl.WP81
                         return;
                     }
 
-                    ValidateCommand(parsed.Command);
+                    var commands = parsed.Commands != null && parsed.Commands.Count > 0
+                        ? parsed.Commands
+                        : new List<string> { parsed.Command };
+
+                    for (var i = 0; i < commands.Count; i++)
+                        ValidateCommand(commands[i]);
 
                     if (parsed.RequiresConfirmation)
                     {
+                        var confirmationText = parsed.ConfirmationText;
+                        if (string.IsNullOrWhiteSpace(confirmationText))
+                            confirmationText = "Выполнить команды:\\n" + string.Join("\\n", commands.ToArray());
                         var dialog = new Windows.UI.Popups.MessageDialog(
-                            parsed.ConfirmationText ?? ("Выполнить " + parsed.Command + "?"),
+                            confirmationText,
                             "Подтверждение Марфы");
                         dialog.Commands.Add(new Windows.UI.Popups.UICommand("Выполнить"));
                         dialog.Commands.Add(new Windows.UI.Popups.UICommand("Отмена"));
@@ -2430,22 +2438,50 @@ namespace ESP32AIControl.WP81
 
                     if (parsed.ExecuteAt.HasValue)
                     {
-                        await _scheduler.ScheduleAsync(parsed.Command, parsed.ExecuteAt.Value);
+                        // Multi-command delayed execution is rejected by the parser;
+                        // keep this path strictly single-command.
+                        await _scheduler.ScheduleAsync(commands[0], parsed.ExecuteAt.Value);
                         await RefreshScheduleAsync();
-                        Log("VOICE SCHEDULE: " + parsed.Command + " @ " + parsed.ExecuteAt.Value);
+                        Log("VOICE SCHEDULE: " + commands[0] + " @ " + parsed.ExecuteAt.Value);
                     }
                     else
                     {
-                        var plan = _commandExecutor.BuildPlan(parsed.Command);
-                        for (var p = 0; p < plan.Actions.Count; p++)
+                        // Preflight every command before sending the first MQTT
+                        // packet. A malformed or unplannable later command must
+                        // never leave the first action executed by itself.
+                        for (var i = 0; i < commands.Count; i++)
                         {
-                            var planned = plan.Actions[p];
-                            Log("PLAN " + (planned.IsDependency ? "DEP " : "ACT ") + planned.Command +
-                                (string.IsNullOrEmpty(planned.Reason) ? string.Empty : " | " + planned.Reason));
+                            var plan = _commandExecutor.BuildPlan(commands[i]);
+                            if (plan == null || plan.Actions == null || plan.Actions.Count == 0)
+                                throw new InvalidOperationException("Не удалось построить план для команды: " + commands[i]);
+
+                            for (var p = 0; p < plan.Actions.Count; p++)
+                            {
+                                var planned = plan.Actions[p];
+                                Log("PLAN " + (planned.IsDependency ? "DEP " : "ACT ") + planned.Command +
+                                    (string.IsNullOrEmpty(planned.Reason) ? string.Empty : " | " + planned.Reason));
+                            }
                         }
 
-                        await _commandExecutor.ExecuteAsync(parsed.Command);
-                        Log("VOICE EXECUTE: " + parsed.Command);
+                        var executed = 0;
+                        try
+                        {
+                            for (var i = 0; i < commands.Count; i++)
+                            {
+                                await _commandExecutor.ExecuteAsync(commands[i]);
+                                executed++;
+                                Log("VOICE EXECUTE " + executed + "/" + commands.Count + ": " + commands[i]);
+                            }
+                            VoiceStatusText.Text = "Выполнено действий: " + executed;
+                            MarfaVoiceResultText.Text = VoiceStatusText.Text;
+                        }
+                        catch
+                        {
+                            if (executed > 0)
+                                Log("VOICE PARTIAL: выполнено " + executed + " из " + commands.Count +
+                                    ". Остальные команды остановлены после ошибки.");
+                            throw;
+                        }
                     }
                 }
                 catch (Exception ex)
