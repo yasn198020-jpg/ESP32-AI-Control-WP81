@@ -23,6 +23,8 @@ namespace ESP32AIControl.WP81.Core.Protocol
         public string WarningMinimum { get; set; }
         public string WarningMaximum { get; set; }
         public string DefinitionName { get; set; }
+        public string ScaleFactor { get; set; }
+        public string[] Options { get; set; }
         public string WidgetType { get; set; }
         public string Page { get; set; }
         public int Order { get; set; }
