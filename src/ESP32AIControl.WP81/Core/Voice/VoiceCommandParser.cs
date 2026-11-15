@@ -12,6 +12,8 @@ namespace ESP32AIControl.WP81.Core.Voice
 
     public sealed class VoiceCommandParser
     {
+        private const int MaximumDelayDays = 30;
+
         private readonly string _openCommand;
         private readonly string _closeCommand;
 
@@ -26,61 +28,117 @@ namespace ESP32AIControl.WP81.Core.Voice
             if (string.IsNullOrWhiteSpace(text))
                 return null;
 
-            var normalized = text.Trim().ToLowerInvariant();
-            var command = string.Empty;
+            var original = text.Trim();
+            var normalized = Regex.Replace(original.ToLowerInvariant(), @"[,.!?;:]+", " ");
 
-            if (normalized.Contains("открой теплиц") || normalized.Contains("открыть теплиц") ||
-                normalized.Contains("open greenhouse"))
+            // Do not turn a negative or contradictory phrase into a physical action.
+            if (ContainsNegativeIntent(normalized))
+                return null;
+
+            var asksOpen = ContainsAny(normalized,
+                "открой теплиц", "открыть теплиц", "open greenhouse");
+            var asksClose = ContainsAny(normalized,
+                "закрой теплиц", "закрыть теплиц", "close greenhouse");
+
+            if (asksOpen && asksClose)
+                return null;
+
+            var command = string.Empty;
+            if (asksOpen)
                 command = _openCommand;
-            else if (normalized.Contains("закрой теплиц") || normalized.Contains("закрыть теплиц") ||
-                     normalized.Contains("close greenhouse"))
+            else if (asksClose)
                 command = _closeCommand;
             else
             {
-                var direct = Regex.Match(normalized, @"([a-z0-9_-]+/[a-z0-9_.:-]+)\s*=\s*([^\s]+)",
-                    RegexOptions.IgnoreCase);
+                // Match the original utterance so case-sensitive MQTT IDs and values
+                // are not silently converted to lowercase.
+                var direct = Regex.Match(original,
+                    @"([a-z0-9_-]+/[a-z0-9_.:-]+)\s*=\s*([^\s]+)",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
                 if (direct.Success)
                     command = direct.Groups[1].Value + "=" + direct.Groups[2].Value;
             }
 
-            if (string.IsNullOrEmpty(command))
+            if (string.IsNullOrWhiteSpace(command))
                 return null;
 
+            var hasDelayMarker = Regex.IsMatch(normalized, @"(?:через|in)\s+",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
             var executeAt = ParseDelay(normalized);
+
+            // A malformed or excessively long delay must not degrade into immediate execution.
+            if (hasDelayMarker && !executeAt.HasValue)
+                return null;
+
             return new ParsedVoiceCommand
             {
-                Command = command,
+                Command = command.Trim(),
                 ExecuteAt = executeAt
             };
         }
 
+        private static bool ContainsNegativeIntent(string text)
+        {
+            return ContainsAny(text,
+                "не открывай", "не открывать", "не надо открывать", "не нужно открывать",
+                "не закрывай", "не закрывать", "не надо закрывать", "не нужно закрывать",
+                "don't open", "do not open", "don't close", "do not close");
+        }
+
+        private static bool ContainsAny(string text, params string[] phrases)
+        {
+            for (var i = 0; i < phrases.Length; i++)
+                if (text.IndexOf(phrases[i], StringComparison.OrdinalIgnoreCase) >= 0)
+                    return true;
+            return false;
+        }
+
         private static DateTimeOffset? ParseDelay(string text)
         {
-            var match = Regex.Match(text, @"(?:через|in)\s+([0-9]+)\s*(секунд(?:у|ы)?|сек|минут(?:у|ы)?|мин|час(?:а|ов)?|дн(?:я|ей)?)",
-                RegexOptions.IgnoreCase);
+            var match = Regex.Match(text,
+                @"(?:через|in)\s+([0-9]+)\s*(секунд(?:у|ы)?|сек|минут(?:у|ы)?|мин|час(?:а|ов)?|дн(?:я|ей)?)",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
             if (match.Success)
             {
-                var amount = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
+                long amount;
+                if (!long.TryParse(match.Groups[1].Value, NumberStyles.None,
+                    CultureInfo.InvariantCulture, out amount) || amount <= 0)
+                    return null;
+
                 var unit = match.Groups[2].Value;
-                var seconds = amount;
+                long seconds = amount;
+                if (unit.StartsWith("мин", StringComparison.OrdinalIgnoreCase)) seconds = amount * 60L;
+                else if (unit.StartsWith("час", StringComparison.OrdinalIgnoreCase)) seconds = amount * 3600L;
+                else if (unit.StartsWith("дн", StringComparison.OrdinalIgnoreCase)) seconds = amount * 86400L;
 
-                if (unit.StartsWith("мин")) seconds = amount * 60;
-                else if (unit.StartsWith("час")) seconds = amount * 3600;
-                else if (unit.StartsWith("дн")) seconds = amount * 86400;
-
-                return DateTimeOffset.Now.AddSeconds(seconds);
+                return CreateDate(seconds);
             }
 
-            match = Regex.Match(text, @"(?:через|in)\s+(один|одну|два|две|три|четыре|пять|десять|двадцать|тридцать|сорок|пятьдесят|шестьдесят)\s*(минут(?:у|ы)?|час(?:а|ов)?)",
-                RegexOptions.IgnoreCase);
+            match = Regex.Match(text,
+                @"(?:через|in)\s+(один|одну|два|две|три|четыре|пять|десять|двадцать|тридцать|сорок|пятьдесят|шестьдесят)\s*(минут(?:у|ы)?|час(?:а|ов)?)",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
             if (match.Success)
             {
                 var amount = WordNumber(match.Groups[1].Value);
-                var seconds = match.Groups[2].Value.StartsWith("час") ? amount * 3600 : amount * 60;
-                return DateTimeOffset.Now.AddSeconds(seconds);
+                if (amount <= 0)
+                    return null;
+
+                var seconds = match.Groups[2].Value.StartsWith("час", StringComparison.OrdinalIgnoreCase)
+                    ? amount * 3600L
+                    : amount * 60L;
+                return CreateDate(seconds);
             }
 
             return null;
+        }
+
+        private static DateTimeOffset? CreateDate(long seconds)
+        {
+            if (seconds <= 0 || seconds > MaximumDelayDays * 86400L)
+                return null;
+            return DateTimeOffset.Now.AddSeconds(seconds);
         }
 
         private static int WordNumber(string word)
