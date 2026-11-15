@@ -108,6 +108,12 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                 return false;
 
             var analysis = _scenarioAnalyzer.AnalyzeControl(targetState, target.Value, _devices);
+            if (analysis != null && !analysis.IsComplete)
+                throw new InvalidOperationException(
+                    "Не удалось построить полный и однозначный план зависимостей сценария для " +
+                    (string.IsNullOrWhiteSpace(targetState.Description) ? target.WidgetId : targetState.Description) +
+                    ". Проверьте условия и промежуточные переменные сценария; команда не отправлена.");
+
             if (analysis == null || string.IsNullOrEmpty(analysis.ActuatorVariable))
                 return false;
 
