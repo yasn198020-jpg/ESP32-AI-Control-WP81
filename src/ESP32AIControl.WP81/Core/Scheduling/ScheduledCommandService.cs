@@ -18,6 +18,7 @@ namespace ESP32AIControl.WP81.Core.Scheduling
         private readonly ICommandExecutor _executor;
         private readonly object _gate = new object();
         private readonly SemaphoreSlim _saveGate = new SemaphoreSlim(1, 1);
+        private readonly HashSet<string> _mutating = new HashSet<string>(StringComparer.Ordinal);
         private readonly List<ScheduledCommand> _items = new List<ScheduledCommand>();
         private ThreadPoolTimer _timer;
         private bool _loaded;
@@ -70,7 +71,14 @@ namespace ESP32AIControl.WP81.Core.Scheduling
         public async Task UpdateAsync(string id, string command, DateTimeOffset executeAt)
         {
             await EnsureLoadedAsync();
+            if (string.IsNullOrWhiteSpace(command))
+                throw new ArgumentException("Команда для расписания не может быть пустой.", "command");
+
             ScheduledCommand item = null;
+            string previousCommand = null;
+            DateTimeOffset previousExecuteAt = DateTimeOffset.MinValue;
+            string previousStatus = null;
+            string previousError = null;
 
             lock (_gate)
             {
@@ -88,34 +96,39 @@ namespace ESP32AIControl.WP81.Core.Scheduling
                     throw new InvalidOperationException("Завершённую задачу нельзя изменить.");
                 if (item.Status == "Executing")
                     throw new InvalidOperationException("Команда уже выполняется. Изменить её сейчас нельзя.");
-                if (string.IsNullOrWhiteSpace(command))
-                    throw new ArgumentException("Команда для расписания не может быть пустой.", "command");
+                if (!_mutating.Add(id))
+                    throw new InvalidOperationException("Эта задача уже изменяется.");
 
-                var previousCommand = item.Command;
-                var previousExecuteAt = item.ExecuteAt;
-                var previousStatus = item.Status;
-                var previousError = item.LastError;
+                previousCommand = item.Command;
+                previousExecuteAt = item.ExecuteAt;
+                previousStatus = item.Status;
+                previousError = item.LastError;
                 item.Command = command.Trim();
                 item.ExecuteAt = executeAt;
                 item.Status = "Scheduled";
                 item.LastError = null;
+            }
 
-                try
-                {
-                    // Persist while the item is reserved by the same lock.
-                    // SaveAsync takes its snapshot after acquiring the save gate.
-                }
-                catch
+            try
+            {
+                await SaveAsync();
+            }
+            catch
+            {
+                lock (_gate)
                 {
                     item.Command = previousCommand;
                     item.ExecuteAt = previousExecuteAt;
                     item.Status = previousStatus;
                     item.LastError = previousError;
-                    throw;
                 }
+                throw;
+            }
+            finally
+            {
+                lock (_gate) _mutating.Remove(id);
             }
 
-            await SaveAsync();
             RaiseChanged(item);
         }
 
@@ -123,6 +136,7 @@ namespace ESP32AIControl.WP81.Core.Scheduling
         {
             await EnsureLoadedAsync();
             ScheduledCommand item = null;
+            string previousStatus = null;
 
             lock (_gate)
             {
@@ -139,10 +153,27 @@ namespace ESP32AIControl.WP81.Core.Scheduling
                 if (item.Status == "Completed" || item.Status == "Cancelled") return;
                 if (item.Status == "Executing")
                     throw new InvalidOperationException("Команда уже выполняется и не может быть отменена.");
+                if (!_mutating.Add(taskId))
+                    throw new InvalidOperationException("Эта задача уже изменяется.");
+
+                previousStatus = item.Status;
                 item.Status = "Cancelled";
             }
 
-            await SaveAsync();
+            try
+            {
+                await SaveAsync();
+            }
+            catch
+            {
+                lock (_gate) item.Status = previousStatus;
+                throw;
+            }
+            finally
+            {
+                lock (_gate) _mutating.Remove(taskId);
+            }
+
             RaiseChanged(item);
         }
 
@@ -175,7 +206,9 @@ namespace ESP32AIControl.WP81.Core.Scheduling
                     var now = DateTimeOffset.Now;
                     foreach (var item in _items)
                     {
-                        if (item.Status == "Scheduled" && item.ExecuteAt <= now)
+                        if (item.Status == "Scheduled" &&
+                            !_mutating.Contains(item.Id) &&
+                            item.ExecuteAt <= now)
                         {
                             item.Status = "Executing";
                             due.Add(item.Clone());
