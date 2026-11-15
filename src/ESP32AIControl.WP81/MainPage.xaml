@@ -137,6 +137,56 @@
                 </ScrollViewer>
             </PivotItem>
 
+            <!-- 1: Marfa voice screen -->
+            <PivotItem Header="Марфа">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="14,12,14,12">
+                    <StackPanel>
+                        <TextBlock Text="Марфа"
+                                   FontSize="27"
+                                   FontWeight="SemiBold"
+                                   Foreground="#FFF5F5F5"/>
+                        <TextBlock Text="Голосовой помощник ESP32 AI Control"
+                                   FontSize="14"
+                                   Foreground="#FF9E9E9E"
+                                   Margin="0,3,0,14"/>
+                        <Border Background="#FF2B2B2B"
+                                BorderBrush="#FF393B44"
+                                BorderThickness="1"
+                                CornerRadius="12"
+                                Padding="16">
+                            <StackPanel>
+                                <TextBlock Text="Голосовое управление"
+                                           FontSize="19"
+                                           FontWeight="SemiBold"
+                                           Foreground="#FFECEFF1"/>
+                                <TextBlock x:Name="MarfaVoiceResultText"
+                                           Text="Нажмите кнопку и произнесите команду"
+                                           TextWrapping="Wrap"
+                                           Foreground="#FFBDBDBD"
+                                           Margin="0,10,0,12"/>
+                                <Button x:Name="MarfaListenButton"
+                                        Content="🎙 Слушать"
+                                        HorizontalAlignment="Stretch"
+                                        Click="MarfaListenButton_Click"/>
+                            </StackPanel>
+                        </Border>
+                        <Button Content="Настроить голосовые команды"
+                                HorizontalAlignment="Stretch"
+                                Click="NavigateSettings_Click"
+                                Margin="0,12,0,0"/>
+                        <Button Content="Посмотреть команды"
+                                HorizontalAlignment="Stretch"
+                                Click="CommandsNavigation_Click"
+                                Margin="0,8,0,0"/>
+                        <TextBlock Text="В WP81 используется штатное распознавание речи Windows Phone. Непрерывное фоновое пробуждение здесь пока не реализовано."
+                                   TextWrapping="Wrap"
+                                   Foreground="#FF9E9E9E"
+                                   FontSize="12"
+                                   Margin="0,14,0,0"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </PivotItem>
+
             <!-- 1: Commands. This first phase exposes the two existing voice actions. -->
             <PivotItem Header="Команды">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="14,12,14,12">
