@@ -412,6 +412,9 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             {
                 var evaluated = new List<string>();
                 var complete = true;
+                var actionTargets = new HashSet<string>(
+                    rule.Assignments.Select(item => item.Variable),
+                    StringComparer.OrdinalIgnoreCase);
 
                 foreach (var assignment in rule.Assignments)
                 {
@@ -420,6 +423,17 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                         evaluated.Add(assignment.Value);
                         if (assignment.Value == null)
                             complete = false;
+                        continue;
+                    }
+
+                    // Expressions that read a variable also written by this
+                    // same action group depend on interpreter execution order.
+                    // The planner does not emulate sequential side effects, so
+                    // such a rule is intentionally treated as unresolved.
+                    if (ExpressionReferencesAny(assignment.Expression, actionTargets))
+                    {
+                        evaluated.Add(null);
+                        complete = false;
                         continue;
                     }
 
@@ -436,6 +450,32 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                 for (var i = 0; i < rule.Assignments.Count; i++)
                     rule.Assignments[i].Value = complete ? evaluated[i] : null;
             }
+        }
+
+        private static bool ExpressionReferencesAny(
+            ScenarioExpression expression,
+            ISet<string> identifiers)
+        {
+            var variable = expression as ScenarioVariableExpression;
+            if (variable != null)
+                return identifiers.Contains(variable.Name);
+
+            var unary = expression as ScenarioUnaryExpression;
+            if (unary != null)
+                return ExpressionReferencesAny(unary.Expression, identifiers);
+
+            var binary = expression as ScenarioBinaryExpression;
+            if (binary != null)
+                return ExpressionReferencesAny(binary.Left, identifiers) ||
+                       ExpressionReferencesAny(binary.Right, identifiers);
+
+            var call = expression as ScenarioCallExpression;
+            if (call != null)
+                foreach (var argument in call.Arguments)
+                    if (ExpressionReferencesAny(argument, identifiers))
+                        return true;
+
+            return false;
         }
 
         private ScenarioAnalysis FindActuatorPath(
