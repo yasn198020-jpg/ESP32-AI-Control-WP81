@@ -404,7 +404,29 @@
                                    TextWrapping="Wrap"
                                    Foreground="#FFBDBDBD"
                                    Margin="0,4,0,10"/>
-                        <TextBlock Text="Сценарий IoTManager"
+                        <TextBlock Text="Сохранённые сценарии"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   Foreground="#FFECEFF1"
+                                   Margin="0,4,0,4"/>
+                        <ListView x:Name="ScenarioList"
+                                  Height="150"
+                                  SelectionChanged="ScenarioList_SelectionChanged"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,4,0,10">
+                            <Button Content="Новый сценарий"
+                                    Click="NewScenarioButton_Click"
+                                    Margin="0,0,8,0"/>
+                            <Button Content="Удалить выбранный"
+                                    Click="DeleteScenarioButton_Click"/>
+                        </StackPanel>
+                        <TextBox x:Name="ScenarioTitleBox"
+                                 Header="Название сценария"
+                                 Margin="0,2,0,4"/>
+                        <CheckBox x:Name="ScenarioEnabledCheckBox"
+                                  Content="Сценарий активен"
+                                  IsChecked="True"
+                                  Margin="0,4,0,8"/>
+                        <TextBlock Text="Код IoTManager"
                                    FontSize="18"
                                    FontWeight="SemiBold"
                                    Foreground="#FFECEFF1"
