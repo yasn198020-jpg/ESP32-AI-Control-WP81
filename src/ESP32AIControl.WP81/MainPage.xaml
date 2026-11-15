@@ -410,7 +410,10 @@
                                     Click="ImportScenarioButton_Click"
                                     Margin="0,0,8,0"/>
                             <Button Content="Проверить план"
-                                    Click="TestScenarioButton_Click"/>
+                                    Click="TestScenarioButton_Click"
+                                    Margin="0,0,8,0"/>
+                            <Button Content="Очистить поле"
+                                    Click="ClearScenarioButton_Click"/>
                         </StackPanel>
                         <Button Content="Сохранить сценарий"
                                 Click="SaveScenarioButton_Click"
@@ -421,6 +424,18 @@
                                    TextWrapping="Wrap"
                                    Foreground="#FFBDBDBD"
                                    Margin="0,8,0,0"/>
+                        <Border Background="#FF17181D"
+                                BorderBrush="#FF393B44"
+                                BorderThickness="1"
+                                CornerRadius="10"
+                                Padding="10"
+                                Margin="0,8,0,0">
+                            <TextBlock x:Name="ScenarioPlanText"
+                                       Text="Здесь появится результат проверки и список действий."
+                                       TextWrapping="Wrap"
+                                       FontSize="12"
+                                       Foreground="#FFE0E0E0"/>
+                        </Border>
                     </StackPanel>
                 </ScrollViewer>
             </PivotItem>
