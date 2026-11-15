@@ -1332,51 +1332,106 @@ namespace ESP32AIControl.WP81
             if (maximum <= minimum) maximum = minimum + 100;
             var number = ReadWidgetNumber(state.Value, minimum);
             var fraction = Math.Max(0.0, Math.Min(1.0, (number - minimum) / (maximum - minimum)));
+            var config = state.ConfigJson ?? string.Empty;
+            var stroke = ReadWidgetNumber(ReadJsonNumber(config, "stroke").HasValue
+                ? ReadJsonNumber(config, "stroke").Value.ToString(CultureInfo.InvariantCulture)
+                : string.Empty, visual.IsFillGauge ? 7.0 : 20.0);
+            stroke = Math.Max(4.0, Math.Min(24.0, stroke));
+
+            var ringColor = accent;
+            var configuredRing = ReadJsonString(config, visual.IsFillGauge ? "circleColor" : "color");
+            if (!string.IsNullOrWhiteSpace(configuredRing))
+                ringColor = ResolveWidgetColor(configuredRing, number);
 
             if (visual.IsFillGauge)
             {
+                var waveColor = ringColor;
+                var configuredWave = ReadJsonString(config, "waveColor");
+                if (!string.IsNullOrWhiteSpace(configuredWave))
+                    waveColor = ResolveWidgetColor(configuredWave, number);
+
                 var fill = new Ellipse
                 {
                     Width = 64,
                     Height = 64,
                     Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(
-                        (byte)(24 + fraction * 82), accent.R, accent.G, accent.B))
+                        (byte)(24 + fraction * 82), waveColor.R, waveColor.G, waveColor.B))
                 };
                 Canvas.SetLeft(fill, 24);
                 Canvas.SetTop(fill, 24);
                 canvas.Children.Add(fill);
-            }
 
-            var track = new Ellipse
-            {
-                Width = 86,
-                Height = 86,
-                Stroke = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 77, 80, 88)),
-                StrokeThickness = 8,
-                Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0))
-            };
-            Canvas.SetLeft(track, 13);
-            Canvas.SetTop(track, 13);
-            canvas.Children.Add(track);
-
-            if (fraction > 0.001)
-            {
-                var arc = new Polyline
+                var gaugeRing = new Ellipse
                 {
-                    Stroke = new SolidColorBrush(accent),
-                    StrokeThickness = 8
+                    Width = 86,
+                    Height = 86,
+                    Stroke = new SolidColorBrush(ringColor),
+                    StrokeThickness = stroke,
+                    Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0))
                 };
-                var points = new PointCollection();
-                var segments = Math.Max(2, (int)Math.Ceiling(64 * fraction));
-                for (var i = 0; i <= segments; i++)
+                Canvas.SetLeft(gaugeRing, 13);
+                Canvas.SetTop(gaugeRing, 13);
+                canvas.Children.Add(gaugeRing);
+            }
+            else
+            {
+                var semicircle = Regex.IsMatch(config,
+                    "\\\\"semicircle\\\\"\\s*:\\s*(?:\\\\"1\\\\"|1|true)",
+                    RegexOptions.IgnoreCase);
+                if (semicircle)
                 {
-                    var angle = (-90.0 + 360.0 * fraction * i / segments) * Math.PI / 180.0;
-                    points.Add(new Windows.Foundation.Point(
-                        56 + 39 * Math.Cos(angle),
-                        56 + 39 * Math.Sin(angle)));
+                    var track = new Polyline
+                    {
+                        Stroke = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 77, 80, 88)),
+                        StrokeThickness = stroke
+                    };
+                    var trackPoints = new PointCollection();
+                    for (var i = 0; i <= 32; i++)
+                    {
+                        var angle = (180.0 + 180.0 * i / 32.0) * Math.PI / 180.0;
+                        trackPoints.Add(new Windows.Foundation.Point(
+                            56 + 39 * Math.Cos(angle),
+                            56 + 39 * Math.Sin(angle)));
+                    }
+                    track.Points = trackPoints;
+                    canvas.Children.Add(track);
                 }
-                arc.Points = points;
-                canvas.Children.Add(arc);
+                else
+                {
+                    var track = new Ellipse
+                    {
+                        Width = 86,
+                        Height = 86,
+                        Stroke = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 77, 80, 88)),
+                        StrokeThickness = stroke,
+                        Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0))
+                    };
+                    Canvas.SetLeft(track, 13);
+                    Canvas.SetTop(track, 13);
+                    canvas.Children.Add(track);
+                }
+
+                if (fraction > 0.001)
+                {
+                    var arc = new Polyline
+                    {
+                        Stroke = new SolidColorBrush(ringColor),
+                        StrokeThickness = stroke
+                    };
+                    var points = new PointCollection();
+                    var segments = Math.Max(2, (int)Math.Ceiling(64 * fraction));
+                    var startAngle = semicircle ? 180.0 : -90.0;
+                    var sweepAngle = (semicircle ? 180.0 : 360.0) * fraction;
+                    for (var i = 0; i <= segments; i++)
+                    {
+                        var angle = (startAngle + sweepAngle * i / segments) * Math.PI / 180.0;
+                        points.Add(new Windows.Foundation.Point(
+                            56 + 39 * Math.Cos(angle),
+                            56 + 39 * Math.Sin(angle)));
+                    }
+                    arc.Points = points;
+                    canvas.Children.Add(arc);
+                }
             }
 
             var displayValue = visual.IsFillGauge
@@ -1396,6 +1451,14 @@ namespace ESP32AIControl.WP81
             Canvas.SetLeft(valueText, 13);
             Canvas.SetTop(valueText, 42);
             canvas.Children.Add(valueText);
+        }
+
+        private static string ReadJsonString(string json, string name)
+        {
+            var match = Regex.Match(json ?? string.Empty,
+                "\\\\"" + Regex.Escape(name) + "\\\\"\\s*:\\s*\\\\"([^\\\\\\\"]*)\\\\"",
+                RegexOptions.IgnoreCase);
+            return match.Success ? match.Groups[1].Value : string.Empty;
         }
 
         private void RefreshInlineChart(WidgetVisual visual)
