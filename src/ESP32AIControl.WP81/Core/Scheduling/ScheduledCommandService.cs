@@ -490,9 +490,24 @@ namespace ESP32AIControl.WP81.Core.Scheduling
                     serializer.WriteObject(stream, snapshot);
                     var json = System.Text.Encoding.UTF8.GetString(stream.ToArray(), 0, (int)stream.Length);
 
-                    var file = await ApplicationData.Current.LocalFolder.CreateFileAsync(
-                        FileName, CreationCollisionOption.ReplaceExisting);
-                    await FileIO.WriteTextAsync(file, json);
+                    var folder = ApplicationData.Current.LocalFolder;
+                    var temporaryFile = await folder.CreateFileAsync(
+                        FileName + ".tmp", CreationCollisionOption.ReplaceExisting);
+                    await FileIO.WriteTextAsync(temporaryFile, json);
+
+                    StorageFile currentFile = null;
+                    try
+                    {
+                        currentFile = await folder.GetFileAsync(FileName);
+                    }
+                    catch (FileNotFoundException)
+                    {
+                    }
+
+                    if (currentFile != null)
+                        await temporaryFile.MoveAndReplaceAsync(currentFile);
+                    else
+                        await temporaryFile.MoveAsync(folder, FileName, NameCollisionOption.ReplaceExisting);
                 }
             }
             finally
