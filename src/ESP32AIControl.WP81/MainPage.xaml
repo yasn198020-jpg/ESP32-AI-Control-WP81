@@ -193,7 +193,8 @@
                                 HorizontalAlignment="Stretch"
                                 Click="NavigateSettings_Click"
                                 Margin="0,4,0,8"/>
-                        <Button Content="Произнести команду"
+                        <Button x:Name="CommandVoiceButton"
+                                Content="Произнести команду"
                                 HorizontalAlignment="Stretch"
                                 Click="VoiceButton_Click"/>
                         <TextBlock x:Name="VoiceStatusText"
