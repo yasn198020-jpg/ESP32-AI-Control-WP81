@@ -36,8 +36,12 @@ namespace ESP32AIControl.WP81
         private readonly RtfHistoryExporter _exporter;
         private readonly Esp32CommandExecutor _commandExecutor;
         private readonly ScheduledCommandService _scheduler;
+        private readonly ScenarioProfileStore _scenarioStore;
+        private readonly List<ScenarioProfile> _scenarioProfiles = new List<ScenarioProfile>();
         private readonly Wp81VoiceCommandService _voice;
         private VoiceCommandParser _voiceParser;
+        private string _selectedScenarioProfileId;
+        private bool _refreshingScenarioList;
 
         private readonly Dictionary<string, WidgetVisual> _visuals =
             new Dictionary<string, WidgetVisual>();
@@ -74,6 +78,7 @@ namespace ESP32AIControl.WP81
             _exporter = new RtfHistoryExporter();
             _commandExecutor = new Esp32CommandExecutor(_mqtt, _devices);
             _scheduler = new ScheduledCommandService(_commandExecutor);
+            _scenarioStore = new ScenarioProfileStore();
             _voice = new Wp81VoiceCommandService();
             _voiceParser = new VoiceCommandParser(string.Empty, string.Empty);
 
@@ -96,8 +101,8 @@ namespace ESP32AIControl.WP81
             {
                 _appSettings = await _settingsStore.LoadAsync();
                 ApplySettingsToMqtt();
-                _commandExecutor.SetScenarioScript(_appSettings.IoTManagerScenario);
                 ApplySettingsToUi();
+                await LoadScenarioProfilesAsync();
                 await _scheduler.InitializeAsync();
 
                 GraphFrom.Date = DateTimeOffset.Now.AddDays(-1);
@@ -289,7 +294,7 @@ namespace ESP32AIControl.WP81
                 _voiceParser = new VoiceCommandParser(
                     _appSettings.VoiceOpenCommand,
                     _appSettings.VoiceCloseCommand);
-                _commandExecutor.SetScenarioScript(_appSettings.IoTManagerScenario);
+                ApplyScenarioProfilesToEngine();
 
                 await _settingsStore.SaveAsync(_appSettings);
                 await CleanupHistoryAsync();
@@ -393,11 +398,11 @@ namespace ESP32AIControl.WP81
 
                 var scenario = await Windows.Storage.FileIO.ReadTextAsync(file);
                 ScenarioTextBox.Text = scenario;
-                _appSettings.IoTManagerScenario = scenario;
-                _commandExecutor.SetScenarioScript(scenario);
-                await _settingsStore.SaveAsync(_appSettings);
+                if (string.IsNullOrWhiteSpace(ScenarioTitleBox.Text))
+                    ScenarioTitleBox.Text = System.IO.Path.GetFileNameWithoutExtension(file.Name);
 
-                ScenarioStatus.Text = "Сценарий IoTManager загружен.";
+                ScenarioPlanText.Text = "Файл загружен в редактор. Проверьте содержимое и нажмите «Сохранить сценарий».";
+                ScenarioStatus.Text = "Сценарий загружен в редактор; сохранение ещё не выполнено.";
                 Log("SCENARIO IMPORT: " + file.Name);
             }
             catch (Exception ex)
@@ -435,12 +440,14 @@ namespace ESP32AIControl.WP81
                 ScenarioStatus.Text = "Проверка завершена. Найдено правил: " +
                     ruleCount.ToString(CultureInfo.InvariantCulture) + ".";
                 Log("SCENARIO TEST COMPLETE: rules=" + ruleCount.ToString(CultureInfo.InvariantCulture));
+                ApplyScenarioProfilesToEngine();
             }
             catch (Exception ex)
             {
                 ScenarioPlanText.Text = "Проверка не выполнена: " + ex.Message;
                 ScenarioStatus.Text = "Ошибка проверки: " + ex.Message;
                 Log("SCENARIO TEST ERROR: " + ex.Message);
+                ApplyScenarioProfilesToEngine();
             }
         }
 
@@ -455,18 +462,210 @@ namespace ESP32AIControl.WP81
         {
             try
             {
-                _appSettings.IoTManagerScenario = ScenarioTextBox.Text ?? string.Empty;
-                _commandExecutor.SetScenarioScript(_appSettings.IoTManagerScenario);
+                var source = ScenarioTextBox.Text ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(source))
+                    throw new InvalidOperationException("Содержимое сценария пустое.");
+
+                var title = (ScenarioTitleBox.Text ?? string.Empty).Trim();
+                if (string.IsNullOrWhiteSpace(title))
+                    title = "Сценарий " + (_scenarioProfiles.Count + 1).ToString(CultureInfo.InvariantCulture);
+
+                ScenarioProfile profile = null;
+                if (!string.IsNullOrEmpty(_selectedScenarioProfileId))
+                    profile = _scenarioProfiles.FirstOrDefault(delegate(ScenarioProfile item)
+                    {
+                        return string.Equals(item.Id, _selectedScenarioProfileId, StringComparison.Ordinal);
+                    });
+
+                var isNew = profile == null;
+                if (isNew)
+                {
+                    profile = new ScenarioProfile
+                    {
+                        Id = Guid.NewGuid().ToString("N"),
+                        Enabled = true
+                    };
+                    _scenarioProfiles.Add(profile);
+                }
+
+                profile.Title = title;
+                profile.Source = source;
+                profile.Enabled = ScenarioEnabledCheckBox.IsChecked == true;
+                _selectedScenarioProfileId = profile.Id;
+
+                await _scenarioStore.SaveAsync(_scenarioProfiles);
+                ApplyScenarioProfilesToEngine();
                 await _settingsStore.SaveAsync(_appSettings);
-                ScenarioStatus.Text = "Сценарий сохранён.";
-                Log("SCENARIO SAVED. Rules: " +
-                    _commandExecutor.GetScenarioRuleCount().ToString(CultureInfo.InvariantCulture));
+                RefreshScenarioProfilesUi();
+
+                ScenarioStatus.Text = (isNew ? "Сценарий добавлен: " : "Сценарий обновлён: ") + title +
+                    (profile.Enabled ? " (активен)." : " (выключен).");
+                Log("SCENARIO " + (isNew ? "ADDED: " : "UPDATED: ") + title +
+                    "; active rules=" + _commandExecutor.GetScenarioRuleCount().ToString(CultureInfo.InvariantCulture));
             }
             catch (Exception ex)
             {
                 ScenarioStatus.Text = "Ошибка сохранения: " + ex.Message;
                 Log("SCENARIO SAVE ERROR: " + ex.Message);
             }
+        }
+
+        private async void DeleteScenarioButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(_selectedScenarioProfileId))
+                    throw new InvalidOperationException("Сначала выберите сохранённый сценарий.");
+
+                var profile = _scenarioProfiles.FirstOrDefault(delegate(ScenarioProfile item)
+                {
+                    return string.Equals(item.Id, _selectedScenarioProfileId, StringComparison.Ordinal);
+                });
+                if (profile == null)
+                    throw new InvalidOperationException("Сценарий уже удалён.");
+
+                var dialog = new Windows.UI.Popups.MessageDialog(
+                    "Удалить сценарий «" + profile.Title + "»?");
+                dialog.Commands.Add(new Windows.UI.Popups.UICommand("Удалить"));
+                dialog.Commands.Add(new Windows.UI.Popups.UICommand("Отмена"));
+                dialog.DefaultCommandIndex = 1;
+                dialog.CancelCommandIndex = 1;
+                var answer = await dialog.ShowAsync();
+                if (answer == null || answer.Label != "Удалить")
+                    return;
+
+                _scenarioProfiles.Remove(profile);
+                _selectedScenarioProfileId = null;
+                await _scenarioStore.SaveAsync(_scenarioProfiles);
+                ApplyScenarioProfilesToEngine();
+                await _settingsStore.SaveAsync(_appSettings);
+                RefreshScenarioProfilesUi();
+                ClearScenarioEditor();
+                ScenarioStatus.Text = "Сценарий удалён.";
+                Log("SCENARIO DELETED: " + profile.Title);
+            }
+            catch (Exception ex)
+            {
+                ScenarioStatus.Text = "Не удалось удалить сценарий: " + ex.Message;
+                Log("SCENARIO DELETE ERROR: " + ex.Message);
+            }
+        }
+
+        private void NewScenarioButton_Click(object sender, RoutedEventArgs e)
+        {
+            _selectedScenarioProfileId = null;
+            _refreshingScenarioList = true;
+            ScenarioList.SelectedIndex = -1;
+            _refreshingScenarioList = false;
+            ClearScenarioEditor();
+            ScenarioStatus.Text = "Новый сценарий. Введите название и код, затем сохраните.";
+        }
+
+        private void ClearScenarioButton_Click(object sender, RoutedEventArgs e)
+        {
+            NewScenarioButton_Click(sender, e);
+        }
+
+        private void ClearScenarioEditor()
+        {
+            ScenarioTitleBox.Text = string.Empty;
+            ScenarioTextBox.Text = string.Empty;
+            ScenarioEnabledCheckBox.IsChecked = true;
+            ScenarioPlanText.Text = "Новый сценарий ещё не сохранён.";
+        }
+
+        private void ScenarioList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_refreshingScenarioList)
+                return;
+
+            var index = ScenarioList.SelectedIndex;
+            if (index < 0 || index >= _scenarioProfiles.Count)
+                return;
+
+            var profile = _scenarioProfiles[index];
+            _selectedScenarioProfileId = profile.Id;
+            LoadScenarioProfileIntoEditor(profile);
+        }
+
+        private void LoadScenarioProfileIntoEditor(ScenarioProfile profile)
+        {
+            if (profile == null)
+                return;
+
+            ScenarioTitleBox.Text = profile.Title ?? string.Empty;
+            ScenarioTextBox.Text = profile.Source ?? string.Empty;
+            ScenarioEnabledCheckBox.IsChecked = profile.Enabled;
+            ScenarioPlanText.Text = "Выбран сценарий «" + profile.Title + "». Нажмите «Проверить план» для анализа.";
+            ScenarioStatus.Text = profile.Enabled ? "Сценарий активен." : "Сценарий выключен.";
+        }
+
+        private void RefreshScenarioProfilesUi()
+        {
+            _refreshingScenarioList = true;
+            ScenarioList.Items.Clear();
+
+            var selectedIndex = -1;
+            for (var i = 0; i < _scenarioProfiles.Count; i++)
+            {
+                var profile = _scenarioProfiles[i];
+                ScenarioList.Items.Add((profile.Enabled ? "● " : "○ ") +
+                    (string.IsNullOrWhiteSpace(profile.Title) ? "Без названия" : profile.Title));
+                if (!string.IsNullOrEmpty(_selectedScenarioProfileId) &&
+                    string.Equals(profile.Id, _selectedScenarioProfileId, StringComparison.Ordinal))
+                    selectedIndex = i;
+            }
+
+            ScenarioList.SelectedIndex = selectedIndex;
+            _refreshingScenarioList = false;
+
+            if (selectedIndex >= 0)
+                LoadScenarioProfileIntoEditor(_scenarioProfiles[selectedIndex]);
+        }
+
+        private async Task LoadScenarioProfilesAsync()
+        {
+            var loaded = await _scenarioStore.LoadAsync();
+            _scenarioProfiles.Clear();
+
+            foreach (var profile in loaded)
+            {
+                if (profile == null || string.IsNullOrWhiteSpace(profile.Id) ||
+                    string.IsNullOrWhiteSpace(profile.Source))
+                    continue;
+                _scenarioProfiles.Add(profile.Clone());
+            }
+
+            // Migrate the former single-script setting without losing the user's existing scenario.
+            if (_scenarioProfiles.Count == 0 && !string.IsNullOrWhiteSpace(_appSettings.IoTManagerScenario))
+            {
+                _scenarioProfiles.Add(new ScenarioProfile
+                {
+                    Id = Guid.NewGuid().ToString("N"),
+                    Title = "Основной сценарий",
+                    Source = _appSettings.IoTManagerScenario,
+                    Enabled = true
+                });
+                await _scenarioStore.SaveAsync(_scenarioProfiles);
+            }
+
+            _selectedScenarioProfileId = _scenarioProfiles.Count > 0
+                ? _scenarioProfiles[0].Id
+                : null;
+            ApplyScenarioProfilesToEngine();
+            RefreshScenarioProfilesUi();
+        }
+
+        private void ApplyScenarioProfilesToEngine()
+        {
+            var activeScripts = new List<string>();
+            foreach (var profile in _scenarioProfiles)
+                if (profile.Enabled && !string.IsNullOrWhiteSpace(profile.Source))
+                    activeScripts.Add(profile.Source.Trim());
+
+            _appSettings.IoTManagerScenario = string.Join(
+                Environment.NewLine + Environment.NewLine, activeScripts);
+            _commandExecutor.SetScenarioScript(_appSettings.IoTManagerScenario);
         }
 
         private string LogScenarioPlan(string name, string command)
