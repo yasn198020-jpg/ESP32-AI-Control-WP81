@@ -107,12 +107,16 @@ namespace ESP32AIControl.WP81.Core.Voice
                     return null;
 
                 var unit = match.Groups[2].Value;
-                long seconds = amount;
-                if (unit.StartsWith("мин", StringComparison.OrdinalIgnoreCase)) seconds = amount * 60L;
-                else if (unit.StartsWith("час", StringComparison.OrdinalIgnoreCase)) seconds = amount * 3600L;
-                else if (unit.StartsWith("дн", StringComparison.OrdinalIgnoreCase)) seconds = amount * 86400L;
+                long multiplier = 1L;
+                if (unit.StartsWith("мин", StringComparison.OrdinalIgnoreCase)) multiplier = 60L;
+                else if (unit.StartsWith("час", StringComparison.OrdinalIgnoreCase)) multiplier = 3600L;
+                else if (unit.StartsWith("дн", StringComparison.OrdinalIgnoreCase)) multiplier = 86400L;
 
-                return CreateDate(seconds);
+                var maximumSeconds = MaximumDelayDays * 86400L;
+                if (amount > maximumSeconds / multiplier)
+                    return null;
+
+                return CreateDate(amount * multiplier);
             }
 
             match = Regex.Match(text,
