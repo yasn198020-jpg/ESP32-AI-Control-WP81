@@ -68,6 +68,9 @@ namespace ESP32AIControl.WP81.Core.Voice
 
         public string ResolveCommand(string phrase, out string reason)
         {
+            _selectedAmbiguousCommands = new List<string>();
+            _selectionIndex = 0;
+            LastAmbiguousOptions = new List<VoiceTargetOption>();
             return ResolveSingleCommand(phrase, out reason);
         }
 
