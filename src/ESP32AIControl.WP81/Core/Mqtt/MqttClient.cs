@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Windows.System.Threading;
@@ -14,6 +15,9 @@ namespace ESP32AIControl.WP81.Core.Mqtt
         private MqttPacketReader _reader;
         private ushort _packetId = 1;
         private readonly object _packetIdGate = new object();
+        private readonly object _publishAckGate = new object();
+        private readonly Dictionary<ushort, TaskCompletionSource<bool>> _pendingPublishAcks =
+            new Dictionary<ushort, TaskCompletionSource<bool>>();
         private bool _running;
         private int _pingOutstanding;
         private long _pingSentUtcTicks;
@@ -102,7 +106,59 @@ namespace ESP32AIControl.WP81.Core.Mqtt
         public async Task PublishAsync(string topic, string payload, byte qos, bool retain)
         {
             EnsureConnected();
-            await WriteAsync(MqttPacketWriter.PublishPacket(topic, payload, qos, retain, NextPacketId()));
+            if (qos > 1)
+                throw new ArgumentOutOfRangeException("qos", "Only MQTT QoS 0 and 1 are supported.");
+
+            var packetId = qos == 0 ? (ushort)0 : NextPacketId();
+            TaskCompletionSource<bool> acknowledgement = null;
+            if (qos == 1)
+            {
+                acknowledgement = new TaskCompletionSource<bool>();
+                lock (_publishAckGate)
+                {
+                    while (_pendingPublishAcks.ContainsKey(packetId))
+                        packetId = NextPacketId();
+                    _pendingPublishAcks.Add(packetId, acknowledgement);
+                }
+            }
+
+            try
+            {
+                await WriteAsync(MqttPacketWriter.PublishPacket(topic, payload, qos, retain, packetId));
+                if (acknowledgement == null)
+                    return;
+
+                var completed = await Task.WhenAny(
+                    acknowledgement.Task,
+                    Task.Delay(TimeSpan.FromSeconds(15)));
+
+                if (!object.ReferenceEquals(completed, acknowledgement.Task) &&
+                    !acknowledgement.Task.IsCompleted)
+                {
+                    // Do not report a QoS 1 publish as successful when the broker
+                    // never acknowledged it. Close the uncertain session so the
+                    // service follows its normal reconnect path.
+                    Close();
+                    throw new TimeoutException("MQTT PUBACK was not received within 15 seconds.");
+                }
+
+                if (!await acknowledgement.Task)
+                    throw new InvalidOperationException("MQTT publish was interrupted before PUBACK.");
+            }
+            catch
+            {
+                if (acknowledgement != null)
+                {
+                    lock (_publishAckGate)
+                    {
+                        TaskCompletionSource<bool> current;
+                        if (_pendingPublishAcks.TryGetValue(packetId, out current) &&
+                            object.ReferenceEquals(current, acknowledgement))
+                            _pendingPublishAcks.Remove(packetId);
+                    }
+                }
+                throw;
+            }
         }
 
         public async Task DisconnectAsync()
@@ -156,6 +212,7 @@ namespace ESP32AIControl.WP81.Core.Mqtt
                     break;
 
                 case 4:
+                    HandlePubAck(packet);
                     break;
             }
         }
@@ -192,6 +249,23 @@ namespace ESP32AIControl.WP81.Core.Mqtt
             var handler = MessageReceived;
             if (handler != null)
                 handler(this, new MqttMessageEventArgs(topic, payload, qos));
+        }
+
+        private void HandlePubAck(MqttPacket packet)
+        {
+            if (packet.Body.Length < 2)
+                return;
+
+            var id = (ushort)((packet.Body[0] << 8) | packet.Body[1]);
+            TaskCompletionSource<bool> completion = null;
+            lock (_publishAckGate)
+            {
+                if (_pendingPublishAcks.TryGetValue(id, out completion))
+                    _pendingPublishAcks.Remove(id);
+            }
+
+            if (completion != null)
+                completion.TrySetResult(true);
         }
 
         private void HandleSubAck(MqttPacket packet)
@@ -300,6 +374,17 @@ namespace ESP32AIControl.WP81.Core.Mqtt
             var completion = _subscribeCompletion;
             if (completion != null)
                 completion.TrySetResult(false);
+
+            List<TaskCompletionSource<bool>> interruptedPublishes =
+                new List<TaskCompletionSource<bool>>();
+            lock (_publishAckGate)
+            {
+                foreach (var pending in _pendingPublishAcks.Values)
+                    interruptedPublishes.Add(pending);
+                _pendingPublishAcks.Clear();
+            }
+            foreach (var pending in interruptedPublishes)
+                pending.TrySetResult(false);
 
             try { if (_writer != null) _writer.DetachStream(); } catch { }
             try { if (_socket != null) _socket.Dispose(); } catch { }
