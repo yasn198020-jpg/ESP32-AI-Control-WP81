@@ -2418,7 +2418,7 @@ namespace ESP32AIControl.WP81
                     {
                         var confirmationText = parsed.ConfirmationText;
                         if (string.IsNullOrWhiteSpace(confirmationText))
-                            confirmationText = "Выполнить команды:\\n" + string.Join("\\n", commands.ToArray());
+                            confirmationText = "Выполнить команды:\n" + string.Join("\n", commands.ToArray());
                         var dialog = new Windows.UI.Popups.MessageDialog(
                             confirmationText,
                             "Подтверждение Марфы");
