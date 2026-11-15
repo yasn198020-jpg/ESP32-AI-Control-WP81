@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Windows.UI.Core;
+using Windows.ApplicationModel.DataTransfer;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Controls.Primitives;
@@ -232,10 +233,20 @@ namespace ESP32AIControl.WP81
 
         private void CopyLogButton_Click(object sender, RoutedEventArgs e)
         {
-            var package = new Windows.ApplicationModel.DataTransfer.DataPackage();
-            package.SetText(LogText.Text ?? string.Empty);
-            Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(package);
-            JournalStatusText.Text = "Журнал скопирован в буфер обмена.";
+            var manager = DataTransferManager.GetForCurrentView();
+            manager.DataRequested += ShareLog_DataRequested;
+            DataTransferManager.ShowShareUI();
+            JournalStatusText.Text = "Выберите приложение для отправки журнала.";
+        }
+
+        private void ShareLog_DataRequested(DataTransferManager sender, DataRequestedEventArgs args)
+        {
+            sender.DataRequested -= ShareLog_DataRequested;
+
+            var request = args.Request;
+            request.Data.Properties.Title = "Журнал ESP32 AI Control";
+            request.Data.Properties.Description = "Журнал событий приложения";
+            request.Data.SetText(LogText.Text ?? string.Empty);
         }
 
         private async void ConnectButton_Click(object sender, RoutedEventArgs e)
@@ -2372,8 +2383,20 @@ namespace ESP32AIControl.WP81
             var separator = target.IndexOf('/');
             if (separator <= 0 || separator >= target.Length - 1 ||
                 target.IndexOf('/', separator + 1) >= 0 ||
-                target.Any(char.IsWhiteSpace) || string.IsNullOrWhiteSpace(value))
+                ContainsWhitespace(target) || string.IsNullOrWhiteSpace(value))
                 throw new InvalidOperationException("Укажите ID устройства, ID виджета и непустое значение: device/widget=value");
+        }
+
+        private static bool ContainsWhitespace(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return false;
+
+            for (var i = 0; i < value.Length; i++)
+                if (char.IsWhiteSpace(value[i]))
+                    return true;
+
+            return false;
         }
 
         private async void VoiceButton_Click(object sender, RoutedEventArgs e)
