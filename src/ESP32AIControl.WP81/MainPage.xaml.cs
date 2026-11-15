@@ -618,9 +618,21 @@ namespace ESP32AIControl.WP81
 
         private async Task LoadScenarioProfilesAsync()
         {
-            var loaded = await _scenarioStore.LoadAsync();
-            _scenarioProfiles.Clear();
+            IList<ScenarioProfile> loaded;
+            try
+            {
+                loaded = await _scenarioStore.LoadAsync();
+            }
+            catch (Exception ex)
+            {
+                // A damaged profile file must not prevent MQTT, history or the rest
+                // of the application from starting. Keep the legacy setting as fallback.
+                loaded = new List<ScenarioProfile>();
+                ScenarioStatus.Text = "Не удалось прочитать список сценариев: " + ex.Message;
+                Log("SCENARIO LOAD ERROR: " + ex.Message);
+            }
 
+            _scenarioProfiles.Clear();
             foreach (var profile in loaded)
             {
                 if (profile == null || string.IsNullOrWhiteSpace(profile.Id) ||
@@ -640,6 +652,7 @@ namespace ESP32AIControl.WP81
                     Enabled = true
                 });
                 await _scenarioStore.SaveAsync(_scenarioProfiles);
+                ScenarioStatus.Text = "Старый сценарий перенесён в новый список.";
             }
 
             _selectedScenarioProfileId = _scenarioProfiles.Count > 0
