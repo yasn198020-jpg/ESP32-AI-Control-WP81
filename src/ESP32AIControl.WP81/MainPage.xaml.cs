@@ -1376,7 +1376,7 @@ namespace ESP32AIControl.WP81
             else
             {
                 var semicircle = Regex.IsMatch(config,
-                    "\\\\"semicircle\\\\"\\s*:\\s*(?:\\\\"1\\\\"|1|true)",
+                    "\"semicircle\"\\s*:\\s*(?:\"1\"|1|true)",
                     RegexOptions.IgnoreCase);
                 if (semicircle)
                 {
@@ -1455,9 +1455,8 @@ namespace ESP32AIControl.WP81
 
         private static string ReadJsonString(string json, string name)
         {
-            var match = Regex.Match(json ?? string.Empty,
-                "\\\\"" + Regex.Escape(name) + "\\\\"\\s*:\\s*\\\\"([^\\\\\\\"]*)\\\\"",
-                RegexOptions.IgnoreCase);
+            var pattern = "\"" + Regex.Escape(name) + "\"\\s*:\\s*\"([^\"]*)\"";
+            var match = Regex.Match(json ?? string.Empty, pattern, RegexOptions.IgnoreCase);
             return match.Success ? match.Groups[1].Value : string.Empty;
         }
 
