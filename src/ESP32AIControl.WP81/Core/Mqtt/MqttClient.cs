@@ -13,7 +13,10 @@ namespace ESP32AIControl.WP81.Core.Mqtt
         private DataWriter _writer;
         private MqttPacketReader _reader;
         private ushort _packetId = 1;
+        private readonly object _packetIdGate = new object();
         private bool _running;
+        private int _pingOutstanding;
+        private long _pingSentUtcTicks;
         private ushort _pendingSubscribeId;
         private TaskCompletionSource<bool> _subscribeCompletion;
         private Task _receiveLoopTask;
@@ -148,6 +151,8 @@ namespace ESP32AIControl.WP81.Core.Mqtt
 
                 case 13:
                     // PINGRESP: the keep-alive exchange is complete.
+                    Interlocked.Exchange(ref _pingOutstanding, 0);
+                    Interlocked.Exchange(ref _pingSentUtcTicks, 0);
                     break;
 
                 case 4:
@@ -205,12 +210,31 @@ namespace ESP32AIControl.WP81.Core.Mqtt
         private async void KeepAliveTick(ThreadPoolTimer timer)
         {
             if (!_running) return;
+
+            if (Interlocked.CompareExchange(ref _pingOutstanding, 0, 0) != 0)
+            {
+                var sentAt = Interlocked.Read(ref _pingSentUtcTicks);
+                if (sentAt > 0 &&
+                    DateTime.UtcNow.Ticks - sentAt >= TimeSpan.FromSeconds(50).Ticks)
+                {
+                    // A silent/broken TCP connection may still accept writes.
+                    // Require PINGRESP so the service can reconnect instead of
+                    // remaining stuck in Connected forever.
+                    Close();
+                }
+                return;
+            }
+
+            Interlocked.Exchange(ref _pingSentUtcTicks, DateTime.UtcNow.Ticks);
+            Interlocked.Exchange(ref _pingOutstanding, 1);
             try
             {
                 await WriteAsync(MqttPacketWriter.PingReq());
             }
             catch
             {
+                Interlocked.Exchange(ref _pingOutstanding, 0);
+                Interlocked.Exchange(ref _pingSentUtcTicks, 0);
                 Close();
             }
         }
@@ -236,10 +260,15 @@ namespace ESP32AIControl.WP81.Core.Mqtt
 
         private ushort NextPacketId()
         {
-            if (_packetId == 0)
-                _packetId = 1;
+            lock (_packetIdGate)
+            {
+                if (_packetId == 0)
+                    _packetId = 1;
 
-            return _packetId++;
+                var id = _packetId;
+                _packetId = id == ushort.MaxValue ? (ushort)1 : (ushort)(id + 1);
+                return id;
+            }
         }
 
         private void EnsureConnected()
@@ -260,6 +289,8 @@ namespace ESP32AIControl.WP81.Core.Mqtt
         private void Close()
         {
             _running = false;
+            Interlocked.Exchange(ref _pingOutstanding, 0);
+            Interlocked.Exchange(ref _pingSentUtcTicks, 0);
             if (_keepAliveTimer != null)
             {
                 try { _keepAliveTimer.Cancel(); } catch { }
