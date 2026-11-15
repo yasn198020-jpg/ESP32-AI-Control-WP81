@@ -77,6 +77,11 @@ namespace ESP32AIControl.WP81.Core.Scenarios
 
         public ScenarioPlan BuildPlan(string command)
         {
+            if (_scenarioAnalyzer != null && _scenarioAnalyzer.HasUnsupportedRules)
+                throw new InvalidOperationException(
+                    "В активном сценарии есть условие, которое планировщик зависимостей не может безопасно разобрать. " +
+                    "Команда не отправлена, чтобы не пропустить обязательное действие.");
+
             var plan = new ScenarioPlan();
             var commands = SplitCommands(command);
 
