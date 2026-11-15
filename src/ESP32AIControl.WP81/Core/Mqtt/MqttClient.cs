@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Windows.System.Threading;
 using Windows.Networking.Sockets;
 using Windows.Storage.Streams;
 
@@ -16,6 +17,7 @@ namespace ESP32AIControl.WP81.Core.Mqtt
         private ushort _pendingSubscribeId;
         private TaskCompletionSource<bool> _subscribeCompletion;
         private Task _receiveLoopTask;
+        private ThreadPoolTimer _keepAliveTimer;
         private readonly SemaphoreSlim _writeGate = new SemaphoreSlim(1, 1);
 
         public event EventHandler<MqttMessageEventArgs> MessageReceived;
@@ -50,6 +52,10 @@ namespace ESP32AIControl.WP81.Core.Mqtt
 
                 _running = true;
                 SetState(MqttConnectionState.Connected);
+                // MQTT 3.1.1 keep-alive is 60 seconds in CONNECT. Send PINGREQ
+                // well before the broker deadline so an idle dashboard stays connected.
+                _keepAliveTimer = ThreadPoolTimer.CreatePeriodicTimer(
+                    KeepAliveTick, TimeSpan.FromSeconds(25));
                 _receiveLoopTask = ReceiveLoopAsync();
             }
             catch
@@ -135,6 +141,7 @@ namespace ESP32AIControl.WP81.Core.Mqtt
                     break;
 
                 case 13:
+                    // PINGRESP: the keep-alive exchange is complete.
                     break;
 
                 case 4:
@@ -189,6 +196,19 @@ namespace ESP32AIControl.WP81.Core.Mqtt
             _subscribeCompletion.TrySetResult(granted != 0x80);
         }
 
+        private async void KeepAliveTick(ThreadPoolTimer timer)
+        {
+            if (!_running) return;
+            try
+            {
+                await WriteAsync(MqttPacketWriter.PingReq());
+            }
+            catch
+            {
+                Close();
+            }
+        }
+
         private async Task WriteAsync(byte[] bytes)
         {
             await _writeGate.WaitAsync();
@@ -224,6 +244,7 @@ namespace ESP32AIControl.WP81.Core.Mqtt
 
         private void SetState(MqttConnectionState state)
         {
+            if (State == state) return;
             State = state;
             var handler = ConnectionStateChanged;
             if (handler != null)
@@ -233,6 +254,11 @@ namespace ESP32AIControl.WP81.Core.Mqtt
         private void Close()
         {
             _running = false;
+            if (_keepAliveTimer != null)
+            {
+                try { _keepAliveTimer.Cancel(); } catch { }
+                _keepAliveTimer = null;
+            }
 
             var completion = _subscribeCompletion;
             if (completion != null)
