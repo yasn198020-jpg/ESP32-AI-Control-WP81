@@ -232,8 +232,8 @@ namespace ESP32AIControl.WP81.Core.Network
                     var array = JsonArray.Parse(text);
                     for (uint i = 0; i < array.Count; i++)
                     {
-                        if (array[i].ValueType == JsonValueType.Object)
-                            AcceptObject(array[i].GetObject(), senderIp);
+                        if (array[(int)i].ValueType == JsonValueType.Object)
+                            AcceptObject(array[(int)i].GetObject(), senderIp);
                     }
                 }
                 else
@@ -296,8 +296,8 @@ namespace ESP32AIControl.WP81.Core.Network
                 {
                     for (uint i = 0; i < array.Count; i++)
                     {
-                        if (array[i].ValueType != JsonValueType.Object) continue;
-                        var item = array[i].GetObject();
+                        if (array[(int)i].ValueType != JsonValueType.Object) continue;
+                        var item = array[(int)i].GetObject();
                         DateTimeOffset lastSeen;
                         if (!DateTimeOffset.TryParse(ReadString(item, "lastSeenAt"),
                             CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out lastSeen))
