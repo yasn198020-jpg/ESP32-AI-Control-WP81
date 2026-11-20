@@ -627,42 +627,108 @@ namespace ESP32AIControl.WP81
             UpdateNavigationState();
         }
 
+        private Popup _navigationPopup;
+
         private void MenuButton_Click(object sender, RoutedEventArgs e)
         {
-            var menu = new MenuFlyout();
+            if (_navigationPopup != null && _navigationPopup.IsOpen)
+            {
+                _navigationPopup.IsOpen = false;
+                return;
+            }
 
-            menu.Items.Add(new MenuFlyoutItem { Text = "ОСНОВНЫЕ РАЗДЕЛЫ", IsEnabled = false });
-            AddMenuItem(menu, "Главная", delegate { ShowSection(0); });
-            AddMenuItem(menu, "История и графики", delegate { ShowSection(1); });
-            AddMenuItem(menu, "Отложенные команды", delegate { ShowSection(2); });
+            var items = new StackPanel { Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 36, 37, 42)) };
+            AddPopupMenuHeader(items, "ОСНОВНЫЕ РАЗДЕЛЫ");
+            AddPopupMenuItem(items, "Главная", delegate { ShowSection(0); });
+            AddPopupMenuItem(items, "История и графики", delegate { ShowSection(1); });
+            AddPopupMenuItem(items, "Отложенные команды", delegate { ShowSection(2); });
 
-            menu.Items.Add(new MenuFlyoutSeparator());
-            menu.Items.Add(new MenuFlyoutItem { Text = "ОБСЛУЖИВАНИЕ", IsEnabled = false });
-            AddSettingsMenuItem(menu, "Сценарии ESP32 / IoTManager", 4);
-            AddSettingsMenuItem(menu, "Автосценарии", 5);
-            AddSettingsMenuItem(menu, "Журнал", 6);
-            AddMenuItem(menu, "UDP устройства", ShowUdpDevicesDialog);
+            AddPopupMenuSeparator(items);
+            AddPopupMenuHeader(items, "ОБСЛУЖИВАНИЕ");
+            AddPopupSettingsItem(items, "Сценарии ESP32 / IoTManager", 4);
+            AddPopupSettingsItem(items, "Автосценарии", 5);
+            AddPopupSettingsItem(items, "Журнал", 6);
+            AddPopupMenuItem(items, "UDP устройства", ShowUdpDevicesDialog);
 
-            menu.Items.Add(new MenuFlyoutSeparator());
-            menu.Items.Add(new MenuFlyoutItem { Text = "НАСТРОЙКИ", IsEnabled = false });
-            AddSettingsMenuItem(menu, "MQTT подключение", 0);
-            AddSettingsMenuItem(menu, "Хранение истории", 1);
-            AddSettingsMenuItem(menu, "Сохранённые профили", 2);
-            AddSettingsMenuItem(menu, "Голос и команды", 3);
+            AddPopupMenuSeparator(items);
+            AddPopupMenuHeader(items, "НАСТРОЙКИ");
+            AddPopupSettingsItem(items, "MQTT подключение", 0);
+            AddPopupSettingsItem(items, "Хранение истории", 1);
+            AddPopupSettingsItem(items, "Сохранённые профили", 2);
+            AddPopupSettingsItem(items, "Голос и команды", 3);
 
-            menu.ShowAt(MenuButton);
+            var scroll = new ScrollViewer
+            {
+                Content = items,
+                MaxHeight = 560,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
+            };
+            var frame = new Border
+            {
+                Width = 300,
+                MaxHeight = 570,
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 36, 37, 42)),
+                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 80, 80, 80)),
+                BorderThickness = new Thickness(1),
+                Child = scroll
+            };
+
+            _navigationPopup = new Popup
+            {
+                Child = frame,
+                HorizontalOffset = 4,
+                VerticalOffset = 45,
+                IsOpen = true
+            };
         }
 
-        private void AddMenuItem(MenuFlyout menu, string title, Action action)
+        private void AddPopupMenuHeader(Panel panel, string title)
         {
-            var item = new MenuFlyoutItem { Text = title };
-            item.Click += delegate { action(); };
-            menu.Items.Add(item);
+            panel.Children.Add(new TextBlock
+            {
+                Text = title,
+                FontSize = 11,
+                FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 33, 150, 243)),
+                Margin = new Thickness(14, 10, 10, 4)
+            });
         }
 
-        private void AddSettingsMenuItem(MenuFlyout menu, string title, int pivotIndex)
+        private void AddPopupMenuSeparator(Panel panel)
         {
-            AddMenuItem(menu, title, delegate
+            panel.Children.Add(new Border
+            {
+                Height = 1,
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 70, 70, 70)),
+                Margin = new Thickness(8, 5, 8, 5)
+            });
+        }
+
+        private void AddPopupMenuItem(Panel panel, string title, Action action)
+        {
+            var item = new Button
+            {
+                Content = title,
+                HorizontalContentAlignment = HorizontalAlignment.Left,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0)),
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 244, 244, 244)),
+                BorderThickness = new Thickness(0),
+                Padding = new Thickness(14, 10, 10, 10),
+                MinHeight = 42
+            };
+            item.Click += delegate
+            {
+                if (_navigationPopup != null) _navigationPopup.IsOpen = false;
+                action();
+            };
+            panel.Children.Add(item);
+        }
+
+        private void AddPopupSettingsItem(Panel panel, string title, int pivotIndex)
+        {
+            AddPopupMenuItem(panel, title, delegate
             {
                 ShowSection(3);
                 if (SettingsPivot != null)
