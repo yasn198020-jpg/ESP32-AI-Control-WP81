@@ -195,7 +195,8 @@ namespace ESP32AIControl.WP81.Core.Scenarios
 
         private static void CopyConditionValues(LocalScenarioRuntimeState state, IDictionary<int, bool> values)
         {
-            state.ConditionValues.Clear();
+            // Preserve previously known conditions while other widgets have not
+            // reported yet; this is required to detect a later TRUE -> FALSE edge.
             foreach (var pair in values)
                 state.ConditionValues[pair.Key] = pair.Value;
         }
