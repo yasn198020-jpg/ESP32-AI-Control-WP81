@@ -54,7 +54,7 @@
             <Setter Property="BorderThickness" Value="1"/>
         </Style>
     </Page.Resources>
-    <Grid Background="#FF24252A">
+    <Grid Background="#FF202020">
         <Grid.RowDefinitions>
             <RowDefinition Height="60"/>
             <RowDefinition Height="*"/>
@@ -362,7 +362,7 @@
         <!-- Fixed bottom navigation inspired by the Android app. -->
         <Border Grid.Row="2" Background="#FF24252A"
                 BorderBrush="#FF414141" BorderThickness="0,1,0,0">
-            <Grid Background="#FF202020">
+            <Grid Background="#FF24252A">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="*"/>
