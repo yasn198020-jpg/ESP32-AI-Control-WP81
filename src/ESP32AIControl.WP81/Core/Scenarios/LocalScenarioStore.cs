@@ -25,8 +25,8 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                 {
                     try
                     {
-                        if (array[i].ValueType != JsonValueType.Object) continue;
-                        var item = array[i].GetObject();
+                        if (array[(int)i].ValueType != JsonValueType.Object) continue;
+                        var item = array[(int)i].GetObject();
                         var scenario = new LocalScenarioDefinition
                         {
                             Id = ReadString(item, "id", Guid.NewGuid().ToString("N")),
@@ -43,8 +43,8 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                             var conditions = conditionsValue.GetArray();
                             for (uint c = 0; c < conditions.Count; c++)
                             {
-                                if (conditions[c].ValueType != JsonValueType.Object) continue;
-                                var condition = conditions[c].GetObject();
+                                if (conditions[(int)c].ValueType != JsonValueType.Object) continue;
+                                var condition = conditions[(int)c].GetObject();
                                 var widgetId = ReadString(condition, "widgetId", string.Empty).Trim();
                                 double threshold;
                                 if (widgetId.Length == 0 ||
@@ -70,8 +70,8 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                             var actions = actionsValue.GetArray();
                             for (uint a = 0; a < actions.Count; a++)
                             {
-                                if (actions[a].ValueType != JsonValueType.Object) continue;
-                                var action = actions[a].GetObject();
+                                if (actions[(int)a].ValueType != JsonValueType.Object) continue;
+                                var action = actions[(int)a].GetObject();
                                 var deviceId = ReadString(action, "deviceId", string.Empty).Trim();
                                 var widgetId = ReadString(action, "widgetId", string.Empty).Trim();
                                 if (deviceId.Length == 0 || widgetId.Length == 0) continue;
