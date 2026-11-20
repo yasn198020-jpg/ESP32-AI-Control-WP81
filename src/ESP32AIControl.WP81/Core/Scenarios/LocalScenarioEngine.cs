@@ -81,7 +81,9 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             var scenarios = _store.Load();
             foreach (var scenario in scenarios)
             {
-                if (!scenario.Enabled || scenario.Conditions.Count == 0)
+                if (!scenario.Enabled || scenario.Conditions.Count == 0 ||
+                    !scenario.Conditions.Any(condition =>
+                        string.Equals(condition.WidgetId, message.WidgetId, StringComparison.OrdinalIgnoreCase)))
                     continue;
 
                 LocalScenarioRuntimeState state;
