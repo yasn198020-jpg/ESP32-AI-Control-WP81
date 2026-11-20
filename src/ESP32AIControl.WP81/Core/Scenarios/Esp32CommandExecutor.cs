@@ -59,6 +59,18 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             }
         }
 
+        public Task ExecuteLocalActionAsync(string deviceId, string widgetId, string value)
+        {
+            return ExecuteActionAsync(new ScenarioAction
+            {
+                DeviceId = deviceId,
+                WidgetId = widgetId,
+                Value = value,
+                Command = (deviceId ?? string.Empty) + "/" +
+                    (widgetId ?? string.Empty) + "=" + (value ?? string.Empty)
+            });
+        }
+
         private async Task ExecuteActionAsync(ScenarioAction action)
         {
             // Esp32MqttService selects MQTT or its local WebSocket fallback.
