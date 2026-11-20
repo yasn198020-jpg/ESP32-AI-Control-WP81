@@ -1,10 +1,8 @@
 name: WP81 Build
 
+# Automatic CI is intentionally disabled. Build and verify locally on Windows.
+# Keep manual dispatch available only if a remote diagnostic build is explicitly needed.
 on:
-  push:
-    branches: [ main, ui/lumia830-dashboard-test ]
-  pull_request:
-    branches: [ main ]
   workflow_dispatch:
 
 jobs:
