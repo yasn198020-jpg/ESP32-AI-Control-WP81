@@ -13,6 +13,7 @@ namespace ESP32AIControl.WP81.Core.Scenarios
     {
         private readonly LocalScenarioStore _store;
         private readonly Action<LocalScenarioDefinition, string> _onTrigger;
+        private readonly object _sync = new object();
         private readonly Dictionary<string, double> _values =
             new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, LocalScenarioRuntimeState> _runtime =
@@ -29,7 +30,9 @@ namespace ESP32AIControl.WP81.Core.Scenarios
 
         public void Reload()
         {
-            var definitions = _store.Load();
+            lock (_sync)
+            {
+                var definitions = _store.Load();
             var active = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var scenario in definitions)
             {
@@ -43,15 +46,25 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                 if (!active.Contains(id)) stale.Add(id);
             foreach (var id in stale)
                 _runtime.Remove(id);
+            }
         }
 
         public void ResetScenario(string id)
         {
-            _runtime[id] = new LocalScenarioRuntimeState();
-            _store.DeleteRuntimeState(id);
+            lock (_sync)
+            {
+                _runtime[id] = new LocalScenarioRuntimeState();
+                _store.DeleteRuntimeState(id);
+            }
         }
 
         public void OnMessage(Esp32Message message, bool allowTrigger)
+        {
+            lock (_sync)
+                OnMessageLocked(message, allowTrigger);
+        }
+
+        private void OnMessageLocked(Esp32Message message, bool allowTrigger)
         {
             if (message == null || string.IsNullOrWhiteSpace(message.WidgetId))
                 return;
