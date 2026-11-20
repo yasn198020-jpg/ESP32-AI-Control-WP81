@@ -143,6 +143,8 @@ namespace ESP32AIControl.WP81.Core.Protocol
                 // the socket write. Preserve the latest requested value and
                 // send it after the next successful MQTT subscription.
                 EnqueueControl(topic, payload, deviceId, widgetId, value);
+                if (_mqtt.State == MqttConnectionState.Connected)
+                    await _mqtt.DisconnectAsync();
             }
         }
 
