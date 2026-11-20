@@ -36,6 +36,7 @@ namespace ESP32AIControl.WP81
         private readonly DeviceRepository _devices;
         private readonly Esp32MqttService _mqtt;
         private readonly UdpDiscoveryService _udpDiscovery;
+        private readonly ConnectionJournal _connectionJournal;
         private readonly DeviceWebSocketFallbackService _webSocketFallback;
         private readonly LocalScenarioStore _localScenarioStore;
         private readonly LocalScenarioEngine _localScenarioEngine;
@@ -84,6 +85,7 @@ namespace ESP32AIControl.WP81
             _mqtt = new Esp32MqttService(_settings, _devices);
             _localScenarioStore = new LocalScenarioStore();
             _localScenarioEngine = new LocalScenarioEngine(_localScenarioStore, LocalScenario_Triggered);
+            _connectionJournal = new ConnectionJournal();
             _udpDiscovery = new UdpDiscoveryService();
             _webSocketFallback = new DeviceWebSocketFallbackService();
             _webSocketFallback.Diagnostic += WebSocketFallback_Diagnostic;
@@ -123,6 +125,7 @@ namespace ESP32AIControl.WP81
             try
             {
                 _appSettings = await _settingsStore.LoadAsync();
+                LogText.Text = string.Join(Environment.NewLine, _connectionJournal.Load());
                 if (_appSettings.SavedMqttProfiles == null)
                     _appSettings.SavedMqttProfiles = new List<SavedMqttProfile>();
                 ApplyDefaultMqttProfileToSettings();
@@ -2076,6 +2079,13 @@ namespace ESP32AIControl.WP81
                 var keep = lines.Take(250).ToArray();
                 LogText.Text = string.Join(Environment.NewLine, keep);
             }
+
+            if (text.IndexOf("MQTT", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                text.IndexOf("UDP", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                text.IndexOf("WS ", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                text.IndexOf("ERROR", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                text.IndexOf("СЦЕНАРИЙ", StringComparison.OrdinalIgnoreCase) >= 0)
+                _connectionJournal.Append(line);
         }
 
         private static string SanitizeFilePart(string value)
