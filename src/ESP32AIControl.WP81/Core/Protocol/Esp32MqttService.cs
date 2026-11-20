@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using ESP32AIControl.WP81.Core.Mqtt;
+using ESP32AIControl.WP81.Core.Network;
 using ESP32AIControl.WP81.Core.State;
 using ESP32AIControl.WP81.Models;
 
@@ -12,6 +13,7 @@ namespace ESP32AIControl.WP81.Core.Protocol
         private Esp32Protocol _protocol;
         private readonly DeviceRepository _devices;
         private readonly MqttSettings _settings;
+        private DeviceWebSocketFallbackService _webSocketFallback;
 
         public event EventHandler<Esp32Message> MessageReceived;
         public event EventHandler<WidgetState> WidgetChanged;
@@ -65,6 +67,13 @@ namespace ESP32AIControl.WP81.Core.Protocol
             return _mqtt.DisconnectAsync();
         }
 
+        public void SetWebSocketFallbackService(DeviceWebSocketFallbackService service)
+        {
+            _webSocketFallback = service;
+            if (_webSocketFallback != null)
+                _webSocketFallback.SetMqttOnline(_mqtt.State == MqttConnectionState.Connected);
+        }
+
         private sealed class PendingControl
         {
             public string Topic;
@@ -86,6 +95,10 @@ namespace ESP32AIControl.WP81.Core.Protocol
 
             if (_mqtt.State != MqttConnectionState.Connected)
             {
+                if (_webSocketFallback != null &&
+                    await _webSocketFallback.SendControlAsync(deviceId, widgetId, value))
+                    return;
+
                 EnqueueControl(topic, payload);
                 return;
             }
@@ -195,6 +208,9 @@ namespace ESP32AIControl.WP81.Core.Protocol
 
         private void Mqtt_ConnectionStateChanged(object sender, MqttConnectionStateChangedEventArgs e)
         {
+            if (_webSocketFallback != null)
+                _webSocketFallback.SetMqttOnline(e.State == MqttConnectionState.Connected);
+
             var handler = ConnectionStateChanged;
             if (handler != null)
                 handler(this, e);
