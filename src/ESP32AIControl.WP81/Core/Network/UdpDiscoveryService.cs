@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Globalization;
+using Windows.Storage;
 using Windows.Networking.Sockets;
 using Windows.Storage.Streams;
 using Windows.Data.Json;
@@ -22,7 +24,10 @@ namespace ESP32AIControl.WP81.Core.Network
     public sealed class UdpDiscoveryService : IDisposable
     {
         public const string Port = "4210";
+        private const string SnapshotKey = "udp_discovered_devices_v1";
         private readonly object _sync = new object();
+        private readonly ApplicationDataContainer _settings = ApplicationData.Current.LocalSettings;
+        private DateTimeOffset _lastSnapshotPersistAt = DateTimeOffset.MinValue;
         private readonly Dictionary<string, UdpDiscoveredDevice> _devices =
             new Dictionary<string, UdpDiscoveredDevice>(StringComparer.OrdinalIgnoreCase);
         private DatagramSocket _socket;
@@ -34,6 +39,11 @@ namespace ESP32AIControl.WP81.Core.Network
         public event EventHandler<UdpDiscoveredDevice> DeviceDiscovered;
         public event EventHandler<UdpDiscoveredDevice> DeviceExpired;
         public event EventHandler<string> Diagnostic;
+
+        public UdpDiscoveryService()
+        {
+            LoadSnapshot();
+        }
 
         public IList<UdpDiscoveredDevice> GetSnapshot()
         {
@@ -58,6 +68,9 @@ namespace ESP32AIControl.WP81.Core.Network
                 for (var i = 0; i < keys.Count; i++)
                     _devices.Remove(keys[i]);
             }
+
+            if (expired.Count > 0)
+                PersistSnapshot();
 
             var handler = DeviceExpired;
             if (handler != null)
@@ -261,9 +274,86 @@ namespace ESP32AIControl.WP81.Core.Network
             lock (_sync)
                 _devices[ip] = device;
 
+            if (DateTimeOffset.Now - _lastSnapshotPersistAt > TimeSpan.FromSeconds(10))
+                PersistSnapshot();
+
             var handler = DeviceDiscovered;
             if (handler != null)
                 handler(this, device);
+        }
+
+        private void LoadSnapshot()
+        {
+            try
+            {
+                object raw;
+                if (!_settings.Values.TryGetValue(SnapshotKey, out raw) || !(raw is string))
+                    return;
+
+                var array = JsonArray.Parse((string)raw);
+                var now = DateTimeOffset.Now;
+                lock (_sync)
+                {
+                    for (uint i = 0; i < array.Count; i++)
+                    {
+                        if (array[i].ValueType != JsonValueType.Object) continue;
+                        var item = array[i].GetObject();
+                        DateTimeOffset lastSeen;
+                        if (!DateTimeOffset.TryParse(ReadString(item, "lastSeenAt"),
+                            CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out lastSeen))
+                            continue;
+                        if ((now - lastSeen).TotalMilliseconds > 300000) continue;
+
+                        var device = new UdpDiscoveredDevice
+                        {
+                            Wg = ReadString(item, "wg"),
+                            Ip = ReadString(item, "ip"),
+                            Id = ReadString(item, "id"),
+                            Name = ReadString(item, "name"),
+                            Status = ReadString(item, "status"),
+                            FirmwareVersion = ReadString(item, "fv"),
+                            LastSeenAt = lastSeen
+                        };
+                        if (!string.IsNullOrWhiteSpace(device.Ip) &&
+                            (!string.IsNullOrWhiteSpace(device.Id) || !string.IsNullOrWhiteSpace(device.Wg)))
+                            _devices[device.Ip] = device;
+                    }
+                }
+                RaiseDiagnostic("UDP snapshot восстановлен: " + _devices.Count + " устройств");
+            }
+            catch (Exception ex)
+            {
+                RaiseDiagnostic("UDP snapshot read error: " + ex.Message);
+            }
+        }
+
+        private void PersistSnapshot()
+        {
+            try
+            {
+                var array = new JsonArray();
+                lock (_sync)
+                {
+                    foreach (var device in _devices.Values)
+                    {
+                        var item = new JsonObject();
+                        item["wg"] = JsonValue.CreateStringValue(device.Wg ?? string.Empty);
+                        item["ip"] = JsonValue.CreateStringValue(device.Ip ?? string.Empty);
+                        item["id"] = JsonValue.CreateStringValue(device.Id ?? string.Empty);
+                        item["name"] = JsonValue.CreateStringValue(device.Name ?? string.Empty);
+                        item["status"] = JsonValue.CreateStringValue(device.Status ?? string.Empty);
+                        item["fv"] = JsonValue.CreateStringValue(device.FirmwareVersion ?? string.Empty);
+                        item["lastSeenAt"] = JsonValue.CreateStringValue(device.LastSeenAt.ToString("o", CultureInfo.InvariantCulture));
+                        array.Add(item);
+                    }
+                }
+                _settings.Values[SnapshotKey] = array.Stringify();
+                _lastSnapshotPersistAt = DateTimeOffset.Now;
+            }
+            catch (Exception ex)
+            {
+                RaiseDiagnostic("UDP snapshot write error: " + ex.Message);
+            }
         }
 
         private static string ReadString(JsonObject json, string key)
