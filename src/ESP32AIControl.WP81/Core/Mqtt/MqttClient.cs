@@ -213,7 +213,7 @@ namespace ESP32AIControl.WP81.Core.Mqtt
             var payload = System.Text.Encoding.UTF8.GetString(packet.Body, offset, packet.Body.Length - offset);
             var handler = MessageReceived;
             if (handler != null)
-                handler(this, new MqttMessageEventArgs(topic, payload, qos));
+                handler(this, new MqttMessageEventArgs(topic, payload, qos, (packet.Header & 0x01) != 0));
         }
 
         private void HandlePubAck(MqttPacket packet)
