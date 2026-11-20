@@ -19,6 +19,7 @@ namespace ESP32AIControl.WP81.Core.Mqtt
         private Task _receiveLoopTask;
         private readonly SemaphoreSlim _writeGate = new SemaphoreSlim(1, 1);
         private readonly object _publishLock = new object();
+        private readonly object _packetIdLock = new object();
         private readonly System.Collections.Generic.Dictionary<ushort, TaskCompletionSource<bool>> _pendingPublishes =
             new System.Collections.Generic.Dictionary<ushort, TaskCompletionSource<bool>>();
 
@@ -274,10 +275,13 @@ namespace ESP32AIControl.WP81.Core.Mqtt
 
         private ushort NextPacketId()
         {
-            if (_packetId == 0)
-                _packetId = 1;
+            lock (_packetIdLock)
+            {
+                if (_packetId == 0)
+                    _packetId = 1;
 
-            return _packetId++;
+                return _packetId++;
+            }
         }
 
         private void EnsureConnected()
