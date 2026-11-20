@@ -61,9 +61,8 @@ namespace ESP32AIControl.WP81.Core.Scenarios
 
         private async Task ExecuteActionAsync(ScenarioAction action)
         {
-            if (_mqtt.State != MqttConnectionState.Connected)
-                throw new InvalidOperationException("MQTT не подключён.");
-
+            // Esp32MqttService selects MQTT or its local WebSocket fallback.
+            // Do not reject a command solely because the broker is disconnected.
             await _mqtt.PublishControlAsync(
                 action.DeviceId,
                 action.WidgetId,
