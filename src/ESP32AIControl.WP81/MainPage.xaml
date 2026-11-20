@@ -5,10 +5,10 @@
     RequestedTheme="Dark">
     <Page.Resources>
         <SolidColorBrush x:Key="AccentBrush" Color="#FF2196F3"/>
-        <SolidColorBrush x:Key="PanelBrush" Color="#FF2B2B2B"/>
+        <SolidColorBrush x:Key="PanelBrush" Color="#FF292D35"/>
         <SolidColorBrush x:Key="MutedBrush" Color="#FFB0B0B0"/>
         <DataTemplate x:Key="WidgetPageHeaderTemplate">
-            <Border Background="#FF424242" CornerRadius="9" Padding="14,9" Margin="0,0,6,0">
+            <Border Background="#FF303640" CornerRadius="12" Padding="16,10" Margin="0,0,8,0">
                 <TextBlock Text="{Binding}" FontSize="14" FontWeight="SemiBold"
                            FontFamily="Segoe UI Symbol"
                            Foreground="#FFF4F4F4" TextWrapping="NoWrap"/>
@@ -19,16 +19,16 @@
             <Setter Property="TextWrapping" Value="Wrap"/>
         </Style>
         <Style TargetType="Button">
-            <Setter Property="Background" Value="#FF2B2B2B"/>
+            <Setter Property="Background" Value="#FF303640"/>
             <Setter Property="Foreground" Value="#FFFFFFFF"/>
-            <Setter Property="BorderBrush" Value="#FF424242"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding" Value="12,8"/>
+            <Setter Property="BorderBrush" Value="#FF3B424D"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="14,10"/>
         </Style>
         <Style TargetType="TextBox">
-            <Setter Property="Background" Value="#FF202020"/>
+            <Setter Property="Background" Value="#FF252A32"/>
             <Setter Property="Foreground" Value="#FFF4F4F4"/>
-            <Setter Property="BorderBrush" Value="#FF555555"/>
+            <Setter Property="BorderBrush" Value="#FF46505D"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Margin" Value="0,4,0,4"/>
         </Style>
@@ -52,15 +52,15 @@
             <Setter Property="BorderThickness" Value="1"/>
         </Style>
     </Page.Resources>
-    <Grid Background="#FF202020">
+    <Grid Background="#FF171A20">
         <Grid.RowDefinitions>
-            <RowDefinition Height="45"/>
+            <RowDefinition Height="52"/>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="80"/>
+            <RowDefinition Height="72"/>
         </Grid.RowDefinitions>
 
         <!-- Android-like top bar: menu, current screen title, info and MQTT cloud status. -->
-        <Border Grid.Row="0" Background="#FF24252A" BorderBrush="#FF424242"
+        <Border Grid.Row="0" Background="#FF20252D" BorderBrush="#FF343B46"
                 BorderThickness="0,0,0,1" Padding="5,7,7,7">
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -96,7 +96,7 @@
             </Grid>
         </Border>
 
-        <Grid x:Name="MainSections" Grid.Row="1" Background="#FF202020">
+        <Grid x:Name="MainSections" Grid.Row="1" Background="#FF171A20">
 <Grid x:Name="HomeSection" Visibility="Visible">
                 <Grid Margin="10,0,10,4">
                     <Grid.RowDefinitions>
@@ -132,9 +132,9 @@
             </Grid>
 
             <Grid x:Name="GraphsSection" Visibility="Collapsed">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="16,8,16,12">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="12,10,12,10">
                     <StackPanel>
-                        <TextBlock Text="ГРАФИКИ" FontSize="28" FontWeight="Light" Foreground="#FF2196F3"/>
+                        <TextBlock Text="История и графики" FontSize="22" FontWeight="SemiBold" Foreground="#FFF4F4F4"/>
                         <TextBlock Text="Запись производится с заданным интервалом, а не по каждому MQTT-пакету."
                                    TextWrapping="Wrap" Opacity="0.7" Margin="0,4,0,10"/>
                         <ComboBox x:Name="GraphWidgetBox" Header="Датчик / виджет" Margin="0,4"/>
@@ -157,7 +157,7 @@
             <Grid x:Name="TasksSection" Visibility="Collapsed">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="16,8,16,12">
                     <StackPanel>
-                        <TextBlock Text="ЗАПЛАНИРОВАННЫЕ КОМАНДЫ" FontSize="26" FontWeight="Light" Foreground="#FF2196F3"/>
+                        <TextBlock Text="Отложенные команды" FontSize="22" FontWeight="SemiBold" Foreground="#FFF4F4F4"/>
                         <TextBlock Text="Команда: device/widget=value" Opacity="0.7" Margin="0,4,0,8"/>
                         <TextBox x:Name="ScheduleCommandBox" Header="Команда"/>
                         <Grid Margin="0,4,0,4">
@@ -173,16 +173,16 @@
                             <Button Grid.Row="1" Content="ОТМЕНИТЬ" Click="CancelScheduleButton_Click" Margin="0,4,4,0"/>
                             <Button Grid.Row="1" Grid.Column="1" Content="ОБНОВИТЬ" Click="RefreshScheduleButton_Click" Margin="4,4,0,0"/>
                         </Grid>
-                        <ListView x:Name="ScheduleList" Height="420" SelectionChanged="ScheduleList_SelectionChanged"/>
+                        <ListView x:Name="ScheduleList" Height="280" SelectionChanged="ScheduleList_SelectionChanged"/>
                     </StackPanel>
                 </ScrollViewer>
             </Grid>
 
             <Grid x:Name="SettingsSection" Visibility="Collapsed">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="12,6,12,8">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="12,10,12,10">
                     <StackPanel>
-                        <TextBlock Text="НАСТРОЙКИ ПРИЛОЖЕНИЯ" FontSize="18" FontWeight="SemiBold" Foreground="#FF2196F3" Margin="0,0,0,8"/>
-                        <Pivot x:Name="SettingsPivot" Height="490" Background="#FF202020" Foreground="#FFF4F4F4">
+                        <TextBlock Text="Настройки приложения" FontSize="21" FontWeight="SemiBold" Foreground="#FFF4F4F4" Margin="4,0,0,12"/>
+                        <Pivot x:Name="SettingsPivot" Height="420" Background="#FF171A20" Foreground="#FFF4F4F4">
                 <PivotItem Header="Подключение">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel Margin="8,0,8,8">
@@ -355,9 +355,9 @@
         </Grid>
 
         <!-- Fixed bottom navigation inspired by the Android app. -->
-        <Border Grid.Row="2" Background="#FF24252A"
+        <Border Grid.Row="2" Background="#FF20252D"
                 BorderBrush="#FF424242" BorderThickness="0,1,0,0">
-            <Grid Background="#FF24252A">
+            <Grid Background="#FF20252D">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="*"/>
@@ -367,14 +367,14 @@
             </Grid.ColumnDefinitions>
 
             <Button x:Name="NavHomeButton" Grid.Column="0" Click="NavigateHome_Click"
-                    Height="76" Padding="0" BorderThickness="0" FontSize="12">
+                    Height="72" Padding="0" BorderThickness="0" FontSize="12">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                     <TextBlock Text="⌂" FontSize="23" HorizontalAlignment="Center"/>
                     <TextBlock Text="Главная" FontSize="12" HorizontalAlignment="Center"/>
                 </StackPanel>
             </Button>
             <Button x:Name="NavMarfaButton" Grid.Column="1" Click="NavigateMarfa_Click"
-                    Height="76" Padding="0" BorderThickness="0" FontSize="11"
+                    Height="72" Padding="0" BorderThickness="0" FontSize="11"
                     AutomationProperties.Name="Голосовое управление Марфа">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                     <Grid Width="24" Height="24" HorizontalAlignment="Center">
@@ -402,7 +402,7 @@
                 </StackPanel>
             </Button>
             <Button x:Name="NavGraphsButton" Grid.Column="3" Click="NavigateGraphs_Click"
-                    Height="64" Padding="0" BorderThickness="0" FontSize="11">
+                    Height="72" Padding="0" BorderThickness="0" FontSize="11">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                     <TextBlock Text="▤" FontSize="20" HorizontalAlignment="Center"/>
                     <TextBlock Text="История" FontSize="10" HorizontalAlignment="Center"/>
