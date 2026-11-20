@@ -59,21 +59,40 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             }
         }
 
+        public Task ExecuteLocalActionAsync(string deviceId, string widgetId, string value)
+        {
+            var current = _devices.Get(deviceId, widgetId);
+            if (current != null && AreValuesEqual(current.Value, value))
+                return Task.FromResult(0);
+
+            return ExecuteActionAsync(new ScenarioAction
+            {
+                DeviceId = deviceId,
+                WidgetId = widgetId,
+                Value = value,
+                Command = (deviceId ?? string.Empty) + "/" +
+                    (widgetId ?? string.Empty) + "=" + (value ?? string.Empty)
+            });
+        }
+
         private async Task ExecuteActionAsync(ScenarioAction action)
         {
-            if (_mqtt.State != MqttConnectionState.Connected)
-                throw new InvalidOperationException("MQTT не подключён.");
-
+            // Esp32MqttService selects MQTT or its local WebSocket fallback.
+            // Do not reject a command solely because the broker is disconnected.
             await _mqtt.PublishControlAsync(
                 action.DeviceId,
                 action.WidgetId,
                 action.Value);
 
+            var confirmationTimeout = _mqtt.State == MqttConnectionState.Connected
+                ? StateTimeoutMilliseconds
+                : 10000;
+
             var confirmed = await WaitForStateAsync(
                 action.DeviceId,
                 action.WidgetId,
                 action.Value,
-                StateTimeoutMilliseconds);
+                confirmationTimeout);
 
             if (!confirmed)
             {
