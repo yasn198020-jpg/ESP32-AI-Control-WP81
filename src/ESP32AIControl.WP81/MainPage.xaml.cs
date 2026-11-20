@@ -16,6 +16,7 @@ using ESP32AIControl.WP81.Core;
 using ESP32AIControl.WP81.Core.Export;
 using ESP32AIControl.WP81.Core.History;
 using ESP32AIControl.WP81.Core.Mqtt;
+using ESP32AIControl.WP81.Core.Network;
 using ESP32AIControl.WP81.Core.Protocol;
 using ESP32AIControl.WP81.Core.Scenarios;
 using ESP32AIControl.WP81.Core.Scheduling;
@@ -32,6 +33,7 @@ namespace ESP32AIControl.WP81
         private readonly MqttSettings _settings;
         private readonly DeviceRepository _devices;
         private readonly Esp32MqttService _mqtt;
+        private readonly UdpDiscoveryService _udpDiscovery;
         private readonly LocalMeasurementStore _measurementStore;
         private readonly MeasurementRecorder _recorder;
         private readonly RtfHistoryExporter _exporter;
@@ -74,6 +76,9 @@ namespace ESP32AIControl.WP81
             _settings = new MqttSettings();
             _devices = new DeviceRepository();
             _mqtt = new Esp32MqttService(_settings, _devices);
+            _udpDiscovery = new UdpDiscoveryService();
+            _udpDiscovery.DeviceDiscovered += UdpDiscovery_DeviceDiscovered;
+            _udpDiscovery.Diagnostic += UdpDiscovery_Diagnostic;
 
             _measurementStore = new LocalMeasurementStore();
             _recorder = new MeasurementRecorder(
@@ -131,6 +136,8 @@ namespace ESP32AIControl.WP81
                 // On WP8.1 keep reconnecting while the app is active and reconnect on resume.
                 _mqttReconnectEnabled = true;
                 SubscribeNetworkStatusChanged();
+                try { await _udpDiscovery.StartAsync(); }
+                catch (Exception udpError) { Log("UDP discovery start: " + udpError.Message); }
                 StartMqttSupervisor();
             }
             catch (Exception ex)
@@ -146,11 +153,25 @@ namespace ESP32AIControl.WP81
             await EnsureMqttConnectedAsync("запуск приложения");
         }
 
+        private void UdpDiscovery_DeviceDiscovered(object sender, UdpDiscoveredDevice device)
+        {
+            if (device == null) return;
+            Log("UDP ESP32: " + (string.IsNullOrWhiteSpace(device.Name) ? device.Id : device.Name) +
+                " · " + device.Ip + " · " + device.Status +
+                (string.IsNullOrWhiteSpace(device.FirmwareVersion) ? string.Empty : " · FW " + device.FirmwareVersion));
+        }
+
+        private void UdpDiscovery_Diagnostic(object sender, string message)
+        {
+            Log(message);
+        }
+
         private void MainPage_Unloaded(object sender, RoutedEventArgs e)
         {
             if (_autoExportTimer != null)
                 _autoExportTimer.Stop();
             UnsubscribeNetworkStatusChanged();
+            _udpDiscovery.Stop();
         }
 
         private void SubscribeNetworkStatusChanged()
@@ -183,14 +204,17 @@ namespace ESP32AIControl.WP81
                     var profile = NetworkInformation.GetInternetConnectionProfile();
                     if (profile == null)
                     {
+                        _udpDiscovery.Stop();
                         await _mqtt.DisconnectAsync();
-                        Log("Сеть недоступна. MQTT отключён до восстановления подключения.");
+                        Log("Сеть недоступна. MQTT и UDP discovery ожидают восстановления подключения.");
                         return;
                     }
 
                     // A socket may remain half-open after Wi-Fi changes. Force
                     // a clean session so the regular supervisor can reconnect
                     // using the current network route.
+                    try { await _udpDiscovery.StartAsync(); }
+                    catch (Exception udpError) { Log("UDP discovery restart: " + udpError.Message); }
                     await _mqtt.DisconnectAsync();
                     await EnsureMqttConnectedAsync("изменение сетевого подключения");
                 });
