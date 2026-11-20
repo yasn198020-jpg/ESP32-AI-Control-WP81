@@ -203,6 +203,7 @@ namespace ESP32AIControl.WP81.Core.Network
         private async Task RunSessionAsync(Session session)
         {
             var token = session.Cancellation.Token;
+            var retryAttempt = 0;
             while (!token.IsCancellationRequested)
             {
                 MessageWebSocket socket = null;
@@ -232,6 +233,7 @@ namespace ESP32AIControl.WP81.Core.Network
                     session.Ready.TrySetResult(true);
                     await SendFrameAsync(session, "/params|");
                     session.LastPongAt = UtcNowMilliseconds();
+                    retryAttempt = 0;
                     RaiseDiagnostic("WS CONNECTED device=" + session.DeviceId + " ip=" + session.Ip);
                     var connectedHandler = DeviceSessionConnected;
                     if (connectedHandler != null)
@@ -275,7 +277,11 @@ namespace ESP32AIControl.WP81.Core.Network
 
                 if (!token.IsCancellationRequested)
                 {
-                    try { await Task.Delay(5000, token); }
+                    retryAttempt = Math.Min(6, retryAttempt + 1);
+                    var delayMs = Math.Min(30000, 1000 * (1 << (retryAttempt - 1)));
+                    RaiseDiagnostic("WS reconnect device=" + session.DeviceId +
+                        " через " + delayMs + " мс");
+                    try { await Task.Delay(delayMs, token); }
                     catch (OperationCanceledException) { break; }
                 }
             }
