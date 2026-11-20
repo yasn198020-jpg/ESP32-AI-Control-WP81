@@ -219,10 +219,11 @@ namespace ESP32AIControl.WP81
             {
                 try
                 {
-                    await _mqtt.PublishControlAsync(action.DeviceId, action.WidgetId, action.Value);
+                    await _commandExecutor.ExecuteLocalActionAsync(
+                        action.DeviceId, action.WidgetId, action.Value);
                     await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, delegate
                     {
-                        Log("СЦЕНАРИЙ TX " + action.DeviceId + "/" + action.WidgetId + "=" + action.Value);
+                        Log("СЦЕНАРИЙ CONFIRMED " + action.DeviceId + "/" + action.WidgetId + "=" + action.Value);
                     });
                 }
                 catch (Exception ex)
