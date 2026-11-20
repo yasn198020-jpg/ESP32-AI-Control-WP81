@@ -475,7 +475,7 @@ namespace ESP32AIControl.WP81
         private async void UdpDiscovery_DeviceExpired(object sender, UdpDiscoveredDevice device)
         {
             if (device == null) return;
-            _webSocketFallback.RemoveDevice(device.Id);
+            _webSocketFallback.RemoveDevice(device.Id, device.Ip);
             await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, delegate
             {
                 Log("UDP ESP32: объявление устарело, устройство удалено · " + device.Ip);
