@@ -27,7 +27,7 @@
                        SmallLogo="Assets\Square44x44Logo.png"
                        Description="ESP32 MQTT client"
                        ForegroundText="light"
-                       BackgroundColor="#464646">
+                       BackgroundColor="#464646" ToastCapable="true">
         <DefaultTile ShortName="ESP32 AI Control" />
         <SplashScreen Image="Assets\SplashScreen.png" />
       </VisualElements>
