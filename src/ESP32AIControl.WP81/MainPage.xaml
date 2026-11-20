@@ -160,8 +160,8 @@
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="16,14,16,16">
                     <StackPanel>
                         <TextBlock Text="Отложенные команды" FontSize="22" FontWeight="SemiBold" Foreground="#FFEAF1F7"/>
-                        <TextBlock Text="Команда: device/widget=value" Opacity="0.7" Margin="0,4,0,8"/>
-                        <TextBox x:Name="ScheduleCommandBox" Header="Команда"/>
+                        <TextBlock Text="Формат команды: устройство/элемент=значение" Opacity="0.7" Margin="0,4,0,8"/>
+                        <TextBox x:Name="ScheduleCommandBox" Header="Команда устройству"/>
                         <Grid Margin="0,4,0,4">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                             <DatePicker x:Name="ScheduleDate" Header="Дата" HorizontalAlignment="Stretch" Margin="0,4,5,4"/>
@@ -183,18 +183,21 @@
             <Grid x:Name="SettingsSection" Visibility="Collapsed">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="12,10,12,10">
                     <StackPanel>
-                        <TextBlock Text="Настройки приложения" FontSize="21" FontWeight="SemiBold" Foreground="#FFEAF1F7" Margin="4,0,0,12"/>
+                        <TextBlock Text="Настройки" FontSize="24" FontWeight="SemiBold" Foreground="#FFF4F4F4" Margin="4,0,0,2"/>
+                        <TextBlock Text="Подключение, хранение данных, профили и голосовое управление"
+                                   FontSize="13" Foreground="#FFB0B0B0" TextWrapping="Wrap"
+                                   Margin="4,0,4,12"/>
                         <Pivot x:Name="SettingsPivot" Height="600" Background="#FF202020" Foreground="#FFEAF1F7">
                 <PivotItem Header="Подключение">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel Margin="8,0,8,8">
                             <TextBlock Text="ПОДКЛЮЧЕНИЕ" FontSize="22" FontWeight="Light" Foreground="#FF8065E8"/>
-                        <TextBox x:Name="HostBox" Header="MQTT host" Text="m4.wqtt.ru" LostFocus="MqttSetting_LostFocus"/>
-                        <TextBox x:Name="PortBox" Header="TCP port" Text="2815" LostFocus="MqttSetting_LostFocus"/>
-                        <TextBox x:Name="PrefixBox" Header="MQTT prefix" Text="dghjko" LostFocus="MqttSetting_LostFocus"/>
-                        <TextBox x:Name="UserNameBox" Header="MQTT username" LostFocus="MqttSetting_LostFocus"/>
-                        <TextBox x:Name="ClientIdBox" Header="MQTT client ID" Text="ESP32-AI-Control-WP81" LostFocus="MqttSetting_LostFocus"/>
-                        <PasswordBox x:Name="PasswordBox" Header="MQTT password" LostFocus="MqttSetting_LostFocus"/>
+                        <TextBox x:Name="HostBox" Header="MQTT сервер или адрес" Text="m4.wqtt.ru" LostFocus="MqttSetting_LostFocus"/>
+                        <TextBox x:Name="PortBox" Header="Порт подключения" Text="2815" LostFocus="MqttSetting_LostFocus"/>
+                        <TextBox x:Name="PrefixBox" Header="Префикс MQTT" Text="dghjko" LostFocus="MqttSetting_LostFocus"/>
+                        <TextBox x:Name="UserNameBox" Header="Имя пользователя" LostFocus="MqttSetting_LostFocus"/>
+                        <TextBox x:Name="ClientIdBox" Header="Идентификатор клиента" Text="ESP32-AI-Control-WP81" LostFocus="MqttSetting_LostFocus"/>
+                        <PasswordBox x:Name="PasswordBox" Header="Пароль MQTT" LostFocus="MqttSetting_LostFocus"/>
                         <CheckBox x:Name="MqttTlsCheckBox" Content="Использовать защищённое TLS-соединение" Margin="0,8,0,4" Checked="MqttTlsCheckBox_Changed" Unchecked="MqttTlsCheckBox_Changed"/>
 
                         <TextBlock Text="МАСШТАБ ИНТЕРФЕЙСА" FontSize="18" FontWeight="SemiBold" Foreground="#FF8065E8" Margin="0,20,0,4"/>
@@ -211,12 +214,12 @@
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
-                                    <Button Content="ПОДКЛЮЧИТЬ" Click="ConnectButton_Click"
+                                    <Button Content="Подключиться" Click="ConnectButton_Click"
                                             Margin="0,0,4,4" Padding="6,8"/>
-                                    <Button Grid.Column="1" Content="ОТКЛЮЧИТЬ"
+                                    <Button Grid.Column="1" Content="Отключиться"
                                             Click="DisconnectButton_Click" Margin="4,0,0,4" Padding="6,8"/>
                                 </Grid>
-                                <Button Content="ОТПРАВИТЬ HELLO" Click="HelloButton_Click"
+                                <Button Content="Запросить данные (HELLO)" Click="HelloButton_Click"
                                         HorizontalAlignment="Stretch" Margin="0,4,0,0"/>
                             </StackPanel>
                         </Border>
@@ -230,7 +233,7 @@
                         <TextBox x:Name="MeasurementIntervalBox" Header="Интервал записи, секунд" Text="60"/>
                         <TextBox x:Name="RetentionDaysBox" Header="Период хранения, дней" Text="30"/>
                         <ComboBox x:Name="AutoExportBox" Header="Автоэкспорт Word">
-                            <ComboBoxItem Content="Never" Tag="Never"/>
+                            <ComboBoxItem Content="Никогда" Tag="Never"/>
                             <ComboBoxItem Content="1 день" Tag="Day"/>
                             <ComboBoxItem Content="Неделя" Tag="Week"/>
                             <ComboBoxItem Content="Месяц" Tag="Month"/>
