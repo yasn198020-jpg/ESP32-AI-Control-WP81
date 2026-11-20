@@ -76,7 +76,7 @@ namespace ESP32AIControl.WP81.Core.Network
                 EnsureSession(device.Id);
         }
 
-        public void RemoveDevice(string deviceId)
+        public void RemoveDevice(string deviceId, string ip)
         {
             if (string.IsNullOrWhiteSpace(deviceId))
                 return;
@@ -84,9 +84,17 @@ namespace ESP32AIControl.WP81.Core.Network
             Session session = null;
             lock (_sync)
             {
+                UdpDiscoveredDevice current;
+                if (!_devices.TryGetValue(deviceId, out current) ||
+                    !string.Equals(current.Ip, ip, StringComparison.OrdinalIgnoreCase))
+                    return;
+
                 _devices.Remove(deviceId);
-                if (_sessions.TryGetValue(deviceId, out session))
+                if (_sessions.TryGetValue(deviceId, out session) &&
+                    string.Equals(session.Ip, ip, StringComparison.OrdinalIgnoreCase))
                     _sessions.Remove(deviceId);
+                else
+                    session = null;
             }
             if (session != null)
                 StopSession(session);
