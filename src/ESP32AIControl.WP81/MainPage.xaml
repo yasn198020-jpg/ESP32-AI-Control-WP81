@@ -148,7 +148,7 @@
                         </StackPanel>
                         <TextBlock x:Name="GraphSummary" Text="—" Margin="0,0,0,8"/>
                         <Border BorderThickness="1" Padding="4">
-                            <Canvas x:Name="GraphCanvas" Height="340" MinWidth="420"/>
+                            <Canvas x:Name="GraphCanvas" Height="300" HorizontalAlignment="Stretch"/>
                         </Border>
                     </StackPanel>
                 </ScrollViewer>
@@ -160,10 +160,11 @@
                         <TextBlock Text="ЗАПЛАНИРОВАННЫЕ КОМАНДЫ" FontSize="26" FontWeight="Light" Foreground="#FF2196F3"/>
                         <TextBlock Text="Команда: device/widget=value" Opacity="0.7" Margin="0,4,0,8"/>
                         <TextBox x:Name="ScheduleCommandBox" Header="Команда"/>
-                        <StackPanel Orientation="Horizontal">
-                            <DatePicker x:Name="ScheduleDate" Header="Дата" Width="210" Margin="0,4,8,4"/>
-                            <TimePicker x:Name="ScheduleTime" Header="Время" Width="210" Margin="8,4,0,4"/>
-                        </StackPanel>
+                        <Grid Margin="0,4,0,4">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <DatePicker x:Name="ScheduleDate" Header="Дата" HorizontalAlignment="Stretch" Margin="0,4,5,4"/>
+                            <TimePicker x:Name="ScheduleTime" Grid.Column="1" Header="Время" HorizontalAlignment="Stretch" Margin="5,4,0,4"/>
+                        </Grid>
                         <Grid Margin="0,4,0,10">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
@@ -366,14 +367,14 @@
             </Grid.ColumnDefinitions>
 
             <Button x:Name="NavHomeButton" Grid.Column="0" Click="NavigateHome_Click"
-                    Height="80" Padding="0" BorderThickness="0" FontSize="12">
+                    Height="76" Padding="0" BorderThickness="0" FontSize="12">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <TextBlock Text="▲" FontSize="22" HorizontalAlignment="Center"/>
+                    <TextBlock Text="⌂" FontSize="23" HorizontalAlignment="Center"/>
                     <TextBlock Text="Главная" FontSize="12" HorizontalAlignment="Center"/>
                 </StackPanel>
             </Button>
             <Button x:Name="NavMarfaButton" Grid.Column="1" Click="NavigateMarfa_Click"
-                    Height="64" Padding="0" BorderThickness="0" FontSize="11"
+                    Height="76" Padding="0" BorderThickness="0" FontSize="11"
                     AutomationProperties.Name="Голосовое управление Марфа">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                     <Grid Width="24" Height="24" HorizontalAlignment="Center">
@@ -394,16 +395,16 @@
                 </StackPanel>
             </Button>
             <Button x:Name="NavCommandsButton" Grid.Column="2" Click="NavigateCommands_Click"
-                    Height="64" Padding="0" BorderThickness="0" FontSize="11">
+                    Height="76" Padding="0" BorderThickness="0" FontSize="11">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <TextBlock Text="🎤" FontSize="19" HorizontalAlignment="Center"/>
+                    <TextBlock Text="☷" FontSize="20" HorizontalAlignment="Center"/>
                     <TextBlock Text="Команды" FontSize="10" HorizontalAlignment="Center"/>
                 </StackPanel>
             </Button>
             <Button x:Name="NavGraphsButton" Grid.Column="3" Click="NavigateGraphs_Click"
                     Height="64" Padding="0" BorderThickness="0" FontSize="11">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <TextBlock Text="▥" FontSize="19" HorizontalAlignment="Center"/>
+                    <TextBlock Text="▤" FontSize="20" HorizontalAlignment="Center"/>
                     <TextBlock Text="История" FontSize="10" HorizontalAlignment="Center"/>
                 </StackPanel>
             </Button>
