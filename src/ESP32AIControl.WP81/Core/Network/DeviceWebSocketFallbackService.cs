@@ -248,7 +248,7 @@ namespace ESP32AIControl.WP81.Core.Network
                         if (UtcNowMilliseconds() - session.LastPongAt > 6000)
                         {
                             RaiseDiagnostic("WS heartbeat timeout device=" + session.DeviceId);
-                            try { socket.Close(); } catch { }
+                            try { socket.Close(1000, "Normal closure"); } catch { }
                             break;
                         }
 
@@ -270,7 +270,7 @@ namespace ESP32AIControl.WP81.Core.Network
                     session.Socket = null;
                     if (socket != null)
                     {
-                        try { socket.Close(); } catch { }
+                        try { socket.Close(1000, "Normal closure"); } catch { }
                         socket.Dispose();
                     }
                 }
@@ -396,7 +396,7 @@ namespace ESP32AIControl.WP81.Core.Network
         {
             if (session == null) return;
             try { session.Cancellation.Cancel(); } catch { }
-            try { if (session.Socket != null) session.Socket.Close(); } catch { }
+            try { if (session.Socket != null) session.Socket.Close(1000, "Session stopped"); } catch { }
         }
 
         private void RaiseDiagnostic(string message)
