@@ -315,7 +315,8 @@ namespace ESP32AIControl.WP81
 
                 double threshold;
                 if (!double.TryParse(tokens[2].Replace(',', '.'), NumberStyles.Float,
-                    CultureInfo.InvariantCulture, out threshold))
+                    CultureInfo.InvariantCulture, out threshold) ||
+                    double.IsNaN(threshold) || double.IsInfinity(threshold))
                 {
                     await ShowLocalScenarioErrorAsync("Неверный порог в строке " + (i + 1) + ".");
                     return;
