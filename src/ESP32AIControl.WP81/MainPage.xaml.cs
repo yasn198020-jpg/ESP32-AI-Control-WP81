@@ -12,6 +12,8 @@ using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Shapes;
 using Windows.Media.SpeechRecognition;
 using Windows.Storage.Pickers;
+using Windows.UI.Notifications;
+using Windows.Data.Xml.Dom;
 using ESP32AIControl.WP81.Core;
 using ESP32AIControl.WP81.Core.Export;
 using ESP32AIControl.WP81.Core.History;
@@ -35,6 +37,9 @@ namespace ESP32AIControl.WP81
         private readonly Esp32MqttService _mqtt;
         private readonly UdpDiscoveryService _udpDiscovery;
         private readonly DeviceWebSocketFallbackService _webSocketFallback;
+        private readonly LocalScenarioStore _localScenarioStore;
+        private readonly LocalScenarioEngine _localScenarioEngine;
+        private string _editingLocalScenarioId;
         private readonly LocalMeasurementStore _measurementStore;
         private readonly MeasurementRecorder _recorder;
         private readonly RtfHistoryExporter _exporter;
@@ -77,6 +82,8 @@ namespace ESP32AIControl.WP81
             _settings = new MqttSettings();
             _devices = new DeviceRepository();
             _mqtt = new Esp32MqttService(_settings, _devices);
+            _localScenarioStore = new LocalScenarioStore();
+            _localScenarioEngine = new LocalScenarioEngine(_localScenarioStore, LocalScenario_Triggered);
             _udpDiscovery = new UdpDiscoveryService();
             _webSocketFallback = new DeviceWebSocketFallbackService();
             _webSocketFallback.Diagnostic += WebSocketFallback_Diagnostic;
@@ -120,6 +127,8 @@ namespace ESP32AIControl.WP81
                     _appSettings.SavedMqttProfiles = new List<SavedMqttProfile>();
                 ApplyDefaultMqttProfileToSettings();
                 ApplySettingsToMqtt();
+                _localScenarioEngine.Reload();
+                RefreshLocalScenariosList();
                 _commandExecutor.SetScenarioScript(_appSettings.IoTManagerScenario);
                 ApplySettingsToUi();
                 await _scheduler.InitializeAsync();
@@ -180,13 +189,65 @@ namespace ESP32AIControl.WP81
         private void WebSocketFallback_WidgetUpdated(object sender, WebSocketWidgetUpdateEventArgs e)
         {
             if (e == null) return;
-            _devices.Apply(new Esp32Message
+            var message = new Esp32Message
             {
                 Kind = Esp32MessageKind.Status,
                 DeviceId = e.DeviceId,
                 WidgetId = e.WidgetId,
-                Value = e.Value
+                Value = e.Value,
+                Retained = e.IsSnapshot
+            };
+            _devices.Apply(message);
+            _localScenarioEngine.OnMessage(message, !e.IsSnapshot);
+        }
+
+        private async void LocalScenario_Triggered(LocalScenarioDefinition scenario, string rawValue)
+        {
+            if (scenario == null) return;
+
+            await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, delegate
+            {
+                Log("АВТОСЦЕНАРИЙ: " + scenario.Title + " · значение " + rawValue);
             });
+
+            foreach (var action in scenario.Actions)
+            {
+                try
+                {
+                    await _mqtt.PublishControlAsync(action.DeviceId, action.WidgetId, action.Value);
+                    await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, delegate
+                    {
+                        Log("СЦЕНАРИЙ TX " + action.DeviceId + "/" + action.WidgetId + "=" + action.Value);
+                    });
+                }
+                catch (Exception ex)
+                {
+                    await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, delegate
+                    {
+                        Log("СЦЕНАРИЙ TX ERROR: " + ex.Message);
+                    });
+                }
+            }
+
+            if (scenario.NotificationEnabled)
+            {
+                await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, delegate
+                {
+                    try
+                    {
+                        var xml = ToastNotificationManager.GetTemplateContent(ToastTemplateType.ToastText02);
+                        var texts = xml.GetElementsByTagName("text");
+                        texts.Item(0).AppendChild(xml.CreateTextNode(scenario.Title ?? "Сценарий"));
+                        texts.Item(1).AppendChild(xml.CreateTextNode((scenario.Message ?? "Условие выполнено")
+                            .Replace("{value}", rawValue ?? string.Empty)));
+                        ToastNotificationManager.CreateToastNotifier().Show(new ToastNotification(xml));
+                    }
+                    catch (Exception ex)
+                    {
+                        Log("Уведомление сценария: " + ex.Message);
+                    }
+                });
+            }
         }
 
         private async void UdpDiscovery_DeviceExpired(object sender, UdpDiscoveredDevice device)
@@ -957,6 +1018,7 @@ namespace ESP32AIControl.WP81
 
         private async void Mqtt_MessageReceived(object sender, Esp32Message e)
         {
+            _localScenarioEngine.OnMessage(e, !e.Retained);
             await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, delegate
             {
                 Log("RX [" + e.Kind + "] " + e.Topic + " = " + e.Value);
