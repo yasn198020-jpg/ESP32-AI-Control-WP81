@@ -84,6 +84,7 @@ namespace ESP32AIControl.WP81
             _mqtt.SetWebSocketFallbackService(_webSocketFallback);
             _udpDiscovery.DeviceDiscovered += UdpDiscovery_DeviceDiscovered;
             _udpDiscovery.Diagnostic += UdpDiscovery_Diagnostic;
+            _udpDiscovery.DeviceExpired += UdpDiscovery_DeviceExpired;
 
             _measurementStore = new LocalMeasurementStore();
             _recorder = new MeasurementRecorder(
@@ -188,6 +189,16 @@ namespace ESP32AIControl.WP81
             });
         }
 
+        private async void UdpDiscovery_DeviceExpired(object sender, UdpDiscoveredDevice device)
+        {
+            if (device == null) return;
+            _webSocketFallback.RemoveDevice(device.Id);
+            await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, delegate
+            {
+                Log("UDP ESP32: объявление устарело, устройство удалено · " + device.Ip);
+            });
+        }
+
         private void UdpDiscovery_Diagnostic(object sender, string message)
         {
             Log(message);
@@ -266,6 +277,7 @@ namespace ESP32AIControl.WP81
 
         private async void MqttSupervisorTimer_Tick(object sender, object e)
         {
+            _udpDiscovery.PruneExpired();
             await EnsureMqttConnectedAsync("проверка соединения");
         }
 
