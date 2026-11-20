@@ -74,6 +74,23 @@ namespace ESP32AIControl.WP81.Core.Network
                 EnsureSession(device.Id);
         }
 
+        public void RemoveDevice(string deviceId)
+        {
+            if (string.IsNullOrWhiteSpace(deviceId))
+                return;
+
+            Session session = null;
+            lock (_sync)
+            {
+                _devices.Remove(deviceId);
+                if (_sessions.TryGetValue(deviceId, out session))
+                    _sessions.Remove(deviceId);
+            }
+            if (session != null)
+                StopSession(session);
+            RaiseDiagnostic("UDP device expired; WebSocket session removed device=" + deviceId);
+        }
+
         public void SetMqttOnline(bool online)
         {
             List<Session> stop = null;
