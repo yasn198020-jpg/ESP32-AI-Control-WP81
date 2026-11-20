@@ -1441,7 +1441,10 @@ namespace ESP32AIControl.WP81
             visual.Row = row;
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(96) });
+            // Keep the value/control column content-sized instead of reserving a
+            // narrow fixed 96 px slot. Long sensor values must remain readable
+            // without forcing the title outside the available Lumia screen width.
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
             // WP8.1 may not contain glyphs for modern emoji. Detect supported emoji
             // by their exact Unicode sequence and draw an app-owned vector equivalent.
@@ -1491,6 +1494,9 @@ namespace ESP32AIControl.WP81
                 TextAlignment = TextAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
+                MaxWidth = 148,
+                TextWrapping = TextWrapping.NoWrap,
+                TextTrimming = TextTrimming.CharacterEllipsis
             };
 
             if (isSwitch)
@@ -1516,6 +1522,7 @@ namespace ESP32AIControl.WP81
                 {
                     Content = "Нажать",
                     MinWidth = 76,
+                    MaxWidth = 128,
                     Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0, 183, 255)),
                     Foreground = new SolidColorBrush(Windows.UI.Colors.White),
                     BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0, 183, 255)),
