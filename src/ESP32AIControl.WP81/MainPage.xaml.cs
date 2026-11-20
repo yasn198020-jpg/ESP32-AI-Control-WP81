@@ -34,6 +34,7 @@ namespace ESP32AIControl.WP81
         private readonly DeviceRepository _devices;
         private readonly Esp32MqttService _mqtt;
         private readonly UdpDiscoveryService _udpDiscovery;
+        private readonly DeviceWebSocketFallbackService _webSocketFallback;
         private readonly LocalMeasurementStore _measurementStore;
         private readonly MeasurementRecorder _recorder;
         private readonly RtfHistoryExporter _exporter;
@@ -77,6 +78,10 @@ namespace ESP32AIControl.WP81
             _devices = new DeviceRepository();
             _mqtt = new Esp32MqttService(_settings, _devices);
             _udpDiscovery = new UdpDiscoveryService();
+            _webSocketFallback = new DeviceWebSocketFallbackService();
+            _webSocketFallback.Diagnostic += WebSocketFallback_Diagnostic;
+            _webSocketFallback.WidgetUpdated += WebSocketFallback_WidgetUpdated;
+            _mqtt.SetWebSocketFallbackService(_webSocketFallback);
             _udpDiscovery.DeviceDiscovered += UdpDiscovery_DeviceDiscovered;
             _udpDiscovery.Diagnostic += UdpDiscovery_Diagnostic;
 
@@ -138,6 +143,7 @@ namespace ESP32AIControl.WP81
                 SubscribeNetworkStatusChanged();
                 try { await _udpDiscovery.StartAsync(); }
                 catch (Exception udpError) { Log("UDP discovery start: " + udpError.Message); }
+                _webSocketFallback.SetMqttOnline(_mqtt.State == MqttConnectionState.Connected);
                 StartMqttSupervisor();
             }
             catch (Exception ex)
@@ -156,9 +162,27 @@ namespace ESP32AIControl.WP81
         private void UdpDiscovery_DeviceDiscovered(object sender, UdpDiscoveredDevice device)
         {
             if (device == null) return;
+            _webSocketFallback.UpdateDevice(device);
             Log("UDP ESP32: " + (string.IsNullOrWhiteSpace(device.Name) ? device.Id : device.Name) +
                 " · " + device.Ip + " · " + device.Status +
                 (string.IsNullOrWhiteSpace(device.FirmwareVersion) ? string.Empty : " · FW " + device.FirmwareVersion));
+        }
+
+        private void WebSocketFallback_Diagnostic(object sender, string message)
+        {
+            Log(message);
+        }
+
+        private void WebSocketFallback_WidgetUpdated(object sender, WebSocketWidgetUpdateEventArgs e)
+        {
+            if (e == null) return;
+            _devices.Apply(new Esp32Message
+            {
+                Kind = Esp32MessageKind.Status,
+                DeviceId = e.DeviceId,
+                WidgetId = e.WidgetId,
+                Value = e.Value
+            });
         }
 
         private void UdpDiscovery_Diagnostic(object sender, string message)
@@ -172,6 +196,7 @@ namespace ESP32AIControl.WP81
                 _autoExportTimer.Stop();
             UnsubscribeNetworkStatusChanged();
             _udpDiscovery.Stop();
+            _webSocketFallback.SetMqttOnline(true);
         }
 
         private void SubscribeNetworkStatusChanged()
