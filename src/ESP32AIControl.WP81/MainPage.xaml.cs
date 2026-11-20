@@ -475,9 +475,9 @@ namespace ESP32AIControl.WP81
             });
         }
 
-        private void UdpDiscovery_Diagnostic(object sender, string message)
+        private async void UdpDiscovery_Diagnostic(object sender, string message)
         {
-            Log(message);
+            await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, delegate { Log(message); });
         }
 
         private void MainPage_Unloaded(object sender, RoutedEventArgs e)
@@ -563,6 +563,8 @@ namespace ESP32AIControl.WP81
                 return;
 
             _mqttReconnectEnabled = true;
+            try { await _udpDiscovery.StartAsync(); }
+            catch (Exception ex) { Log("UDP resume: " + ex.Message); }
             await EnsureMqttConnectedAsync("возврат приложения из фона");
         }
 
