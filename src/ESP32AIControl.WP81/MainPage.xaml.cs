@@ -523,9 +523,14 @@ namespace ESP32AIControl.WP81
                     var profile = NetworkInformation.GetInternetConnectionProfile();
                     if (profile == null)
                     {
+                        // No Internet profile does not necessarily mean that
+                        // the local Wi-Fi/LAN is down. Keep UDP discovery and
+                        // WebSocket fallback alive for ESP32 devices on the LAN.
                         _udpDiscovery.Stop();
+                        try { await _udpDiscovery.StartAsync(); }
+                        catch (Exception udpError) { Log("UDP local-network restart: " + udpError.Message); }
                         await _mqtt.DisconnectAsync();
-                        Log("Сеть недоступна. MQTT и UDP discovery ожидают восстановления подключения.");
+                        Log("Интернет недоступен. MQTT отключён; локальный UDP/WebSocket поиск продолжает работу.");
                         return;
                     }
 
