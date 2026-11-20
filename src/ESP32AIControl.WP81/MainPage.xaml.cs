@@ -159,18 +159,21 @@ namespace ESP32AIControl.WP81
             await EnsureMqttConnectedAsync("запуск приложения");
         }
 
-        private void UdpDiscovery_DeviceDiscovered(object sender, UdpDiscoveredDevice device)
+        private async void UdpDiscovery_DeviceDiscovered(object sender, UdpDiscoveredDevice device)
         {
             if (device == null) return;
             _webSocketFallback.UpdateDevice(device);
-            Log("UDP ESP32: " + (string.IsNullOrWhiteSpace(device.Name) ? device.Id : device.Name) +
-                " · " + device.Ip + " · " + device.Status +
-                (string.IsNullOrWhiteSpace(device.FirmwareVersion) ? string.Empty : " · FW " + device.FirmwareVersion));
+            await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, delegate
+            {
+                Log("UDP ESP32: " + (string.IsNullOrWhiteSpace(device.Name) ? device.Id : device.Name) +
+                    " · " + device.Ip + " · " + device.Status +
+                    (string.IsNullOrWhiteSpace(device.FirmwareVersion) ? string.Empty : " · FW " + device.FirmwareVersion));
+            });
         }
 
-        private void WebSocketFallback_Diagnostic(object sender, string message)
+        private async void WebSocketFallback_Diagnostic(object sender, string message)
         {
-            Log(message);
+            await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, delegate { Log(message); });
         }
 
         private void WebSocketFallback_WidgetUpdated(object sender, WebSocketWidgetUpdateEventArgs e)
