@@ -772,7 +772,8 @@ namespace ESP32AIControl.WP81
 
             SetNavigationButton(NavHomeButton, _selectedSection == 0);
             SetNavigationButton(NavMarfaButton, false);
-            SetNavigationButton(NavCommandsButton, false);
+            SetNavigationButton(NavCommandsButton,
+                _selectedSection == 3 && SettingsPivot != null && SettingsPivot.SelectedIndex == 3);
             SetNavigationButton(NavGraphsButton, _selectedSection == 1);
             SetNavigationButton(NavTasksButton, _selectedSection == 2);
             // Settings stays available from the hamburger menu, not the bottom bar.
@@ -786,8 +787,8 @@ namespace ESP32AIControl.WP81
             // the selected destination gets a soft surface and an accent icon,
             // rather than turning the entire navigation tile bright purple.
             button.Background = new SolidColorBrush(isSelected
-                ? Windows.UI.Color.FromArgb(255, 98, 98, 98)
-                : Windows.UI.Color.FromArgb(255, 36, 37, 42));
+                ? Windows.UI.Color.FromArgb(255, 51, 44, 68)
+                : Windows.UI.Color.FromArgb(255, 36, 37, 45));
             button.Foreground = new SolidColorBrush(isSelected
                 ? Windows.UI.Color.FromArgb(255, 244, 244, 244)
                 : Windows.UI.Color.FromArgb(255, 176, 176, 176));
@@ -814,6 +815,7 @@ namespace ESP32AIControl.WP81
             ShowSection(3);
             if (SettingsPivot != null)
                 SettingsPivot.SelectedIndex = 3;
+            UpdateNavigationState();
         }
         private void NavigateGraphs_Click(object sender, RoutedEventArgs e) { ShowSection(1); }
         private void NavigateTasks_Click(object sender, RoutedEventArgs e) { ShowSection(2); }
@@ -1425,7 +1427,7 @@ namespace ESP32AIControl.WP81
 
             var shell = new Border
             {
-                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 43, 43, 43)),
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 43, 44, 52)),
                 CornerRadius = new CornerRadius(14),
                 Padding = new Thickness(16, 10, 16, 10),
                 BorderThickness = new Thickness(0)
@@ -1548,6 +1550,7 @@ namespace ESP32AIControl.WP81
                     Maximum = 100,
                     StepFrequency = 1,
                     HorizontalAlignment = HorizontalAlignment.Stretch,
+                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 128, 101, 232)),
                     Margin = new Thickness(34, 2, 8, 0)
                 };
                 slider.ValueChanged += async delegate(object s, RangeBaseValueChangedEventArgs ev)
@@ -1878,11 +1881,27 @@ namespace ESP32AIControl.WP81
             var padding = 18.0;
             var timeSpan = Math.Max(1.0, (maxTime - minTime).TotalSeconds);
 
+            // Subtle horizontal guides make values easier to compare without
+            // competing with the sensor series.
+            for (var gridIndex = 0; gridIndex <= 4; gridIndex++)
+            {
+                var y = padding + (height - padding * 2) * gridIndex / 4.0;
+                GraphCanvas.Children.Add(new Line
+                {
+                    X1 = padding,
+                    Y1 = y,
+                    X2 = width - padding,
+                    Y2 = y,
+                    Stroke = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 58, 60, 70)),
+                    StrokeThickness = 1
+                });
+            }
+
             var axis = new Line
             {
                 X1 = padding, Y1 = height - padding,
                 X2 = width - padding, Y2 = height - padding,
-                Stroke = new SolidColorBrush(Windows.UI.Colors.Gray),
+                Stroke = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 130, 132, 145)),
                 StrokeThickness = 1
             };
             GraphCanvas.Children.Add(axis);
@@ -2071,11 +2090,39 @@ namespace ESP32AIControl.WP81
             foreach (var item in items)
             {
                 _scheduleRows.Add(item);
-                ScheduleList.Items.Add(
-                    item.Status + " | " +
-                    item.ExecuteAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss") +
-                    " | " + item.Command +
-                    (string.IsNullOrEmpty(item.LastError) ? string.Empty : " | " + item.LastError));
+                var statusLabel = new TextBlock
+                {
+                    Text = item.Status,
+                    FontSize = 14,
+                    FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 174, 151, 255)),
+                    Margin = new Thickness(0, 0, 0, 3)
+                };
+                var detailsText = item.ExecuteAt.ToLocalTime().ToString(
+                    "dd.MM.yyyy  HH:mm", CultureInfo.InvariantCulture) +
+                    Environment.NewLine + item.Command;
+                if (!string.IsNullOrEmpty(item.LastError))
+                    detailsText += Environment.NewLine + "Ошибка: " + item.LastError;
+
+                var detailsLabel = new TextBlock
+                {
+                    Text = detailsText,
+                    FontSize = 12,
+                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 185, 187, 198)),
+                    TextWrapping = TextWrapping.Wrap
+                };
+                var rowContent = new StackPanel
+                {
+                    Margin = new Thickness(2, 1, 2, 1)
+                };
+                rowContent.Children.Add(statusLabel);
+                rowContent.Children.Add(detailsLabel);
+
+                ScheduleList.Items.Add(new ListViewItem
+                {
+                    Content = rowContent,
+                    Tag = item.Id
+                });
             }
         }
 
