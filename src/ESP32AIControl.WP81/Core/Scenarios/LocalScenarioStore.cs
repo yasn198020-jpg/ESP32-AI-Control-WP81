@@ -114,9 +114,9 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                     value["operator"] = JsonValue.CreateStringValue(condition.Operator ?? ">");
                     value["threshold"] = JsonValue.CreateNumberValue(condition.Threshold);
                     value["connector"] = JsonValue.CreateStringValue(condition.Connector ?? "AND");
-                    conditions.Add(JsonValue.CreateObjectValue(value));
+                    conditions.Add(value);
                 }
-                item["conditions"] = JsonValue.CreateArrayValue(conditions);
+                item["conditions"] = conditions;
 
                 var actions = new JsonArray();
                 foreach (var action in scenario.Actions)
@@ -125,10 +125,10 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                     value["deviceId"] = JsonValue.CreateStringValue(action.DeviceId ?? string.Empty);
                     value["widgetId"] = JsonValue.CreateStringValue(action.WidgetId ?? string.Empty);
                     value["value"] = JsonValue.CreateStringValue(action.Value ?? "1");
-                    actions.Add(JsonValue.CreateObjectValue(value));
+                    actions.Add(value);
                 }
-                item["actions"] = JsonValue.CreateArrayValue(actions);
-                array.Add(JsonValue.CreateObjectValue(item));
+                item["actions"] = actions;
+                array.Add(item);
             }
             _settings.Values[DefinitionsKey] = array.Stringify();
         }
@@ -190,8 +190,8 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                 foreach (var pair in state.ConditionValues)
                     values[pair.Key.ToString(System.Globalization.CultureInfo.InvariantCulture)] =
                         JsonValue.CreateBooleanValue(pair.Value);
-                item["conditions"] = JsonValue.CreateObjectValue(values);
-                root[id] = JsonValue.CreateObjectValue(item);
+                item["conditions"] = values;
+                root[id] = item;
                 _settings.Values[RuntimeKey] = root.Stringify();
             }
             catch { }
