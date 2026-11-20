@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Runtime.InteropServices.WindowsRuntime;
 using Windows.Networking.Sockets;
 using Windows.Storage.Streams;
 
@@ -41,16 +42,25 @@ namespace ESP32AIControl.WP81.Core.Mqtt
 
             try
             {
-                await _socket.ConnectAsync(
+                var socketConnect = _socket.ConnectAsync(
                     new Windows.Networking.HostName(host),
                     port,
-                    useTls ? SocketProtectionLevel.Tls12 : SocketProtectionLevel.PlainSocket);
+                    useTls ? SocketProtectionLevel.Tls12 : SocketProtectionLevel.PlainSocket).AsTask();
+                var socketConnected = await Task.WhenAny(socketConnect, Task.Delay(12000));
+                if (socketConnected != socketConnect)
+                    throw new TimeoutException("MQTT TCP connection timeout.");
+                await socketConnect;
+
                 _writer = new DataWriter(_socket.OutputStream);
                 _reader = new MqttPacketReader(_socket.InputStream);
 
                 await WriteAsync(MqttPacketWriter.ConnectPacket(clientId, userName, password, true));
 
-                var response = await _reader.ReadAsync();
+                var connAckTask = _reader.ReadAsync();
+                var connAckReceived = await Task.WhenAny(connAckTask, Task.Delay(8000));
+                if (connAckReceived != connAckTask)
+                    throw new TimeoutException("MQTT CONNACK timeout.");
+                var response = await connAckTask;
                 if (response.PacketType != 2 || response.Body.Length < 2 || response.Body[1] != 0)
                     throw new InvalidOperationException("MQTT CONNACK rejected.");
 
