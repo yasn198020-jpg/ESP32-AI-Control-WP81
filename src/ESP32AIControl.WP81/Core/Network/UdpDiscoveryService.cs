@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using Windows.Networking.Sockets;
 using Windows.Storage.Streams;
 using Windows.Data.Json;
@@ -26,6 +28,8 @@ namespace ESP32AIControl.WP81.Core.Network
         private DatagramSocket _socket;
         private bool _disposed;
         private int _generation;
+        private CancellationTokenSource _recoveryCancellation;
+        private int _recoveryAttempt;
 
         public event EventHandler<UdpDiscoveredDevice> DeviceDiscovered;
         public event EventHandler<UdpDiscoveredDevice> DeviceExpired;
@@ -85,6 +89,7 @@ namespace ESP32AIControl.WP81.Core.Network
                         return;
                     }
                     _socket = socket;
+                    _recoveryAttempt = 0;
                 }
                 RaiseDiagnostic("UDP discovery слушает *:" + Port);
             }
@@ -93,6 +98,7 @@ namespace ESP32AIControl.WP81.Core.Network
                 socket.MessageReceived -= Socket_MessageReceived;
                 socket.Dispose();
                 RaiseDiagnostic("UDP discovery: " + ex.Message);
+                ScheduleRecovery(ex.Message);
                 throw;
             }
         }
@@ -100,19 +106,87 @@ namespace ESP32AIControl.WP81.Core.Network
         public void Stop()
         {
             DatagramSocket socket;
+            CancellationTokenSource recovery;
             lock (_sync)
             {
                 ++_generation;
                 socket = _socket;
                 _socket = null;
+                recovery = _recoveryCancellation;
+                _recoveryCancellation = null;
+                _recoveryAttempt = 0;
             }
 
+            if (recovery != null)
+            {
+                try { recovery.Cancel(); } catch { }
+            }
             if (socket != null)
             {
                 socket.MessageReceived -= Socket_MessageReceived;
                 socket.Dispose();
             }
             RaiseDiagnostic("UDP discovery остановлен");
+        }
+
+        private void ScheduleRecovery(string reason)
+        {
+            CancellationTokenSource cancellation;
+            lock (_sync)
+            {
+                if (_disposed || _socket != null || _recoveryCancellation != null)
+                    return;
+                cancellation = new CancellationTokenSource();
+                _recoveryCancellation = cancellation;
+            }
+
+            Task.Run(async delegate
+            {
+                while (!cancellation.IsCancellationRequested)
+                {
+                    int attempt;
+                    lock (_sync)
+                    {
+                        if (_disposed || _socket != null)
+                        {
+                            if (_recoveryCancellation == cancellation)
+                                _recoveryCancellation = null;
+                            return;
+                        }
+                        _recoveryAttempt = Math.Min(6, _recoveryAttempt + 1);
+                        attempt = _recoveryAttempt;
+                    }
+
+                    var delayMs = Math.Min(60000, 1000 * (1 << (attempt - 1)));
+                    RaiseDiagnostic("UDP recovery: попытка " + attempt +
+                        " через " + delayMs + " мс; причина: " + reason);
+                    try
+                    {
+                        await Task.Delay(delayMs, cancellation.Token);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        return;
+                    }
+
+                    try
+                    {
+                        await StartAsync();
+                        lock (_sync)
+                        {
+                            if (_recoveryCancellation == cancellation)
+                                _recoveryCancellation = null;
+                            _recoveryAttempt = 0;
+                        }
+                        return;
+                    }
+                    catch
+                    {
+                        // StartAsync leaves this recovery worker registered;
+                        // continue with the next exponential backoff interval.
+                    }
+                }
+            });
         }
 
         private void Socket_MessageReceived(DatagramSocket sender, DatagramSocketMessageReceivedEventArgs args)
