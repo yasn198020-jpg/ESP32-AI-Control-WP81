@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using Windows.UI.Core;
+using Windows.Networking.Connectivity;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Controls.Primitives;
@@ -57,6 +58,7 @@ namespace ESP32AIControl.WP81
         private bool _autoExportRunning;
         private bool _mqttReconnectEnabled;
         private bool _mqttReconnectInProgress;
+        private bool _networkStatusSubscribed;
         private int _selectedSection = 0;
 
         public MainPage()
@@ -128,6 +130,7 @@ namespace ESP32AIControl.WP81
                 // Android starts its MQTT foreground service automatically.
                 // On WP8.1 keep reconnecting while the app is active and reconnect on resume.
                 _mqttReconnectEnabled = true;
+                SubscribeNetworkStatusChanged();
                 StartMqttSupervisor();
             }
             catch (Exception ex)
@@ -147,6 +150,55 @@ namespace ESP32AIControl.WP81
         {
             if (_autoExportTimer != null)
                 _autoExportTimer.Stop();
+            UnsubscribeNetworkStatusChanged();
+        }
+
+        private void SubscribeNetworkStatusChanged()
+        {
+            if (_networkStatusSubscribed)
+                return;
+
+            NetworkInformation.NetworkStatusChanged += NetworkInformation_NetworkStatusChanged;
+            _networkStatusSubscribed = true;
+        }
+
+        private void UnsubscribeNetworkStatusChanged()
+        {
+            if (!_networkStatusSubscribed)
+                return;
+
+            NetworkInformation.NetworkStatusChanged -= NetworkInformation_NetworkStatusChanged;
+            _networkStatusSubscribed = false;
+        }
+
+        private async void NetworkInformation_NetworkStatusChanged(object sender)
+        {
+            try
+            {
+                await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, async delegate
+                {
+                    if (_initializing || !_mqttReconnectEnabled)
+                        return;
+
+                    var profile = NetworkInformation.GetInternetConnectionProfile();
+                    if (profile == null)
+                    {
+                        await _mqtt.DisconnectAsync();
+                        Log("Сеть недоступна. MQTT отключён до восстановления подключения.");
+                        return;
+                    }
+
+                    // A socket may remain half-open after Wi-Fi changes. Force
+                    // a clean session so the regular supervisor can reconnect
+                    // using the current network route.
+                    await _mqtt.DisconnectAsync();
+                    await EnsureMqttConnectedAsync("изменение сетевого подключения");
+                });
+            }
+            catch (Exception ex)
+            {
+                Log("Network change: " + ex.Message);
+            }
         }
 
         private void StartMqttSupervisor()
