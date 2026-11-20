@@ -576,8 +576,14 @@ namespace ESP32AIControl.WP81
                 return;
 
             _mqttReconnectEnabled = true;
+            _udpDiscovery.Stop();
             try { await _udpDiscovery.StartAsync(); }
             catch (Exception ex) { Log("UDP resume: " + ex.Message); }
+
+            // A suspended WP8.1 socket can look connected while its route is
+            // already dead. Recreate MQTT instead of trusting the old state.
+            if (_mqtt.State != MqttConnectionState.Disconnected)
+                await _mqtt.DisconnectAsync();
             await EnsureMqttConnectedAsync("возврат приложения из фона");
         }
 
