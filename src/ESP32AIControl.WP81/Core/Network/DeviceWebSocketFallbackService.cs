@@ -31,6 +31,7 @@ namespace ESP32AIControl.WP81.Core.Network
             public CancellationTokenSource Cancellation;
             public Task Worker;
             public long LastPongAt;
+            public TaskCompletionSource<bool> Ready = new TaskCompletionSource<bool>();
             public readonly SemaphoreSlim WriteGate = new SemaphoreSlim(1, 1);
         }
 
@@ -118,7 +119,12 @@ namespace ESP32AIControl.WP81.Core.Network
             }
 
             if (session.Writer == null || session.Socket == null)
-                return false;
+            {
+                var ready = session.Ready.Task;
+                var completed = await Task.WhenAny(ready, Task.Delay(8000));
+                if (completed != ready || !await ready)
+                    return false;
+            }
 
             try
             {
@@ -173,6 +179,7 @@ namespace ESP32AIControl.WP81.Core.Network
             while (!token.IsCancellationRequested)
             {
                 MessageWebSocket socket = null;
+                session.Ready = new TaskCompletionSource<bool>();
                 try
                 {
                     socket = new MessageWebSocket();
@@ -195,8 +202,9 @@ namespace ESP32AIControl.WP81.Core.Network
 
                     session.Socket = socket;
                     session.Writer = new DataWriter(socket.OutputStream);
+                    session.Ready.TrySetResult(true);
                     await SendFrameAsync(session, "/params|");
-                    session.LastPongAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                    session.LastPongAt = UtcNowMilliseconds();
                     RaiseDiagnostic("WS CONNECTED device=" + session.DeviceId + " ip=" + session.Ip);
 
                     while (!token.IsCancellationRequested)
@@ -304,6 +312,11 @@ namespace ESP32AIControl.WP81.Core.Network
             {
                 RaiseDiagnostic("WS frame parse error device=" + session.DeviceId + ": " + ex.Message);
             }
+        }
+
+        private static long UtcNowMilliseconds()
+        {
+            return DateTimeOffset.UtcNow.Ticks / TimeSpan.TicksPerMillisecond;
         }
 
         private static string ReadJsonString(Windows.Data.Json.JsonObject json, string key)
