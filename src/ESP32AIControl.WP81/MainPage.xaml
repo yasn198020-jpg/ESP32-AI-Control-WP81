@@ -280,6 +280,49 @@
                         </StackPanel>
                     </ScrollViewer>
                 </PivotItem>
+                <PivotItem Header="Автосценарии">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="8,0,8,8">
+                            <TextBlock Text="ЛОКАЛЬНЫЕ АВТОСЦЕНАРИИ" FontSize="18" FontWeight="SemiBold"
+                                       Foreground="#FF00B7FF" Margin="0,12,0,4"/>
+                            <TextBlock Text="Условия проверяются по данным MQTT и WebSocket. Сценарий срабатывает один раз, повторно — после перехода хотя бы одного условия в FALSE."
+                                       TextWrapping="Wrap" Opacity="0.75" Margin="0,0,0,8"/>
+                            <TextBox x:Name="LocalScenarioTitleBox" Header="Название сценария"
+                                     PlaceholderText="Например, высокая температура"/>
+                            <TextBox x:Name="LocalScenarioConditionsBox" Header="Условия (по одному на строку)"
+                                     AcceptsReturn="True" TextWrapping="Wrap" Height="100"
+                                     PlaceholderText="sensor1 > 25&#10;AND sensor2 = 1&#10;OR sensor3 &lt; 10"/>
+                            <TextBlock Text="Формат: widgetId оператор значение. Для следующих строк укажите AND или OR в начале."
+                                       TextWrapping="Wrap" FontSize="12" Opacity="0.7" Margin="0,2,0,6"/>
+                            <TextBox x:Name="LocalScenarioActionsBox" Header="Действия MQTT (deviceId/widgetId=value)"
+                                     AcceptsReturn="True" TextWrapping="Wrap" Height="72"
+                                     PlaceholderText="esp32/relay1=1"/>
+                            <TextBox x:Name="LocalScenarioMessageBox" Header="Текст уведомления"
+                                     Text="Условие выполнено: {value}"/>
+                            <CheckBox x:Name="LocalScenarioEnabledCheckBox" Content="Сценарий включён"
+                                      IsChecked="True" Margin="0,4,0,0"/>
+                            <CheckBox x:Name="LocalScenarioNotificationCheckBox" Content="Показывать уведомление"
+                                      IsChecked="True" Margin="0,0,0,6"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,4,0,8">
+                                <Button x:Name="LocalScenarioSaveButton" Content="Добавить сценарий"
+                                        Click="LocalScenarioSaveButton_Click" Margin="0,0,6,0"/>
+                                <Button Content="Очистить" Click="LocalScenarioClearButton_Click"/>
+                            </StackPanel>
+                            <TextBlock Text="СОХРАНЁННЫЕ СЦЕНАРИИ" FontWeight="SemiBold"
+                                       Foreground="#FF00B7FF" Margin="0,6,0,4"/>
+                            <ListView x:Name="LocalScenariosList" Height="125"
+                                      SelectionMode="Single"
+                                      SelectionChanged="LocalScenariosList_SelectionChanged"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                <Button Content="Вкл. / Выкл." Click="LocalScenarioToggleButton_Click"
+                                        Margin="0,0,6,0"/>
+                                <Button Content="Удалить" Click="LocalScenarioDeleteButton_Click"/>
+                            </StackPanel>
+                            <TextBlock x:Name="LocalScenariosStatus" Text="" TextWrapping="Wrap"
+                                       FontSize="12" Opacity="0.75" Margin="0,6,0,8"/>
+                        </StackPanel>
+                    </ScrollViewer>
+                </PivotItem>
                 <PivotItem Header="Журнал">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel Margin="8,0,8,8">
