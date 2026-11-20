@@ -629,8 +629,6 @@ namespace ESP32AIControl.WP81
 
         private Popup _navigationPopup;
 
-        private Popup _navigationPopup;
-
         private void MenuButton_Click(object sender, RoutedEventArgs e)
         {
             if (_navigationPopup != null && _navigationPopup.IsOpen)
