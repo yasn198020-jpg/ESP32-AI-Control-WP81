@@ -47,6 +47,7 @@ namespace ESP32AIControl.WP81.Core.Network
         private bool _disposed;
 
         public event EventHandler<string> Diagnostic;
+        public event EventHandler<string> DeviceSessionConnected;
         public event EventHandler<WebSocketWidgetUpdateEventArgs> WidgetUpdated;
 
         public void UpdateDevice(UdpDiscoveredDevice device)
@@ -224,6 +225,9 @@ namespace ESP32AIControl.WP81.Core.Network
                     await SendFrameAsync(session, "/params|");
                     session.LastPongAt = UtcNowMilliseconds();
                     RaiseDiagnostic("WS CONNECTED device=" + session.DeviceId + " ip=" + session.Ip);
+                    var connectedHandler = DeviceSessionConnected;
+                    if (connectedHandler != null)
+                        connectedHandler(this, session.DeviceId);
 
                     while (!token.IsCancellationRequested)
                     {
