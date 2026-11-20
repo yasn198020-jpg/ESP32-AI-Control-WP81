@@ -52,6 +52,7 @@ namespace ESP32AIControl.WP81.Core.Protocol
 
             await _mqtt.SubscribeAsync("/" + _settings.Prefix + "/#", 1);
             await PublishHelloAsync();
+            await FlushPendingControlsAsync();
         }
 
         public Task PublishHelloAsync()
@@ -64,14 +65,103 @@ namespace ESP32AIControl.WP81.Core.Protocol
             return _mqtt.DisconnectAsync();
         }
 
-        public Task PublishControlAsync(string deviceId, string widgetId, string value)
+        private sealed class PendingControl
+        {
+            public string Topic;
+            public string Payload;
+        }
+
+        private readonly object _pendingLock = new object();
+        private readonly System.Collections.Generic.LinkedList<PendingControl> _pendingControls =
+            new System.Collections.Generic.LinkedList<PendingControl>();
+        private const int MaxPendingControls = 100;
+        private bool _flushingPendingControls;
+
+        public async Task PublishControlAsync(string deviceId, string widgetId, string value)
         {
             var topic = "/" + _settings.Prefix + "/" +
                         (deviceId ?? string.Empty).Trim('/') + "/" +
                         (widgetId ?? string.Empty).Trim('/') + "/control";
             var payload = "{\"status\":\"" + EscapeJson(value) + "\"}";
 
-            return _mqtt.PublishAsync(topic, payload, 1, false);
+            if (_mqtt.State != MqttConnectionState.Connected)
+            {
+                EnqueueControl(topic, payload);
+                return;
+            }
+
+            try
+            {
+                await _mqtt.PublishAsync(topic, payload, 1, false);
+            }
+            catch
+            {
+                // A Wi-Fi transition can happen between the state check and
+                // the socket write. Preserve the latest requested value and
+                // send it after the next successful MQTT subscription.
+                EnqueueControl(topic, payload);
+            }
+        }
+
+        private void EnqueueControl(string topic, string payload)
+        {
+            lock (_pendingLock)
+            {
+                // Keep only the newest requested value for a given control.
+                var node = _pendingControls.First;
+                while (node != null)
+                {
+                    var next = node.Next;
+                    if (string.Equals(node.Value.Topic, topic, StringComparison.Ordinal))
+                        _pendingControls.Remove(node);
+                    node = next;
+                }
+
+                _pendingControls.AddLast(new PendingControl { Topic = topic, Payload = payload });
+                while (_pendingControls.Count > MaxPendingControls)
+                    _pendingControls.RemoveFirst();
+            }
+        }
+
+        private async Task FlushPendingControlsAsync()
+        {
+            lock (_pendingLock)
+            {
+                if (_flushingPendingControls || _pendingControls.Count == 0)
+                    return;
+                _flushingPendingControls = true;
+            }
+
+            try
+            {
+                while (_mqtt.State == MqttConnectionState.Connected)
+                {
+                    PendingControl item;
+                    lock (_pendingLock)
+                    {
+                        if (_pendingControls.Count == 0)
+                            break;
+                        item = _pendingControls.First.Value;
+                        _pendingControls.RemoveFirst();
+                    }
+
+                    try
+                    {
+                        await _mqtt.PublishAsync(item.Topic, item.Payload, 1, false);
+                    }
+                    catch
+                    {
+                        lock (_pendingLock)
+                            _pendingControls.AddFirst(item);
+                        break;
+                    }
+                }
+            }
+            finally
+            {
+                lock (_pendingLock)
+                    _flushingPendingControls = false;
+            }
         }
 
         private void Mqtt_MessageReceived(object sender, MqttMessageEventArgs e)
