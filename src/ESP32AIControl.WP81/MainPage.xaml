@@ -5,10 +5,13 @@
     RequestedTheme="Dark">
     <Page.Resources>
         <SolidColorBrush x:Key="AccentBrush" Color="#FF8065E8"/>
-        <SolidColorBrush x:Key="PanelBrush" Color="#FF2A2A2A"/>
-        <SolidColorBrush x:Key="MutedBrush" Color="#FFB0B0B0"/>
+        <SolidColorBrush x:Key="PanelBrush" Color="#FF2B2C34"/>
+        <SolidColorBrush x:Key="MutedBrush" Color="#FFACADB8"/>
+        <SolidColorBrush x:Key="CardBrush" Color="#FF30313A"/>
+        <SolidColorBrush x:Key="FieldBrush" Color="#FF25262D"/>
+        <SolidColorBrush x:Key="LineBrush" Color="#FF41434D"/>
         <DataTemplate x:Key="WidgetPageHeaderTemplate">
-            <Border Background="#FF303030" CornerRadius="12" Padding="16,10" Margin="0,0,8,0">
+            <Border Background="#FF30313A" CornerRadius="12" Padding="16,10" Margin="0,0,8,0">
                 <TextBlock Text="{Binding}" FontSize="14" FontWeight="SemiBold"
                            FontFamily="Segoe UI Symbol"
                            Foreground="#FFEAF1F7" TextWrapping="NoWrap"/>
@@ -17,19 +20,20 @@
         <Style TargetType="TextBlock">
             <Setter Property="Foreground" Value="#FFEAF1F7"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="FontSize" Value="14"/>
         </Style>
         <Style TargetType="Button">
-            <Setter Property="Background" Value="#FF303030"/>
+            <Setter Property="Background" Value="#FF343540"/>
             <Setter Property="Foreground" Value="#FFEAF1F7"/>
-            <Setter Property="BorderBrush" Value="#FF484848"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Padding" Value="16,12"/>
+            <Setter Property="BorderBrush" Value="#FF4A4B56"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="14,10"/>
             <Setter Property="MinHeight" Value="44"/>
         </Style>
         <Style TargetType="TextBox">
-            <Setter Property="Background" Value="#FF2B2B2B"/>
+            <Setter Property="Background" Value="#FF25262D"/>
             <Setter Property="Foreground" Value="#FFEAF1F7"/>
-            <Setter Property="BorderBrush" Value="#FF555555"/>
+            <Setter Property="BorderBrush" Value="#FF4B4C58"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="10,8"/>
             <Setter Property="Margin" Value="0,7,0,7"/>
@@ -42,19 +46,43 @@
             <Setter Property="Margin" Value="0,7,0,7"/>
         </Style>
         <Style TargetType="ComboBox">
-            <Setter Property="Background" Value="#FF2B2B2B"/>
+            <Setter Property="Background" Value="#FF25262D"/>
             <Setter Property="Foreground" Value="#FFEAF1F7"/>
-            <Setter Property="BorderBrush" Value="#FF555555"/>
+            <Setter Property="BorderBrush" Value="#FF4B4C58"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="MinHeight" Value="44"/>
+        </Style>
+        <Style TargetType="DatePicker">
+            <Setter Property="Foreground" Value="#FFEAF1F7"/>
+            <Setter Property="Background" Value="#FF25262D"/>
+            <Setter Property="BorderBrush" Value="#FF4B4C58"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Margin" Value="0,4,0,4"/>
+        </Style>
+        <Style TargetType="TimePicker">
+            <Setter Property="Foreground" Value="#FFEAF1F7"/>
+            <Setter Property="Background" Value="#FF25262D"/>
+            <Setter Property="BorderBrush" Value="#FF4B4C58"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Margin" Value="0,4,0,4"/>
+        </Style>
+        <Style TargetType="Slider"><Setter Property="Foreground" Value="#FF8065E8"/></Style>
+        <Style TargetType="CheckBox"><Setter Property="Foreground" Value="#FFEAF1F7"/></Style>
+        <Style TargetType="ListView">
+            <Setter Property="Background" Value="#FF25262D"/>
+            <Setter Property="Foreground" Value="#FFEAF1F7"/>
+            <Setter Property="BorderBrush" Value="#FF41434D"/>
             <Setter Property="BorderThickness" Value="1"/>
         </Style>
-        <Style TargetType="ListView">
-            <Setter Property="Background" Value="#FF2B2B2B"/>
+        <Style TargetType="ListViewItem">
+            <Setter Property="Background" Value="#FF30313A"/>
             <Setter Property="Foreground" Value="#FFEAF1F7"/>
-            <Setter Property="BorderBrush" Value="#FF414141"/>
-            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="12,9"/>
+            <Setter Property="Margin" Value="0,3,0,3"/>
         </Style>
     </Page.Resources>
-    <Grid Background="#FF202020">
+    <Grid Background="#FF202127">
         <Grid.RowDefinitions>
             <RowDefinition Height="60"/>
             <RowDefinition Height="*"/>
@@ -62,7 +90,7 @@
         </Grid.RowDefinitions>
 
         <!-- Android-like top bar: menu, current screen title, info and MQTT cloud status. -->
-        <Border Grid.Row="0" Background="#FF202020" BorderBrush="#FF414141"
+        <Border Grid.Row="0" Background="#FF202127" BorderBrush="#FF41434D"
                 BorderThickness="0,0,0,1" Padding="10,6,10,6">
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -134,60 +162,86 @@
             </Grid>
 
             <Grid x:Name="GraphsSection" Visibility="Collapsed">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="16,14,16,14">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="12,10,12,12">
                     <StackPanel>
-                        <TextBlock Text="История и графики" FontSize="22" FontWeight="SemiBold" Foreground="#FFEAF1F7"/>
-                        <TextBlock Text="Запись производится с заданным интервалом, а не по каждому MQTT-пакету."
-                                   TextWrapping="Wrap" Opacity="0.7" Margin="0,4,0,10"/>
-                        <ComboBox x:Name="GraphWidgetBox" Header="Датчик / виджет" Margin="0,4"/>
-                        <StackPanel>
-                            <DatePicker x:Name="GraphFrom" Header="Начало периода" Margin="0,4"/>
-                            <DatePicker x:Name="GraphTo" Header="Конец периода" Margin="0,4"/>
+                        <StackPanel Margin="4,4,4,12">
+                            <TextBlock Text="АНАЛИТИКА" FontSize="11" FontWeight="SemiBold" Foreground="#FF8065E8"/>
+                            <TextBlock Text="История и графики" FontSize="25" FontWeight="SemiBold" Margin="0,2,0,2"/>
+                            <TextBlock Text="Изменение показаний датчиков за выбранный период." FontSize="13" Foreground="#FFACADB8"/>
                         </StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0,4,0,10">
-                            <Button Content="Построить" Click="BuildGraphButton_Click" Margin="0,0,8,0"/>
-                            <Button Content="Экспорт Word" Click="ExportGraphButton_Click"/>
-                        </StackPanel>
-                        <TextBlock x:Name="GraphSummary" Text="—" Margin="0,0,0,8"/>
-                        <Border BorderThickness="1" Padding="4">
-                            <Canvas x:Name="GraphCanvas" Height="300" HorizontalAlignment="Stretch"/>
+                        <Border Background="#FF2B2C34" CornerRadius="16" BorderBrush="#FF41434D" BorderThickness="1" Padding="14" Margin="0,0,0,10">
+                            <StackPanel>
+                                <TextBlock Text="Параметры графика" FontSize="17" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                                <ComboBox x:Name="GraphWidgetBox" Header="Датчик или виджет" Margin="0,2,0,8"/>
+                                <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                    <DatePicker x:Name="GraphFrom" Header="Начало периода" Margin="0,2,5,2"/>
+                                    <DatePicker x:Name="GraphTo" Grid.Column="1" Header="Конец периода" Margin="5,2,0,2"/>
+                                </Grid>
+                                <Grid Margin="0,8,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                    <Button Content="Построить график" Click="BuildGraphButton_Click" Background="#FF8065E8" BorderBrush="#FF8065E8" Foreground="#FFFFFFFF" Margin="0,0,5,0"/>
+                                    <Button Grid.Column="1" Content="Экспорт Word" Click="ExportGraphButton_Click" Margin="5,0,0,0"/>
+                                </Grid>
+                            </StackPanel>
                         </Border>
+                        <Border Background="#FF2B2C34" CornerRadius="16" BorderBrush="#FF41434D" BorderThickness="1" Padding="12" Margin="0,0,0,8">
+                            <StackPanel>
+                                <TextBlock Text="Результат" FontSize="17" FontWeight="SemiBold" Margin="2,0,2,4"/>
+                                <TextBlock x:Name="GraphSummary" Text="Выберите датчик и период" Foreground="#FFACADB8" FontSize="12" TextWrapping="Wrap" Margin="2,0,2,8"/>
+                                <Border Background="#FF202127" CornerRadius="10" Padding="6">
+                                    <Canvas x:Name="GraphCanvas" Height="300" HorizontalAlignment="Stretch"/>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Text="Запись показаний выполняется с заданным интервалом, а не по каждому MQTT-пакету." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="4,2,4,8"/>
                     </StackPanel>
                 </ScrollViewer>
             </Grid>
 
             <Grid x:Name="TasksSection" Visibility="Collapsed">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="16,14,16,16">
-                    <StackPanel>
-                        <TextBlock Text="Отложенные команды" FontSize="22" FontWeight="SemiBold" Foreground="#FFEAF1F7"/>
-                        <TextBlock Text="Формат команды: устройство/элемент=значение" Opacity="0.7" Margin="0,4,0,8"/>
-                        <TextBox x:Name="ScheduleCommandBox" Header="Команда устройству"/>
-                        <Grid Margin="0,4,0,4">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                            <DatePicker x:Name="ScheduleDate" Header="Дата" HorizontalAlignment="Stretch" Margin="0,4,5,4"/>
-                            <TimePicker x:Name="ScheduleTime" Grid.Column="1" Header="Время" HorizontalAlignment="Stretch" Margin="5,4,0,4"/>
-                        </Grid>
-                        <Grid Margin="0,4,0,10">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                            <Button Content="ДОБАВИТЬ" Click="AddScheduleButton_Click" Margin="0,0,4,4"/>
-                            <Button Grid.Column="1" Content="ИЗМЕНИТЬ" Click="UpdateScheduleButton_Click" Margin="4,0,0,4"/>
-                            <Button Grid.Row="1" Content="ОТМЕНИТЬ" Click="CancelScheduleButton_Click" Margin="0,4,4,0"/>
-                            <Button Grid.Row="1" Grid.Column="1" Content="ОБНОВИТЬ" Click="RefreshScheduleButton_Click" Margin="4,4,0,0"/>
-                        </Grid>
-                        <ListView x:Name="ScheduleList" Height="280" SelectionChanged="ScheduleList_SelectionChanged"/>
+                <Grid Margin="12,10,12,12">
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                    <StackPanel Grid.Row="0" Margin="4,4,4,12">
+                        <TextBlock Text="ПЛАНИРОВАНИЕ" FontSize="11" FontWeight="SemiBold" Foreground="#FF8065E8"/>
+                        <TextBlock Text="Отложенные команды" FontSize="25" FontWeight="SemiBold" Margin="0,2,0,2"/>
+                        <TextBlock Text="Команда будет отправлена устройству в указанное время." FontSize="13" Foreground="#FFACADB8"/>
                     </StackPanel>
-                </ScrollViewer>
+                    <Border Grid.Row="1" Background="#FF2B2C34" CornerRadius="16" BorderBrush="#FF41434D" BorderThickness="1" Padding="12" Margin="0,0,0,10">
+                        <StackPanel>
+                            <TextBlock Text="Новая команда" FontSize="17" FontWeight="SemiBold" Margin="2,0,2,4"/>
+                            <TextBox x:Name="ScheduleCommandBox" Header="Команда устройству" PlaceholderText="device/widget=value"/>
+                            <Grid Margin="0,2,0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <DatePicker x:Name="ScheduleDate" Header="Дата" HorizontalAlignment="Stretch" Margin="0,2,5,2"/>
+                                <TimePicker x:Name="ScheduleTime" Grid.Column="1" Header="Время" HorizontalAlignment="Stretch" Margin="5,2,0,2"/>
+                            </Grid>
+                            <Grid Margin="0,6,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                                <Button Content="Добавить" Click="AddScheduleButton_Click" Background="#FF8065E8" BorderBrush="#FF8065E8" Foreground="#FFFFFFFF" Margin="0,0,5,5"/>
+                                <Button Grid.Column="1" Content="Изменить" Click="UpdateScheduleButton_Click" Margin="5,0,0,5"/>
+                                <Button Grid.Row="1" Content="Отменить" Click="CancelScheduleButton_Click" Margin="0,5,5,0"/>
+                                <Button Grid.Row="1" Grid.Column="1" Content="Обновить список" Click="RefreshScheduleButton_Click" Margin="5,5,0,0"/>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Row="2" Background="#FF2B2C34" CornerRadius="16" BorderBrush="#FF41434D" BorderThickness="1" Padding="10">
+                        <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="2,0,2,8">
+                                <TextBlock Text="Запланировано" FontSize="17" FontWeight="SemiBold"/>
+                                <TextBlock Text="  •  выберите запись для изменения" FontSize="11" Foreground="#FFACADB8" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <ListView x:Name="ScheduleList" Grid.Row="1" SelectionChanged="ScheduleList_SelectionChanged" Background="#FF25262D" BorderThickness="0"/>
+                        </Grid>
+                    </Border>
+                </Grid>
             </Grid>
 
             <Grid x:Name="SettingsSection" Visibility="Collapsed">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="12,10,12,10">
-                    <StackPanel>
-                        <TextBlock Text="Настройки" FontSize="24" FontWeight="SemiBold" Foreground="#FFF4F4F4" Margin="4,0,0,2"/>
-                        <TextBlock Text="Подключение, хранение данных, профили и голосовое управление"
-                                   FontSize="13" Foreground="#FFB0B0B0" TextWrapping="Wrap"
-                                   Margin="4,0,4,12"/>
-                        <Pivot x:Name="SettingsPivot" Height="600" Background="#FF202020" Foreground="#FFEAF1F7">
+                <Grid Margin="12,8,12,8">
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <StackPanel Grid.Row="0" Margin="4,2,4,8">
+                        <TextBlock Text="ПЕРСОНАЛИЗАЦИЯ И СВЯЗЬ" FontSize="11" FontWeight="SemiBold" Foreground="#FF8065E8"/>
+                        <TextBlock Text="Настройки" FontSize="24" FontWeight="SemiBold" Margin="0,1,0,1"/>
+                        <TextBlock Text="Подключение, история, профили, голос и сценарии" FontSize="12" Foreground="#FFACADB8"/>
+                    </StackPanel>
+                                            <Pivot x:Name="SettingsPivot" Grid.Row="1" Background="#FF202127" Foreground="#FFEAF1F7">
                 <PivotItem Header="Подключение">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel Margin="8,0,8,8">
@@ -204,7 +258,7 @@
                         <TextBlock Text="Размер текста и элементов интерфейса" Opacity="0.7" TextWrapping="Wrap"/>
                         <Slider x:Name="UiFontScaleSlider" Minimum="0.7" Maximum="1.1" Value="0.85" StepFrequency="0.05" />
 
-                        <Border Background="#FF2B2B2B" BorderBrush="#FF414141"
+                        <Border Background="#FF2B2C34" BorderBrush="#FF414141"
                                 BorderThickness="1" Padding="10" Margin="0,8,0,8">
                             <StackPanel>
                                 <TextBlock x:Name="ConnectionText" Text="MQTT: отключено"
@@ -348,19 +402,23 @@
                     </ScrollViewer>
                 </PivotItem>
                         </Pivot>
-                        <Button Content="Сохранить настройки" Click="SaveSettingsButton_Click" Margin="0,12,0,4"/>
-                        <Button Content="Сохранить резервную копию в Изображения" Click="ExportSettingsBackupButton_Click" Margin="0,4"/>
-                        <Button Content="Восстановить настройки из резервной копии" Click="ImportSettingsBackupButton_Click" Margin="0,4,0,8"/>
-                        <TextBlock Text="Файл ESP32-AI-Control-settings-backup.json хранится в общей папке Изображения телефона, вне данных приложения. После переустановки нажмите восстановление." TextWrapping="Wrap" Opacity="0.7" Margin="0,0,0,8"/>
-                        <TextBlock x:Name="SettingsStatus" Text="" TextWrapping="Wrap"/>
-                        
-                    </StackPanel>
-                </ScrollViewer>
+                    <Border Grid.Row="2" Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1" CornerRadius="12" Padding="8" Margin="0,6,0,0">
+                        <StackPanel>
+                            <Button Content="Сохранить настройки" Click="SaveSettingsButton_Click" Background="#FF8065E8" BorderBrush="#FF8065E8" Foreground="#FFFFFFFF"/>
+                            <Grid Margin="0,6,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Button Content="Экспорт копии" Click="ExportSettingsBackupButton_Click" FontSize="12" Padding="6,8" Margin="0,0,4,0"/>
+                                <Button Grid.Column="1" Content="Восстановить" Click="ImportSettingsBackupButton_Click" FontSize="12" Padding="6,8" Margin="4,0,0,0"/>
+                            </Grid>
+                            <TextBlock Text="Резервная копия хранится в общей папке Изображения телефона." TextWrapping="Wrap" FontSize="11" Foreground="#FFACADB8" Margin="2,6,2,2"/>
+                            <TextBlock x:Name="SettingsStatus" Text="" TextWrapping="Wrap" FontSize="12" Margin="2,2,2,0"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
             </Grid>
-        </Grid>
+            </Grid>
 
         <!-- Fixed bottom navigation inspired by the Android app. -->
-        <Border Grid.Row="2" Background="#FF24252A"
+        <Border Grid.Row="2" Background="#FF24252D"
                 BorderBrush="#FF414141" BorderThickness="0,1,0,0">
             <Grid Background="#FF24252A">
             <Grid.ColumnDefinitions>
