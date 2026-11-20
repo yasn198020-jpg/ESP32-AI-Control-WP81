@@ -28,12 +28,37 @@ namespace ESP32AIControl.WP81.Core.Network
         private int _generation;
 
         public event EventHandler<UdpDiscoveredDevice> DeviceDiscovered;
+        public event EventHandler<UdpDiscoveredDevice> DeviceExpired;
         public event EventHandler<string> Diagnostic;
 
         public IList<UdpDiscoveredDevice> GetSnapshot()
         {
             lock (_sync)
                 return new List<UdpDiscoveredDevice>(_devices.Values);
+        }
+
+        public void PruneExpired()
+        {
+            var expired = new List<UdpDiscoveredDevice>();
+            lock (_sync)
+            {
+                var keys = new List<string>();
+                foreach (var pair in _devices)
+                {
+                    if ((DateTimeOffset.Now - pair.Value.LastSeenAt).TotalMilliseconds > 300000)
+                    {
+                        keys.Add(pair.Key);
+                        expired.Add(pair.Value);
+                    }
+                }
+                for (var i = 0; i < keys.Count; i++)
+                    _devices.Remove(keys[i]);
+            }
+
+            var handler = DeviceExpired;
+            if (handler != null)
+                for (var i = 0; i < expired.Count; i++)
+                    handler(this, expired[i]);
         }
 
         public async System.Threading.Tasks.Task StartAsync()
