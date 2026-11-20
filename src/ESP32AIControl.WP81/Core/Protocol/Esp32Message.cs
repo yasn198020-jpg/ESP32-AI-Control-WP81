@@ -20,5 +20,6 @@ namespace ESP32AIControl.WP81.Core.Protocol
         public string Page { get; set; }
         public int Order { get; set; }
         public string RawPayload { get; set; }
+        public bool Retained { get; set; }
     }
 }
