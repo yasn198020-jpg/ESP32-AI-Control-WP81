@@ -79,15 +79,32 @@ namespace ESP32AIControl.WP81.Core.Protocol
 
         public void SetWebSocketFallbackService(DeviceWebSocketFallbackService service)
         {
+            if (_webSocketFallback != null)
+                _webSocketFallback.DeviceSessionConnected -= WebSocketFallback_DeviceSessionConnected;
+
             _webSocketFallback = service;
             if (_webSocketFallback != null)
+            {
+                _webSocketFallback.DeviceSessionConnected += WebSocketFallback_DeviceSessionConnected;
                 _webSocketFallback.SetMqttOnline(_mqtt.State != MqttConnectionState.Disconnected);
+            }
+        }
+
+        private async void WebSocketFallback_DeviceSessionConnected(object sender, string deviceId)
+        {
+            if (_mqtt.State == MqttConnectionState.Connected)
+                return;
+
+            await FlushPendingControlsViaWebSocketAsync(deviceId);
         }
 
         private sealed class PendingControl
         {
             public string Topic;
             public string Payload;
+            public string DeviceId;
+            public string WidgetId;
+            public string Value;
         }
 
         private readonly object _pendingLock = new object();
@@ -107,9 +124,12 @@ namespace ESP32AIControl.WP81.Core.Protocol
             {
                 if (_webSocketFallback != null &&
                     await _webSocketFallback.SendControlAsync(deviceId, widgetId, value))
+                {
+                    RemovePendingControl(deviceId, widgetId);
                     return;
+                }
 
-                EnqueueControl(topic, payload);
+                EnqueueControl(topic, payload, deviceId, widgetId, value);
                 return;
             }
 
@@ -122,11 +142,11 @@ namespace ESP32AIControl.WP81.Core.Protocol
                 // A Wi-Fi transition can happen between the state check and
                 // the socket write. Preserve the latest requested value and
                 // send it after the next successful MQTT subscription.
-                EnqueueControl(topic, payload);
+                EnqueueControl(topic, payload, deviceId, widgetId, value);
             }
         }
 
-        private void EnqueueControl(string topic, string payload)
+        private void EnqueueControl(string topic, string payload, string deviceId, string widgetId, string value)
         {
             lock (_pendingLock)
             {
@@ -135,14 +155,64 @@ namespace ESP32AIControl.WP81.Core.Protocol
                 while (node != null)
                 {
                     var next = node.Next;
-                    if (string.Equals(node.Value.Topic, topic, StringComparison.Ordinal))
+                    if (string.Equals(node.Value.DeviceId, deviceId, StringComparison.Ordinal) &&
+                        string.Equals(node.Value.WidgetId, widgetId, StringComparison.Ordinal))
                         _pendingControls.Remove(node);
                     node = next;
                 }
 
-                _pendingControls.AddLast(new PendingControl { Topic = topic, Payload = payload });
+                _pendingControls.AddLast(new PendingControl
+                {
+                    Topic = topic, Payload = payload, DeviceId = deviceId,
+                    WidgetId = widgetId, Value = value
+                });
                 while (_pendingControls.Count > MaxPendingControls)
                     _pendingControls.RemoveFirst();
+            }
+        }
+
+        private void RemovePendingControl(string deviceId, string widgetId)
+        {
+            lock (_pendingLock)
+            {
+                var node = _pendingControls.First;
+                while (node != null)
+                {
+                    var next = node.Next;
+                    if (string.Equals(node.Value.DeviceId, deviceId, StringComparison.Ordinal) &&
+                        string.Equals(node.Value.WidgetId, widgetId, StringComparison.Ordinal))
+                        _pendingControls.Remove(node);
+                    node = next;
+                }
+            }
+        }
+
+        private async Task FlushPendingControlsViaWebSocketAsync(string deviceId)
+        {
+            if (_webSocketFallback == null || _mqtt.State == MqttConnectionState.Connected)
+                return;
+
+            var pending = new System.Collections.Generic.List<PendingControl>();
+            lock (_pendingLock)
+            {
+                for (var node = _pendingControls.First; node != null; node = node.Next)
+                    if (string.Equals(node.Value.DeviceId, deviceId, StringComparison.Ordinal))
+                        pending.Add(node.Value);
+            }
+
+            foreach (var item in pending)
+            {
+                if (_mqtt.State == MqttConnectionState.Connected)
+                    return;
+                if (await _webSocketFallback.SendControlAsync(item.DeviceId, item.WidgetId, item.Value))
+                {
+                    lock (_pendingLock)
+                        _pendingControls.Remove(item);
+                }
+                else
+                {
+                    return;
+                }
             }
         }
 
