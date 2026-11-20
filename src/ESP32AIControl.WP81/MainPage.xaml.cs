@@ -684,7 +684,7 @@ namespace ESP32AIControl.WP81
             var state = ConnectionText == null ? "Состояние MQTT неизвестно." : ConnectionText.Text;
             var dialog = new Windows.UI.Popups.MessageDialog(
                 state + Environment.NewLine +
-                "Параметры MQTT, сценарий IoTManager и журнал доступны в разделе «Настройки».",
+                "Дополнительные разделы, сценарии, журнал и сетевые настройки доступны через меню ☰.",
                 "ESP32 AI Control");
             await dialog.ShowAsync();
         }
@@ -701,9 +701,9 @@ namespace ESP32AIControl.WP81
             if (_selectedSection == 0)
                 PageSubtitle.Text = "Главная";
             else if (_selectedSection == 1)
-                PageSubtitle.Text = "Графики";
+                PageSubtitle.Text = "История и графики";
             else if (_selectedSection == 2)
-                PageSubtitle.Text = "Задачи";
+                PageSubtitle.Text = "Отложенные";
             else
                 PageSubtitle.Text = "Настройки";
 
@@ -723,11 +723,11 @@ namespace ESP32AIControl.WP81
             // the selected destination gets a soft surface and an accent icon,
             // rather than turning the entire navigation tile bright purple.
             button.Background = new SolidColorBrush(isSelected
-                ? Windows.UI.Color.FromArgb(255, 43, 39, 57)
-                : Windows.UI.Color.FromArgb(255, 25, 26, 32));
+                ? Windows.UI.Color.FromArgb(255, 58, 58, 58)
+                : Windows.UI.Color.FromArgb(255, 36, 37, 42));
             button.Foreground = new SolidColorBrush(isSelected
                 ? Windows.UI.Color.FromArgb(255, 243, 244, 246)
-                : Windows.UI.Color.FromArgb(255, 156, 163, 175));
+                : Windows.UI.Color.FromArgb(255, 176, 176, 176));
             button.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0));
 
             var content = button.Content as StackPanel;
@@ -737,7 +737,7 @@ namespace ESP32AIControl.WP81
                 var label = content.Children[i] as TextBlock;
                 if (label == null) continue;
                 label.Foreground = new SolidColorBrush(isSelected && i == 0
-                    ? Windows.UI.Color.FromArgb(255, 0, 183, 255)
+                    ? Windows.UI.Color.FromArgb(255, 33, 150, 243)
                     : (isSelected
                         ? Windows.UI.Color.FromArgb(255, 243, 244, 246)
                         : Windows.UI.Color.FromArgb(255, 156, 163, 175)));
