@@ -61,6 +61,10 @@ namespace ESP32AIControl.WP81.Core.Scenarios
 
         public Task ExecuteLocalActionAsync(string deviceId, string widgetId, string value)
         {
+            var current = _devices.Get(deviceId, widgetId);
+            if (current != null && AreValuesEqual(current.Value, value))
+                return Task.FromResult(0);
+
             return ExecuteActionAsync(new ScenarioAction
             {
                 DeviceId = deviceId,
