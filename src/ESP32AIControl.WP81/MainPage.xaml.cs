@@ -157,6 +157,8 @@ namespace ESP32AIControl.WP81
                 try { await _udpDiscovery.StartAsync(); }
                 catch (Exception udpError) { Log("UDP discovery start: " + udpError.Message); }
                 _webSocketFallback.SetMqttOnline(_mqtt.State != MqttConnectionState.Disconnected);
+                foreach (var discovered in _udpDiscovery.GetSnapshot())
+                    _webSocketFallback.UpdateDevice(discovered);
                 StartMqttSupervisor();
             }
             catch (Exception ex)
