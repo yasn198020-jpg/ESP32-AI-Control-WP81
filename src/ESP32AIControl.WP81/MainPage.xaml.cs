@@ -537,6 +537,7 @@ namespace ESP32AIControl.WP81
                     // A socket may remain half-open after Wi-Fi changes. Force
                     // a clean session so the regular supervisor can reconnect
                     // using the current network route.
+                    _udpDiscovery.Stop();
                     try { await _udpDiscovery.StartAsync(); }
                     catch (Exception udpError) { Log("UDP discovery restart: " + udpError.Message); }
                     await _mqtt.DisconnectAsync();
