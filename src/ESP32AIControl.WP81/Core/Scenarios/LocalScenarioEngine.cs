@@ -110,8 +110,18 @@ namespace ESP32AIControl.WP81.Core.Scenarios
 
             double value;
             var raw = (message.Value ?? string.Empty).Trim().Replace(',', '.');
-            if (!double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out value) ||
-                double.IsNaN(value) || double.IsInfinity(value))
+            if (!double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out value))
+            {
+                if (string.Equals(raw, "true", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(raw, "on", StringComparison.OrdinalIgnoreCase))
+                    value = 1;
+                else if (string.Equals(raw, "false", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(raw, "off", StringComparison.OrdinalIgnoreCase))
+                    value = 0;
+                else
+                    return;
+            }
+            if (double.IsNaN(value) || double.IsInfinity(value))
                 return;
 
             _values[message.WidgetId] = value;
