@@ -629,28 +629,54 @@ namespace ESP32AIControl.WP81
         {
             var menu = new MenuFlyout();
 
-            var home = new MenuFlyoutItem { Text = "Главная" };
-            home.Click += delegate { ShowSection(0); };
-            menu.Items.Add(home);
+            menu.Items.Add(new MenuFlyoutItem { Text = "ОСНОВНЫЕ РАЗДЕЛЫ", IsEnabled = false });
+            AddMenuItem(menu, "Главная", delegate { ShowSection(0); });
+            AddMenuItem(menu, "История и графики", delegate { ShowSection(1); });
+            AddMenuItem(menu, "Отложенные команды", delegate { ShowSection(2); });
 
-            var graphs = new MenuFlyoutItem { Text = "Графики и история" };
-            graphs.Click += delegate { ShowSection(1); };
-            menu.Items.Add(graphs);
+            menu.Items.Add(new MenuFlyoutSeparator());
+            menu.Items.Add(new MenuFlyoutItem { Text = "ОБСЛУЖИВАНИЕ", IsEnabled = false });
+            AddSettingsMenuItem(menu, "Сценарии ESP32 / IoTManager", 4);
+            AddSettingsMenuItem(menu, "Автосценарии", 5);
+            AddSettingsMenuItem(menu, "Журнал", 6);
+            AddMenuItem(menu, "UDP устройства", ShowUdpDevicesDialog);
 
-            var tasks = new MenuFlyoutItem { Text = "Запланированные команды" };
-            tasks.Click += delegate { ShowSection(2); };
-            menu.Items.Add(tasks);
+            menu.Items.Add(new MenuFlyoutSeparator());
+            menu.Items.Add(new MenuFlyoutItem { Text = "НАСТРОЙКИ", IsEnabled = false });
+            AddSettingsMenuItem(menu, "MQTT подключение", 0);
+            AddSettingsMenuItem(menu, "Хранение истории", 1);
+            AddSettingsMenuItem(menu, "Сохранённые профили", 2);
+            AddSettingsMenuItem(menu, "Голос и команды", 3);
 
-            var settings = new MenuFlyoutItem { Text = "Настройки" };
-            settings.Click += delegate
+            menu.ShowAt(MenuButton);
+        }
+
+        private void AddMenuItem(MenuFlyout menu, string title, Action action)
+        {
+            var item = new MenuFlyoutItem { Text = title };
+            item.Click += delegate { action(); };
+            menu.Items.Add(item);
+        }
+
+        private void AddSettingsMenuItem(MenuFlyout menu, string title, int pivotIndex)
+        {
+            AddMenuItem(menu, title, delegate
             {
                 ShowSection(3);
                 if (SettingsPivot != null)
-                    SettingsPivot.SelectedIndex = 0;
-            };
-            menu.Items.Add(settings);
+                    SettingsPivot.SelectedIndex = pivotIndex;
+            });
+        }
 
-            menu.ShowAt(MenuButton);
+        private async void ShowUdpDevicesDialog()
+        {
+            var devices = _udpDiscovery.GetSnapshot();
+            var message = devices.Count == 0
+                ? "Пока не найдено ни одного UDP-устройства."
+                : string.Join(Environment.NewLine, devices.Select(device =>
+                    (string.IsNullOrWhiteSpace(device.Name) ? device.Id : device.Name) +
+                    " — " + device.Ip + " (обновлено " + device.LastSeenAt.ToString("HH:mm:ss") + ")"));
+            await new Windows.UI.Popups.MessageDialog(message, "UDP устройства").ShowAsync();
         }
 
         private async void TopInfoButton_Click(object sender, RoutedEventArgs e)
@@ -683,6 +709,7 @@ namespace ESP32AIControl.WP81
 
             SetNavigationButton(NavHomeButton, _selectedSection == 0);
             SetNavigationButton(NavMarfaButton, false);
+            SetNavigationButton(NavCommandsButton, false);
             SetNavigationButton(NavGraphsButton, _selectedSection == 1);
             SetNavigationButton(NavTasksButton, _selectedSection == 2);
             // Settings stays available from the hamburger menu, not the bottom bar.
@@ -719,6 +746,12 @@ namespace ESP32AIControl.WP81
 
         private void NavigateHome_Click(object sender, RoutedEventArgs e) { ShowSection(0); }
         private void NavigateMarfa_Click(object sender, RoutedEventArgs e) { VoiceButton_Click(sender, e); }
+        private void NavigateCommands_Click(object sender, RoutedEventArgs e)
+        {
+            ShowSection(3);
+            if (SettingsPivot != null)
+                SettingsPivot.SelectedIndex = 3;
+        }
         private void NavigateGraphs_Click(object sender, RoutedEventArgs e) { ShowSection(1); }
         private void NavigateTasks_Click(object sender, RoutedEventArgs e) { ShowSection(2); }
         private void NavigateSettings_Click(object sender, RoutedEventArgs e) { ShowSection(3); }
