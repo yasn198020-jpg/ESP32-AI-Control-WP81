@@ -202,6 +202,7 @@ namespace ESP32AIControl.WP81.Core.Protocol
                 return;
             }
 
+            message.Retained = e.Retained;
             _devices.Apply(message);
 
             var handler = MessageReceived;
