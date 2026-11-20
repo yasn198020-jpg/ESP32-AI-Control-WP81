@@ -1424,7 +1424,8 @@ namespace ESP32AIControl.WP81
 
             var type = NormalizeType(state.WidgetType);
             var isSwitch = type == "switch" || type == "toggle" ||
-                           type == "checkbox" || type == "vbutton";
+                           type == "checkbox" || type == "vbutton" ||
+                           type == "vbtn" || type == "buttonin";
             var isAction = type == "button" || type == "action" || type == "buttonout";
             var isSlider = type == "slider" || type == "range" || type == "inputdgt";
 
