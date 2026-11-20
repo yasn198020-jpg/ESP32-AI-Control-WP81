@@ -300,9 +300,9 @@
                             <TextBox x:Name="LocalScenarioMessageBox" Header="Текст уведомления"
                                      Text="Условие выполнено: {value}"/>
                             <CheckBox x:Name="LocalScenarioEnabledCheckBox" Content="Сценарий включён"
-                                      IsChecked="True" Margin="0,4,0,0"/>
+                                      Margin="0,4,0,0"/>
                             <CheckBox x:Name="LocalScenarioNotificationCheckBox" Content="Показывать уведомление"
-                                      IsChecked="True" Margin="0,0,0,6"/>
+                                      Margin="0,0,0,6"/>
                             <StackPanel Orientation="Horizontal" Margin="0,4,0,8">
                                 <Button x:Name="LocalScenarioSaveButton" Content="Добавить сценарий"
                                         Click="LocalScenarioSaveButton_Click" Margin="0,0,6,0"/>
