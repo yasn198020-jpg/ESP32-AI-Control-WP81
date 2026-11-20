@@ -549,7 +549,14 @@ namespace ESP32AIControl.WP81
             }
             catch (Exception ex)
             {
-                Log("Network change: " + ex.Message);
+                try
+                {
+                    await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, delegate
+                    {
+                        Log("Network change: " + ex.Message);
+                    });
+                }
+                catch { }
             }
         }
 
@@ -1269,7 +1276,10 @@ namespace ESP32AIControl.WP81
             }
             catch (Exception ex)
             {
-                Log("HISTORY ERROR: " + ex.Message);
+                await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, delegate
+                {
+                    Log("HISTORY ERROR: " + ex.Message);
+                });
             }
 
             await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, delegate
