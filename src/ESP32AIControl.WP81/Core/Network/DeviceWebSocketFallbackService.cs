@@ -213,7 +213,7 @@ namespace ESP32AIControl.WP81.Core.Network
                         if (tick == session.Closed.Task)
                             break;
 
-                        if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - session.LastPongAt > 6000)
+                        if (UtcNowMilliseconds() - session.LastPongAt > 6000)
                         {
                             RaiseDiagnostic("WS heartbeat timeout device=" + session.DeviceId);
                             try { socket.Close(); } catch { }
@@ -280,7 +280,7 @@ namespace ESP32AIControl.WP81.Core.Network
                     var frame = reader.ReadString(reader.UnconsumedBufferLength);
                     if (frame == "/po|")
                     {
-                        session.LastPongAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                        session.LastPongAt = UtcNowMilliseconds();
                         return;
                     }
 
