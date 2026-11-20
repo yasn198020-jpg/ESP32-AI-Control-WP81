@@ -71,7 +71,7 @@ namespace ESP32AIControl.WP81.Core.Protocol
         {
             _webSocketFallback = service;
             if (_webSocketFallback != null)
-                _webSocketFallback.SetMqttOnline(_mqtt.State == MqttConnectionState.Connected);
+                _webSocketFallback.SetMqttOnline(_mqtt.State != MqttConnectionState.Disconnected);
         }
 
         private sealed class PendingControl
@@ -209,7 +209,12 @@ namespace ESP32AIControl.WP81.Core.Protocol
         private void Mqtt_ConnectionStateChanged(object sender, MqttConnectionStateChangedEventArgs e)
         {
             if (_webSocketFallback != null)
-                _webSocketFallback.SetMqttOnline(e.State == MqttConnectionState.Connected);
+            {
+                if (e.State == MqttConnectionState.Connected)
+                    _webSocketFallback.SetMqttOnline(true);
+                else if (e.State == MqttConnectionState.Disconnected)
+                    _webSocketFallback.SetMqttOnline(false);
+            }
 
             var handler = ConnectionStateChanged;
             if (handler != null)
