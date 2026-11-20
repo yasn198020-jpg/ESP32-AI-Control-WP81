@@ -1425,11 +1425,10 @@ namespace ESP32AIControl.WP81
 
             var shell = new Border
             {
-                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 42, 42, 42)),
-                CornerRadius = new CornerRadius(12),
-                Padding = new Thickness(14, 9, 14, 9),
-                BorderThickness = new Thickness(1),
-                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 65, 65, 65))
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 43, 43, 43)),
+                CornerRadius = new CornerRadius(14),
+                Padding = new Thickness(16, 10, 16, 10),
+                BorderThickness = new Thickness(0)
             };
 
             var row = new Grid();
