@@ -73,6 +73,8 @@ namespace ESP32AIControl.WP81
         public MainPage()
         {
             InitializeComponent();
+            LocalScenarioEnabledCheckBox.IsChecked = true;
+            LocalScenarioNotificationCheckBox.IsChecked = true;
             if (DashboardEmptyState != null)
                 DashboardEmptyState.Visibility = WidgetPages.Items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             UpdateNavigationState();
