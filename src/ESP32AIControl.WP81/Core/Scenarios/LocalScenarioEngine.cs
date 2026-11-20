@@ -1,0 +1,201 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using ESP32AIControl.WP81.Core.Protocol;
+
+namespace ESP32AIControl.WP81.Core.Scenarios
+{
+    /// <summary>
+    /// Local user-defined automations. Kept separate from IoTManager script
+    /// analysis: these rules are stored and evaluated by the phone application.
+    /// </summary>
+    public sealed class LocalScenarioEngine
+    {
+        private readonly LocalScenarioStore _store;
+        private readonly Action<LocalScenarioDefinition, string> _onTrigger;
+        private readonly Dictionary<string, double> _values =
+            new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, LocalScenarioRuntimeState> _runtime =
+            new Dictionary<string, LocalScenarioRuntimeState>(StringComparer.OrdinalIgnoreCase);
+
+        public LocalScenarioEngine(LocalScenarioStore store, Action<LocalScenarioDefinition, string> onTrigger)
+        {
+            if (store == null) throw new ArgumentNullException("store");
+            _store = store;
+            _onTrigger = onTrigger;
+            foreach (var pair in _store.LoadRuntimeStates())
+                _runtime[pair.Key] = pair.Value;
+        }
+
+        public void Reload()
+        {
+            var definitions = _store.Load();
+            var active = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var scenario in definitions)
+            {
+                active.Add(scenario.Id);
+                if (!_runtime.ContainsKey(scenario.Id))
+                    _runtime[scenario.Id] = new LocalScenarioRuntimeState();
+            }
+
+            var stale = new List<string>();
+            foreach (var id in _runtime.Keys)
+                if (!active.Contains(id)) stale.Add(id);
+            foreach (var id in stale)
+                _runtime.Remove(id);
+        }
+
+        public void ResetScenario(string id)
+        {
+            _runtime[id] = new LocalScenarioRuntimeState();
+            _store.DeleteRuntimeState(id);
+        }
+
+        public void OnMessage(Esp32Message message, bool allowTrigger)
+        {
+            if (message == null || string.IsNullOrWhiteSpace(message.WidgetId))
+                return;
+            if (message.Kind != Esp32MessageKind.Status && message.Kind != Esp32MessageKind.Event)
+                return;
+
+            double value;
+            var raw = (message.Value ?? string.Empty).Trim().Replace(',', '.');
+            if (!double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out value) ||
+                double.IsNaN(value) || double.IsInfinity(value))
+                return;
+
+            _values[message.WidgetId] = value;
+            var scenarios = _store.Load();
+            foreach (var scenario in scenarios)
+            {
+                if (!scenario.Enabled || scenario.Conditions.Count == 0)
+                    continue;
+
+                LocalScenarioRuntimeState state;
+                if (!_runtime.TryGetValue(scenario.Id, out state))
+                {
+                    state = new LocalScenarioRuntimeState();
+                    _runtime[scenario.Id] = state;
+                }
+
+                var current = new Dictionary<int, bool>();
+                var known = true;
+                var fallingEdge = false;
+                for (var i = 0; i < scenario.Conditions.Count; i++)
+                {
+                    var condition = scenario.Conditions[i];
+                    double actual;
+                    if (!_values.TryGetValue(condition.WidgetId, out actual))
+                    {
+                        known = false;
+                        continue;
+                    }
+
+                    var matched = Compare(actual, condition.Operator, condition.Threshold);
+                    current[i] = matched;
+                    bool previous;
+                    if (string.Equals(condition.WidgetId, message.WidgetId, StringComparison.OrdinalIgnoreCase) &&
+                        state.ConditionValues.TryGetValue(i, out previous) && previous && !matched)
+                        fallingEdge = true;
+                }
+
+                if (fallingEdge)
+                {
+                    state.Fired = false;
+                    state.AwaitingTrueUpdate = true;
+                    CopyConditionValues(state, current);
+                    _store.SaveRuntimeState(scenario.Id, state);
+                    continue;
+                }
+
+                if (!known || current.Count != scenario.Conditions.Count)
+                {
+                    CopyConditionValues(state, current);
+                    _store.SaveRuntimeState(scenario.Id, state);
+                    continue;
+                }
+
+                var expression = current[0];
+                for (var i = 1; i < scenario.Conditions.Count; i++)
+                {
+                    expression = string.Equals(scenario.Conditions[i].Connector, "OR", StringComparison.OrdinalIgnoreCase)
+                        ? expression || current[i]
+                        : expression && current[i];
+                }
+
+                if (!allowTrigger)
+                {
+                    // Retained MQTT values and the initial WebSocket /params
+                    // snapshot establish a baseline but are never trigger edges.
+                    if (!state.AwaitingTrueUpdate)
+                        state.Fired = expression;
+                    CopyConditionValues(state, current);
+                    _store.SaveRuntimeState(scenario.Id, state);
+                    continue;
+                }
+
+                if (!expression)
+                {
+                    state.Fired = false;
+                    CopyConditionValues(state, current);
+                    _store.SaveRuntimeState(scenario.Id, state);
+                    continue;
+                }
+
+                if (state.AwaitingTrueUpdate)
+                {
+                    var changedConditionTrue = false;
+                    for (var i = 0; i < scenario.Conditions.Count; i++)
+                        if (string.Equals(scenario.Conditions[i].WidgetId, message.WidgetId, StringComparison.OrdinalIgnoreCase) &&
+                            current[i])
+                            changedConditionTrue = true;
+
+                    if (!changedConditionTrue)
+                    {
+                        CopyConditionValues(state, current);
+                        _store.SaveRuntimeState(scenario.Id, state);
+                        continue;
+                    }
+
+                    state.AwaitingTrueUpdate = false;
+                }
+
+                if (state.Fired)
+                {
+                    CopyConditionValues(state, current);
+                    _store.SaveRuntimeState(scenario.Id, state);
+                    continue;
+                }
+
+                // Persist the one-shot latch before dispatching actions. A
+                // process restart cannot replay the same TRUE edge.
+                state.Fired = true;
+                CopyConditionValues(state, current);
+                _store.SaveRuntimeState(scenario.Id, state);
+                if (_onTrigger != null)
+                    _onTrigger(scenario, message.Value ?? string.Empty);
+            }
+        }
+
+        private static void CopyConditionValues(LocalScenarioRuntimeState state, IDictionary<int, bool> values)
+        {
+            state.ConditionValues.Clear();
+            foreach (var pair in values)
+                state.ConditionValues[pair.Key] = pair.Value;
+        }
+
+        private static bool Compare(double actual, string op, double expected)
+        {
+            switch (op)
+            {
+                case ">": return actual > expected;
+                case ">=": return actual >= expected;
+                case "<": return actual < expected;
+                case "<=": return actual <= expected;
+                case "=": case "==": return Math.Abs(actual - expected) < 0.000001;
+                case "!=": return Math.Abs(actual - expected) >= 0.000001;
+                default: return false;
+            }
+        }
+    }
+}
