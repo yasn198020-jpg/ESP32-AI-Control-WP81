@@ -79,6 +79,9 @@ namespace ESP32AIControl.WP81.Core.Mqtt
             try
             {
                 await WriteAsync(MqttPacketWriter.SubscribePacket(id, topicFilter, qos));
+                var completed = await Task.WhenAny(_subscribeCompletion.Task, Task.Delay(5000));
+                if (completed != _subscribeCompletion.Task)
+                    throw new TimeoutException("MQTT SUBACK timeout.");
                 var success = await _subscribeCompletion.Task;
                 if (!success)
                     throw new InvalidOperationException("MQTT SUBSCRIBE was rejected.");
