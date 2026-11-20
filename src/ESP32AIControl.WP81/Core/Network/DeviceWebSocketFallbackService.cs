@@ -30,6 +30,7 @@ namespace ESP32AIControl.WP81.Core.Network
             public TaskCompletionSource<bool> Closed;
             public CancellationTokenSource Cancellation;
             public Task Worker;
+            public long LastPongAt;
             public readonly SemaphoreSlim WriteGate = new SemaphoreSlim(1, 1);
         }
 
@@ -195,8 +196,24 @@ namespace ESP32AIControl.WP81.Core.Network
                     session.Socket = socket;
                     session.Writer = new DataWriter(socket.OutputStream);
                     await SendFrameAsync(session, "/params|");
+                    session.LastPongAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                     RaiseDiagnostic("WS CONNECTED device=" + session.DeviceId + " ip=" + session.Ip);
-                    await session.Closed.Task;
+
+                    while (!token.IsCancellationRequested)
+                    {
+                        var tick = await Task.WhenAny(session.Closed.Task, Task.Delay(2000, token));
+                        if (tick == session.Closed.Task)
+                            break;
+
+                        if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - session.LastPongAt > 6000)
+                        {
+                            RaiseDiagnostic("WS heartbeat timeout device=" + session.DeviceId);
+                            try { socket.Close(); } catch { }
+                            break;
+                        }
+
+                        await SendFrameAsync(session, "/pi|");
+                    }
                 }
                 catch (OperationCanceledException)
                 {
@@ -254,7 +271,10 @@ namespace ESP32AIControl.WP81.Core.Network
                     reader.UnicodeEncoding = UnicodeEncoding.Utf8;
                     var frame = reader.ReadString(reader.UnconsumedBufferLength);
                     if (frame == "/po|")
+                    {
+                        session.LastPongAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                         return;
+                    }
 
                     var separator = frame.IndexOf(FrameSeparator, StringComparison.Ordinal);
                     if (separator < 0 || separator < 6)
@@ -266,9 +286,9 @@ namespace ESP32AIControl.WP81.Core.Network
                     {
                         var json = Windows.Data.Json.JsonObject.Parse(payload);
                         var topic = ReadJsonString(json, "topic").Trim('/');
+                        if (topic.EndsWith("/status", StringComparison.OrdinalIgnoreCase))
+                            topic = topic.Substring(0, topic.Length - 7).Trim('/');
                         var widgetId = topic.SubstringAfterLast('/');
-                        if (widgetId.EndsWith("/status", StringComparison.OrdinalIgnoreCase))
-                            widgetId = widgetId.Substring(0, widgetId.Length - 7).Trim('/');
                         var value = ReadJsonString(json, "status");
                         RaiseWidgetUpdated(session.DeviceId, widgetId, value);
                     }
