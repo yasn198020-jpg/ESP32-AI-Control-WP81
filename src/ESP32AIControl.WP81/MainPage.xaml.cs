@@ -250,6 +250,221 @@ namespace ESP32AIControl.WP81
             }
         }
 
+        private void RefreshLocalScenariosList()
+        {
+            if (LocalScenariosList == null) return;
+            LocalScenariosList.Items.Clear();
+            var scenarios = _localScenarioStore.Load();
+            foreach (var scenario in scenarios)
+            {
+                var conditionText = string.Join(" · ", scenario.Conditions.Select((condition, index) =>
+                    (index == 0 ? string.Empty : condition.Connector + " ") +
+                    condition.WidgetId + " " + condition.Operator + " " +
+                    condition.Threshold.ToString(CultureInfo.InvariantCulture)));
+                var item = new ListViewItem
+                {
+                    Content = (scenario.Enabled ? "● " : "○ ") + scenario.Title +
+                        Environment.NewLine + conditionText,
+                    Tag = scenario.Id
+                };
+                LocalScenariosList.Items.Add(item);
+            }
+            LocalScenariosStatus.Text = "Сценариев: " + scenarios.Count;
+        }
+
+        private async void LocalScenarioSaveButton_Click(object sender, RoutedEventArgs e)
+        {
+            var title = (LocalScenarioTitleBox.Text ?? string.Empty).Trim();
+            if (title.Length == 0) title = "Сценарий";
+
+            var scenario = new LocalScenarioDefinition
+            {
+                Id = string.IsNullOrWhiteSpace(_editingLocalScenarioId)
+                    ? Guid.NewGuid().ToString("N")
+                    : _editingLocalScenarioId,
+                Title = title,
+                Message = string.IsNullOrWhiteSpace(LocalScenarioMessageBox.Text)
+                    ? "Условие выполнено"
+                    : LocalScenarioMessageBox.Text.Trim(),
+                Enabled = LocalScenarioEnabledCheckBox.IsChecked == true,
+                NotificationEnabled = LocalScenarioNotificationCheckBox.IsChecked == true
+            };
+
+            var conditionLines = (LocalScenarioConditionsBox.Text ?? string.Empty)
+                .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            for (var i = 0; i < conditionLines.Length; i++)
+            {
+                var tokens = conditionLines[i].Trim().Split(
+                    new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                if (tokens.Length == 0) continue;
+
+                var connector = "AND";
+                if (string.Equals(tokens[0], "AND", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(tokens[0], "OR", StringComparison.OrdinalIgnoreCase))
+                {
+                    connector = tokens[0].ToUpperInvariant();
+                    tokens = tokens.Skip(1).ToArray();
+                }
+
+                if (tokens.Length != 3)
+                {
+                    await ShowLocalScenarioErrorAsync("Строка условия " + (i + 1) +
+                        ": ожидается widgetId оператор значение.");
+                    return;
+                }
+
+                double threshold;
+                if (!double.TryParse(tokens[2].Replace(',', '.'), NumberStyles.Float,
+                    CultureInfo.InvariantCulture, out threshold))
+                {
+                    await ShowLocalScenarioErrorAsync("Неверный порог в строке " + (i + 1) + ".");
+                    return;
+                }
+
+                var op = tokens[1];
+                if (op != ">" && op != ">=" && op != "<" && op != "<=" &&
+                    op != "=" && op != "==" && op != "!=")
+                {
+                    await ShowLocalScenarioErrorAsync("Неизвестный оператор в строке " + (i + 1) + ".");
+                    return;
+                }
+
+                scenario.Conditions.Add(new LocalScenarioCondition
+                {
+                    WidgetId = tokens[0],
+                    Operator = op,
+                    Threshold = threshold,
+                    Connector = scenario.Conditions.Count == 0 ? "AND" : connector
+                });
+            }
+
+            if (scenario.Conditions.Count == 0)
+            {
+                await ShowLocalScenarioErrorAsync("Добавьте хотя бы одно условие.");
+                return;
+            }
+
+            var actionLines = (LocalScenarioActionsBox.Text ?? string.Empty)
+                .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            for (var i = 0; i < actionLines.Length; i++)
+            {
+                var parts = actionLines[i].Trim().Split(new[] { '=' }, 2);
+                if (parts.Length != 2)
+                {
+                    await ShowLocalScenarioErrorAsync("Строка действия " + (i + 1) +
+                        ": ожидается deviceId/widgetId=value.");
+                    return;
+                }
+                var target = parts[0].Trim().Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+                if (target.Length != 2 || target[0].Trim().Length == 0 || target[1].Trim().Length == 0)
+                {
+                    await ShowLocalScenarioErrorAsync("Неверная цель в строке действия " + (i + 1) + ".");
+                    return;
+                }
+                scenario.Actions.Add(new LocalScenarioAction
+                {
+                    DeviceId = target[0].Trim(),
+                    WidgetId = target[1].Trim(),
+                    Value = parts[1].Trim()
+                });
+            }
+
+            var items = _localScenarioStore.Load().ToList();
+            var existingIndex = items.FindIndex(x => x.Id == scenario.Id);
+            if (existingIndex >= 0) items[existingIndex] = scenario;
+            else items.Add(scenario);
+
+            _localScenarioStore.Save(items);
+            _localScenarioEngine.ResetScenario(scenario.Id);
+            _localScenarioEngine.Reload();
+            RefreshLocalScenariosList();
+            ClearLocalScenarioEditor();
+            LocalScenariosStatus.Text = "Сценарий сохранён. Срабатывание будет после нового перехода условий в TRUE.";
+        }
+
+        private async System.Threading.Tasks.Task ShowLocalScenarioErrorAsync(string message)
+        {
+            await new Windows.UI.Popups.MessageDialog(message, "Автосценарий").ShowAsync();
+        }
+
+        private void LocalScenariosList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            var selected = LocalScenariosList.SelectedItem as ListViewItem;
+            if (selected == null)
+            {
+                _editingLocalScenarioId = null;
+                return;
+            }
+
+            var id = selected.Tag as string;
+            var scenario = _localScenarioStore.Load().FirstOrDefault(x => x.Id == id);
+            if (scenario == null) return;
+
+            _editingLocalScenarioId = scenario.Id;
+            LocalScenarioTitleBox.Text = scenario.Title;
+            LocalScenarioMessageBox.Text = scenario.Message;
+            LocalScenarioEnabledCheckBox.IsChecked = scenario.Enabled;
+            LocalScenarioNotificationCheckBox.IsChecked = scenario.NotificationEnabled;
+            LocalScenarioConditionsBox.Text = string.Join(Environment.NewLine,
+                scenario.Conditions.Select((condition, index) =>
+                    (index == 0 ? string.Empty : condition.Connector + " ") +
+                    condition.WidgetId + " " + condition.Operator + " " +
+                    condition.Threshold.ToString(CultureInfo.InvariantCulture)));
+            LocalScenarioActionsBox.Text = string.Join(Environment.NewLine,
+                scenario.Actions.Select(action =>
+                    action.DeviceId + "/" + action.WidgetId + "=" + action.Value));
+            LocalScenarioSaveButton.Content = "Сохранить изменения";
+        }
+
+        private void LocalScenarioClearButton_Click(object sender, RoutedEventArgs e)
+        {
+            ClearLocalScenarioEditor();
+        }
+
+        private void ClearLocalScenarioEditor()
+        {
+            _editingLocalScenarioId = null;
+            LocalScenarioTitleBox.Text = string.Empty;
+            LocalScenarioConditionsBox.Text = string.Empty;
+            LocalScenarioActionsBox.Text = string.Empty;
+            LocalScenarioMessageBox.Text = "Условие выполнено: {value}";
+            LocalScenarioEnabledCheckBox.IsChecked = true;
+            LocalScenarioNotificationCheckBox.IsChecked = true;
+            LocalScenarioSaveButton.Content = "Добавить сценарий";
+            LocalScenariosList.SelectedIndex = -1;
+        }
+
+        private void LocalScenarioToggleButton_Click(object sender, RoutedEventArgs e)
+        {
+            var selected = LocalScenariosList.SelectedItem as ListViewItem;
+            if (selected == null) return;
+            var id = selected.Tag as string;
+            var items = _localScenarioStore.Load().ToList();
+            var scenario = items.FirstOrDefault(x => x.Id == id);
+            if (scenario == null) return;
+            scenario.Enabled = !scenario.Enabled;
+            _localScenarioStore.Save(items);
+            _localScenarioEngine.ResetScenario(id);
+            _localScenarioEngine.Reload();
+            RefreshLocalScenariosList();
+            LocalScenariosStatus.Text = scenario.Title + (scenario.Enabled ? ": включён" : ": выключен");
+        }
+
+        private void LocalScenarioDeleteButton_Click(object sender, RoutedEventArgs e)
+        {
+            var selected = LocalScenariosList.SelectedItem as ListViewItem;
+            if (selected == null) return;
+            var id = selected.Tag as string;
+            var items = _localScenarioStore.Load().Where(x => x.Id != id).ToList();
+            _localScenarioStore.Save(items);
+            _localScenarioStore.DeleteRuntimeState(id);
+            _localScenarioEngine.ResetScenario(id);
+            _localScenarioEngine.Reload();
+            RefreshLocalScenariosList();
+            ClearLocalScenarioEditor();
+            LocalScenariosStatus.Text = "Сценарий удалён.";
+        }
+
         private async void UdpDiscovery_DeviceExpired(object sender, UdpDiscoveredDevice device)
         {
             if (device == null) return;
