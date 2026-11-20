@@ -637,7 +637,7 @@ namespace ESP32AIControl.WP81
                 return;
             }
 
-            var items = new StackPanel { Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 36, 37, 42)) };
+            var items = new StackPanel { Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 36, 37, 45)) };
             AddPopupMenuHeader(items, "ОБСЛУЖИВАНИЕ");
             AddPopupSettingsItem(items, "Сценарии ESP32 / IoTManager", 4);
             AddPopupSettingsItem(items, "Автосценарии", 5);
@@ -662,8 +662,8 @@ namespace ESP32AIControl.WP81
             {
                 Width = Math.Min(340, Math.Max(260, ActualWidth - 24)),
                 MaxHeight = Math.Max(270, ActualHeight - 95),
-                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 36, 37, 42)),
-                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 72, 72, 72)),
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 36, 37, 45)),
+                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 65, 67, 77)),
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(14),
                 Child = scroll
@@ -707,18 +707,26 @@ namespace ESP32AIControl.WP81
                 Content = title,
                 HorizontalContentAlignment = HorizontalAlignment.Left,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
-                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 48, 48, 48)),
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0)),
                 Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 244, 244, 244)),
                 BorderThickness = new Thickness(0),
-                Padding = new Thickness(16, 12, 12, 12),
-                MinHeight = 48
+                Padding = new Thickness(14, 10, 12, 10),
+                MinHeight = 46
             };
             item.Click += delegate
             {
                 if (_navigationPopup != null) _navigationPopup.IsOpen = false;
                 action();
             };
-            panel.Children.Add(item);
+            panel.Children.Add(new Border
+            {
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 48, 49, 58)),
+                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 60, 62, 72)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(10),
+                Margin = new Thickness(6, 2, 6, 2),
+                Child = item
+            });
         }
 
         private void AddPopupSettingsItem(Panel panel, string title, int pivotIndex)
