@@ -2105,8 +2105,11 @@ namespace ESP32AIControl.WP81
                 LogText.Text = string.Join(Environment.NewLine, keep);
             }
 
+            var udpDiagnostic =
+                text.IndexOf("UDP", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                text.IndexOf("UDP ESP32:", StringComparison.OrdinalIgnoreCase) < 0;
             if (text.IndexOf("MQTT", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                text.IndexOf("UDP", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                udpDiagnostic ||
                 text.IndexOf("WS ", StringComparison.OrdinalIgnoreCase) >= 0 ||
                 text.IndexOf("ERROR", StringComparison.OrdinalIgnoreCase) >= 0 ||
                 text.IndexOf("СЦЕНАРИЙ", StringComparison.OrdinalIgnoreCase) >= 0)
