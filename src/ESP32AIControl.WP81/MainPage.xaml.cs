@@ -1412,7 +1412,7 @@ namespace ESP32AIControl.WP81
             // small vertical rhythm, and no oversized fixed-width controls.
             visual.Container = new StackPanel
             {
-                Margin = new Thickness(0, 0, 0, 2),
+                Margin = new Thickness(0, 0, 0, 6),
                 Tag = state.Key
             };
 
@@ -1434,7 +1434,7 @@ namespace ESP32AIControl.WP81
 
             var row = new Grid();
             visual.Row = row;
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(34) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             // Keep the value/control column content-sized instead of reserving a
             // narrow fixed 96 px slot. Long sensor values must remain readable
@@ -1498,12 +1498,12 @@ namespace ESP32AIControl.WP81
             {
                 var toggle = new ToggleSwitch
                 {
-                    OnContent = "Вкл.",
-                    OffContent = "Выкл.",
+                    OnContent = "",
+                    OffContent = "",
                     Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 203, 213, 225)),
                     VerticalAlignment = VerticalAlignment.Center,
                     HorizontalAlignment = HorizontalAlignment.Right,
-                    MinWidth = 82
+                    MinWidth = 58
                 };
                 toggle.Toggled += delegate { PublishSwitchValue(visual, toggle.IsOn); };
                 visual.Control = toggle;
@@ -1521,7 +1521,7 @@ namespace ESP32AIControl.WP81
                     Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 128, 101, 232)),
                     Foreground = new SolidColorBrush(Windows.UI.Colors.White),
                     BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 128, 101, 232)),
-                    Padding = new Thickness(8, 5, 8, 5),
+                    Padding = new Thickness(12, 7, 12, 7),
                     HorizontalAlignment = HorizontalAlignment.Right,
                     VerticalAlignment = VerticalAlignment.Center,
                     Margin = new Thickness(0)
