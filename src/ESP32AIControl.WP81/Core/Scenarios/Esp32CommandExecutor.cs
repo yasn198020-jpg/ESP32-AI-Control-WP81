@@ -68,11 +68,15 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                 action.WidgetId,
                 action.Value);
 
+            var confirmationTimeout = _mqtt.State == MqttConnectionState.Connected
+                ? StateTimeoutMilliseconds
+                : 10000;
+
             var confirmed = await WaitForStateAsync(
                 action.DeviceId,
                 action.WidgetId,
                 action.Value,
-                StateTimeoutMilliseconds);
+                confirmationTimeout);
 
             if (!confirmed)
             {
