@@ -54,8 +54,44 @@ namespace ESP32AIControl.WP81.Core.Scenarios
         {
             lock (_sync)
             {
-                _runtime[id] = new LocalScenarioRuntimeState();
-                _store.DeleteRuntimeState(id);
+                var scenario = _store.Load().FirstOrDefault(item => item.Id == id);
+                if (scenario == null)
+                {
+                    _runtime.Remove(id);
+                    _store.DeleteRuntimeState(id);
+                    return;
+                }
+
+                var state = new LocalScenarioRuntimeState();
+                var allKnown = true;
+                for (var i = 0; i < scenario.Conditions.Count; i++)
+                {
+                    double value;
+                    if (!_values.TryGetValue(scenario.Conditions[i].WidgetId, out value))
+                    {
+                        allKnown = false;
+                        continue;
+                    }
+                    state.ConditionValues[i] = Compare(value,
+                        scenario.Conditions[i].Operator, scenario.Conditions[i].Threshold);
+                }
+
+                if (allKnown && state.ConditionValues.Count == scenario.Conditions.Count)
+                {
+                    var expression = state.ConditionValues[0];
+                    for (var i = 1; i < scenario.Conditions.Count; i++)
+                    {
+                        expression = string.Equals(scenario.Conditions[i].Connector, "OR", StringComparison.OrdinalIgnoreCase)
+                            ? expression || state.ConditionValues[i]
+                            : expression && state.ConditionValues[i];
+                    }
+                    // Editing/enabling establishes a baseline; an already-true
+                    // expression must wait for a fresh FALSE -> TRUE edge.
+                    state.Fired = expression;
+                }
+
+                _runtime[id] = state;
+                _store.SaveRuntimeState(id, state);
             }
         }
 
