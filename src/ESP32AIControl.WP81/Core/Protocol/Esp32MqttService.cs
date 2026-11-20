@@ -52,9 +52,19 @@ namespace ESP32AIControl.WP81.Core.Protocol
                 _settings.Password,
                 _settings.UseTls);
 
-            await _mqtt.SubscribeAsync("/" + _settings.Prefix + "/#", 1);
-            await PublishHelloAsync();
-            await FlushPendingControlsAsync();
+            try
+            {
+                await _mqtt.SubscribeAsync("/" + _settings.Prefix + "/#", 1);
+                await PublishHelloAsync();
+                await FlushPendingControlsAsync();
+            }
+            catch
+            {
+                // A missing SUBACK or failed initial publish must not leave
+                // the UI believing that an unusable MQTT session is healthy.
+                await _mqtt.DisconnectAsync();
+                throw;
+            }
         }
 
         public Task PublishHelloAsync()
