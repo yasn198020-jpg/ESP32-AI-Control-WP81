@@ -13,6 +13,7 @@ namespace ESP32AIControl.WP81.Core.Network
         public string DeviceId { get; set; }
         public string WidgetId { get; set; }
         public string Value { get; set; }
+        public bool IsSnapshot { get; set; }
     }
 
     /// <summary>
@@ -315,13 +316,13 @@ namespace ESP32AIControl.WP81.Core.Network
                             topic = topic.Substring(0, topic.Length - 7).Trim('/');
                         var widgetId = topic.SubstringAfterLast('/');
                         var value = ReadJsonString(json, "status");
-                        RaiseWidgetUpdated(session.DeviceId, widgetId, value);
+                        RaiseWidgetUpdated(session.DeviceId, widgetId, value, false);
                     }
                     else if (string.Equals(header, "params", StringComparison.Ordinal))
                     {
                         var json = Windows.Data.Json.JsonObject.Parse(payload);
                         foreach (var pair in json)
-                            RaiseWidgetUpdated(session.DeviceId, pair.Key, JsonValueToString(pair.Value));
+                            RaiseWidgetUpdated(session.DeviceId, pair.Key, JsonValueToString(pair.Value), true);
                     }
                 }
             }
@@ -358,7 +359,7 @@ namespace ESP32AIControl.WP81.Core.Network
             }
         }
 
-        private void RaiseWidgetUpdated(string deviceId, string widgetId, string value)
+        private void RaiseWidgetUpdated(string deviceId, string widgetId, string value, bool isSnapshot)
         {
             if (string.IsNullOrWhiteSpace(widgetId))
                 return;
@@ -368,7 +369,8 @@ namespace ESP32AIControl.WP81.Core.Network
                 {
                     DeviceId = deviceId,
                     WidgetId = widgetId,
-                    Value = value
+                    Value = value,
+                    IsSnapshot = isSnapshot
                 });
         }
 
