@@ -673,7 +673,7 @@ namespace ESP32AIControl.WP81
             {
                 Child = frame,
                 HorizontalOffset = 4,
-                VerticalOffset = 45,
+                VerticalOffset = 58,
                 IsOpen = true
             };
         }
@@ -800,7 +800,7 @@ namespace ESP32AIControl.WP81
                 var label = content.Children[i] as TextBlock;
                 if (label == null) continue;
                 label.Foreground = new SolidColorBrush(isSelected && i == 0
-                    ? Windows.UI.Color.FromArgb(255, 33, 150, 243)
+                    ? Windows.UI.Color.FromArgb(255, 128, 101, 232)
                     : (isSelected
                         ? Windows.UI.Color.FromArgb(255, 243, 244, 246)
                         : Windows.UI.Color.FromArgb(255, 156, 163, 175)));
@@ -1456,7 +1456,7 @@ namespace ESP32AIControl.WP81
                 visual.Title = new TextBlock
                 {
                     Text = visibleTitle,
-                    FontSize = 16,
+                    FontSize = 17,
                     Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 243, 244, 246)),
                     TextWrapping = TextWrapping.Wrap,
                     VerticalAlignment = VerticalAlignment.Center,
