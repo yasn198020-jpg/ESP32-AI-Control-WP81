@@ -691,7 +691,7 @@ namespace ESP32AIControl.WP81
                 Text = title,
                 FontSize = 11,
                 FontWeight = Windows.UI.Text.FontWeights.SemiBold,
-                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 33, 150, 243)),
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 85, 214, 190)),
                 Margin = new Thickness(14, 10, 10, 4)
             });
         }
@@ -792,11 +792,11 @@ namespace ESP32AIControl.WP81
             // the selected destination gets a soft surface and an accent icon,
             // rather than turning the entire navigation tile bright purple.
             button.Background = new SolidColorBrush(isSelected
-                ? Windows.UI.Color.FromArgb(255, 58, 58, 58)
-                : Windows.UI.Color.FromArgb(255, 36, 37, 42));
+                ? Windows.UI.Color.FromArgb(255, 29, 42, 58)
+                : Windows.UI.Color.FromArgb(255, 18, 27, 40));
             button.Foreground = new SolidColorBrush(isSelected
-                ? Windows.UI.Color.FromArgb(255, 243, 244, 246)
-                : Windows.UI.Color.FromArgb(255, 176, 176, 176));
+                ? Windows.UI.Color.FromArgb(255, 234, 241, 247)
+                : Windows.UI.Color.FromArgb(255, 148, 163, 184));
             button.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0));
 
             var content = button.Content as StackPanel;
@@ -1431,11 +1431,11 @@ namespace ESP32AIControl.WP81
 
             var shell = new Border
             {
-                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 28, 29, 36)),
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 20, 30, 43)),
                 CornerRadius = new CornerRadius(12),
                 Padding = new Thickness(14, 9, 14, 9),
                 BorderThickness = new Thickness(1),
-                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 48, 49, 58))
+                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 38, 53, 72))
             };
 
             var row = new Grid();
@@ -1506,7 +1506,7 @@ namespace ESP32AIControl.WP81
                 {
                     OnContent = "Вкл.",
                     OffContent = "Выкл.",
-                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 209, 213, 219)),
+                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 203, 213, 225)),
                     VerticalAlignment = VerticalAlignment.Center,
                     HorizontalAlignment = HorizontalAlignment.Right,
                     MinWidth = 82
@@ -1524,7 +1524,7 @@ namespace ESP32AIControl.WP81
                     Content = "Нажать",
                     MinWidth = 76,
                     MaxWidth = 128,
-                    Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0, 183, 255)),
+                    Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 85, 214, 190)),
                     Foreground = new SolidColorBrush(Windows.UI.Colors.White),
                     BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0, 183, 255)),
                     Padding = new Thickness(8, 5, 8, 5),
