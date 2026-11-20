@@ -1870,7 +1870,8 @@ namespace ESP32AIControl.WP81
             if (numeric.Count < 2) return;
             if (Math.Abs(maxValue - minValue) < 0.000001) maxValue = minValue + 1;
 
-            var width = Math.Max(420.0, ActualWidth - 55.0);
+            var width = Math.Max(280.0, GraphCanvas.ActualWidth > 0 ? GraphCanvas.ActualWidth : ActualWidth - 40.0);
+            GraphCanvas.Width = width;
             var height = 300.0;
             var padding = 18.0;
             var timeSpan = Math.Max(1.0, (maxTime - minTime).TotalSeconds);
