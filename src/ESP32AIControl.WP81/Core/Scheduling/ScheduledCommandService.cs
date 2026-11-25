@@ -34,7 +34,17 @@ namespace ESP32AIControl.WP81.Core.Scheduling
                 _timer = ThreadPoolTimer.CreatePeriodicTimer(Tick, TimeSpan.FromSeconds(5));
         }
 
-        public async Task<string> ScheduleAsync(string command, DateTimeOffset executeAt)
+        public Task<string> ScheduleAsync(string command, DateTimeOffset executeAt)
+        {
+            return ScheduleCoreAsync(command, executeAt, "Manual");
+        }
+
+        public Task<string> ScheduleVoiceAsync(string command, DateTimeOffset executeAt)
+        {
+            return ScheduleCoreAsync(command, executeAt, "Voice");
+        }
+
+        private async Task<string> ScheduleCoreAsync(string command, DateTimeOffset executeAt, string origin)
         {
             await EnsureLoadedAsync();
 
@@ -42,6 +52,7 @@ namespace ESP32AIControl.WP81.Core.Scheduling
             {
                 Id = Guid.NewGuid().ToString("N"),
                 Command = command,
+                Origin = origin,
                 ExecuteAt = executeAt,
                 Status = "Scheduled",
                 CreatedAt = DateTimeOffset.Now
