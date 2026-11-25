@@ -28,14 +28,14 @@
             <Setter Property="BorderBrush" Value="#FF4A4B56"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="14,10"/>
-            <Setter Property="MinHeight" Value="44"/>
+            <Setter Property="MinHeight" Value="48"/>
         </Style>
         <Style TargetType="TextBox">
             <Setter Property="Background" Value="#FF25262D"/>
             <Setter Property="Foreground" Value="#FFEAF1F7"/>
             <Setter Property="BorderBrush" Value="#FF4B4C58"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding" Value="10,8"/>
+            <Setter Property="Padding" Value="12,10"/>
             <Setter Property="Margin" Value="0,7,0,7"/>
         </Style>
         <Style TargetType="PasswordBox">
@@ -50,7 +50,7 @@
             <Setter Property="Foreground" Value="#FFEAF1F7"/>
             <Setter Property="BorderBrush" Value="#FF4B4C58"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="MinHeight" Value="44"/>
+            <Setter Property="MinHeight" Value="48"/>
         </Style>
         <Style TargetType="DatePicker">
             <Setter Property="Foreground" Value="#FFEAF1F7"/>
@@ -440,20 +440,7 @@
                     Height="80" Padding="2" BorderThickness="0" FontSize="11"
                     AutomationProperties.Name="Голосовое управление Марфа">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <Grid Width="24" Height="24" HorizontalAlignment="Center">
-                        <Border Width="8" Height="14" CornerRadius="4"
-                                Background="#FFD0BCFF" VerticalAlignment="Top"
-                                HorizontalAlignment="Center" Margin="0,1,0,0"/>
-                        <Border Width="17" Height="13" CornerRadius="7"
-                                BorderBrush="#FFD0BCFF" BorderThickness="2"
-                                Background="Transparent" VerticalAlignment="Top"
-                                HorizontalAlignment="Center" Margin="0,5,0,0"/>
-                        <Rectangle Width="2" Height="5" Fill="#FFD0BCFF"
-                                   VerticalAlignment="Bottom" HorizontalAlignment="Center"
-                                   Margin="0,0,0,2"/>
-                        <Rectangle Width="10" Height="2" Fill="#FFD0BCFF"
-                                   VerticalAlignment="Bottom" HorizontalAlignment="Center"/>
-                    </Grid>
+                    <TextBlock Text="🎙" FontSize="22" HorizontalAlignment="Center"/>
                     <TextBlock Text="Марфа" FontSize="12" HorizontalAlignment="Center"/>
                 </StackPanel>
             </Button>
