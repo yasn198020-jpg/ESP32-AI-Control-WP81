@@ -3118,6 +3118,264 @@ namespace ESP32AIControl.WP81
             }
         }
 
+        private static bool IsValueWidget(WidgetState state)
+        {
+            if (state == null) return false;
+            var def = NormalizeType(state.DefinitionName);
+            var type = NormalizeType(state.WidgetType);
+            return type == "status" || type == "value" ||
+                def.StartsWith("anydata") || def.StartsWith("chart") ||
+                def == "fillgauge" || def == "progressline" || def == "progressround";
+        }
+
+        private void OpenTrainingDialog(WidgetState state)
+        {
+            if (state == null) return;
+            var definition = NormalizeType(state.DefinitionName);
+            var type = NormalizeType(state.WidgetType);
+            var canTrain = IsValueWidget(state) || type == "toggle" ||
+                type == "button" || definition == "button" || definition == "vbtn" || definition == "btn";
+            if (!canTrain) return;
+
+            _trainingTarget = state.Clone();
+            _trainingValue = IsValueWidget(state) ? TrainedReadValue : "1";
+            _trainingPhraseBox = new TextBox
+            {
+                Header = "Фраза команды",
+                PlaceholderText = "Например: открой форточку",
+                MinHeight = 52,
+                Text = string.Empty
+            };
+            _trainingModeBox = new ComboBox { MinHeight = 48, Header = "Добавить как" };
+            _trainingModeBox.Items.Add("Новая команда");
+            _trainingModeBox.Items.Add("К существующей");
+            _trainingModeBox.SelectedIndex = 0;
+            _trainingExistingPhraseBox = new ComboBox
+            {
+                MinHeight = 48,
+                Header = "Существующая фраза",
+                Visibility = Visibility.Collapsed
+            };
+            foreach (var phrase in _trainedCommands.Select(c => c.Phrase).Distinct(StringComparer.OrdinalIgnoreCase))
+                _trainingExistingPhraseBox.Items.Add(phrase);
+
+            _trainingActionBox = new ComboBox
+            {
+                MinHeight = 48,
+                Header = "Действие",
+                Visibility = IsValueWidget(state) ? Visibility.Collapsed : Visibility.Visible
+            };
+            _trainingActionBox.Items.Add("Открыть / включить");
+            _trainingActionBox.Items.Add("Закрыть / выключить");
+            _trainingActionBox.SelectedIndex = 0;
+
+            _trainingModeBox.SelectionChanged += delegate
+            {
+                var attach = _trainingModeBox.SelectedIndex == 1;
+                _trainingExistingPhraseBox.Visibility = attach ? Visibility.Visible : Visibility.Collapsed;
+                _trainingPhraseBox.Visibility = attach ? Visibility.Collapsed : Visibility.Visible;
+            };
+
+            var body = new StackPanel { Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 43, 44, 52)) };
+            body.Children.Add(new TextBlock
+            {
+                Text = "Обучить голосовую команду",
+                FontSize = 20, FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(Windows.UI.Colors.White),
+                Margin = new Thickness(14, 14, 14, 0)
+            });
+            body.Children.Add(new TextBlock
+            {
+                Text = "Виджет: " + GetTitle(state),
+                FontSize = 14, TextWrapping = TextWrapping.Wrap,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 190, 192, 201)),
+                Margin = new Thickness(14, 0, 14, 0)
+            });
+            body.Children.Add(_trainingModeBox);
+            body.Children.Add(_trainingExistingPhraseBox);
+            if (IsValueWidget(state))
+            {
+                body.Children.Add(new TextBlock
+                {
+                    Text = "Эта фраза будет произносить текущее значение датчика или виджета.",
+                    TextWrapping = TextWrapping.Wrap,
+                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 190, 192, 201)),
+                    Margin = new Thickness(14, 0, 14, 0)
+                });
+            }
+            else body.Children.Add(_trainingActionBox);
+            body.Children.Add(_trainingPhraseBox);
+
+            var actions = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(8, 4, 8, 8)
+            };
+            var record = new Button { Content = "🎤 Записать", Margin = new Thickness(0, 0, 6, 0) };
+            record.Click += async delegate
+            {
+                try
+                {
+                    VoiceResultText.Text = "Слушаю фразу для обучения…";
+                    await _voice.StartListeningAsync();
+                }
+                catch (Exception ex) { VoiceResultText.Text = "Ошибка микрофона: " + ex.Message; }
+            };
+            var save = new Button
+            {
+                Content = "Сохранить",
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255)),
+                Foreground = new SolidColorBrush(Windows.UI.Colors.White)
+            };
+            save.Click += delegate
+            {
+                if (_trainingModeBox.SelectedIndex != 1 &&
+                    _trainingActionBox != null && _trainingActionBox.Visibility == Visibility.Visible)
+                    _trainingValue = _trainingActionBox.SelectedIndex == 1 ? "0" : "1";
+                var phrase = _trainingModeBox.SelectedIndex == 1
+                    ? (_trainingExistingPhraseBox.SelectedItem as string)
+                    : _trainingPhraseBox.Text;
+                SaveTrainedCommand(phrase);
+            };
+            actions.Children.Add(record);
+            actions.Children.Add(save);
+            body.Children.Add(actions);
+
+            _trainingPopup = CreateAppPopup(body, 330, 520);
+        }
+
+        private Popup CreateAppPopup(Panel content, double width, double maxHeight)
+        {
+            var scroll = new ScrollViewer
+            {
+                Content = content,
+                MaxHeight = Math.Min(maxHeight, Math.Max(260, ActualHeight - 140)),
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
+            };
+            var frame = new Border
+            {
+                Width = Math.Min(width, Math.Max(270, ActualWidth - 24)),
+                MaxHeight = Math.Min(maxHeight, Math.Max(280, ActualHeight - 110)),
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 43, 44, 52)),
+                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 65, 67, 77)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(16),
+                Child = scroll
+            };
+            var popup = new Popup
+            {
+                Child = frame,
+                HorizontalOffset = Math.Max(8, (ActualWidth - frame.Width) / 2),
+                VerticalOffset = 108,
+                IsOpen = true
+            };
+            return popup;
+        }
+
+        private void SaveTrainedCommand(string phrase)
+        {
+            if (_trainingTarget == null) return;
+            var targetPhrase = (phrase ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(targetPhrase))
+            {
+                VoiceResultText.Text = "Введите или запишите фразу.";
+                return;
+            }
+
+            var existing = _trainedCommands.FirstOrDefault(c =>
+                string.Equals(c.Phrase, targetPhrase, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(c.DeviceId, _trainingTarget.DeviceId, StringComparison.Ordinal) &&
+                string.Equals(c.WidgetId, _trainingTarget.Id, StringComparison.Ordinal) &&
+                string.Equals(c.Value, _trainingValue, StringComparison.Ordinal));
+            if (existing == null)
+            {
+                existing = new TrainedVoiceCommand
+                {
+                    Phrase = targetPhrase,
+                    DeviceId = _trainingTarget.DeviceId,
+                    WidgetId = _trainingTarget.Id,
+                    Value = _trainingValue,
+                    Variants = new List<string> { targetPhrase }
+                };
+                _trainedCommands.Add(existing);
+            }
+            else if (!existing.Variants.Contains(targetPhrase, StringComparer.OrdinalIgnoreCase))
+                existing.Variants.Add(targetPhrase);
+
+            SaveTrainedCommands();
+            if (_trainingPopup != null) _trainingPopup.IsOpen = false;
+            _trainingTarget = null;
+            _trainingPhraseBox = null;
+            _trainingModeBox = null;
+            _trainingExistingPhraseBox = null;
+            _trainingActionBox = null;
+            VoiceResultText.Text = "Действие добавлено к команде: " + targetPhrase;
+            RefreshTrainedCommandsScreen();
+        }
+
+        private void OpenVariantDialog(string phrase)
+        {
+            _variantPhraseTarget = phrase;
+            _variantPhraseBox = new TextBox
+            {
+                Header = "Новый вариант фразы",
+                PlaceholderText = "Введите или запишите вариант",
+                MinHeight = 52
+            };
+            var body = new StackPanel();
+            body.Children.Add(new TextBlock
+            {
+                Text = "Добавить вариант",
+                FontSize = 20, FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                Margin = new Thickness(14, 14, 14, 0)
+            });
+            body.Children.Add(new TextBlock
+            {
+                Text = "Основная команда: «" + phrase + "»",
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(14, 0, 14, 0),
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 190, 192, 201))
+            });
+            body.Children.Add(_variantPhraseBox);
+            var actions = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(8)
+            };
+            var record = new Button { Content = "🎤 Записать", Margin = new Thickness(0, 0, 6, 0) };
+            record.Click += async delegate
+            {
+                try { await _voice.StartListeningAsync(); }
+                catch (Exception ex) { VoiceResultText.Text = "Ошибка микрофона: " + ex.Message; }
+            };
+            var add = new Button
+            {
+                Content = "Добавить",
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255))
+            };
+            add.Click += delegate
+            {
+                var variant = (_variantPhraseBox.Text ?? string.Empty).Trim();
+                if (variant.Length == 0) return;
+                foreach (var item in _trainedCommands.Where(c => string.Equals(c.Phrase, _variantPhraseTarget, StringComparison.OrdinalIgnoreCase)))
+                    if (!item.Variants.Contains(variant, StringComparer.OrdinalIgnoreCase))
+                        item.Variants.Add(variant);
+                SaveTrainedCommands();
+                if (_variantPopup != null) _variantPopup.IsOpen = false;
+                _variantPhraseTarget = null;
+                _variantPhraseBox = null;
+                VoiceResultText.Text = "Вариант фразы добавлен.";
+                RefreshTrainedCommandsScreen();
+            };
+            actions.Children.Add(record);
+            actions.Children.Add(add);
+            body.Children.Add(actions);
+            _variantPopup = CreateAppPopup(body, 330, 420);
+        }
+
         private void Log(string text)
         {
             var line = "[" + DateTime.Now.ToString("HH:mm:ss") + "] " + text;
