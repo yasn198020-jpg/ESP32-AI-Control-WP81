@@ -72,6 +72,38 @@ namespace ESP32AIControl.WP81.Core.State
             return result;
         }
 
+        // Removes only the local cached widget record. No MQTT/ESP32 command is sent.
+        // A later CONFIG/STATE message recreates the record through Apply().
+        public bool RemoveLocal(string deviceId, string widgetId)
+        {
+            var key = (deviceId ?? string.Empty) + "/" + (widgetId ?? string.Empty);
+            lock (_widgets)
+            {
+                if (!_widgets.Remove(key)) return false;
+                var stampPrefix = key + "|";
+                var oldStamps = new List<string>();
+                foreach (var stamp in _lastUpdates.Keys)
+                    if (stamp.StartsWith(stampPrefix, StringComparison.Ordinal)) oldStamps.Add(stamp);
+                foreach (var stamp in oldStamps) _lastUpdates.Remove(stamp);
+
+                if (!string.IsNullOrWhiteSpace(widgetId))
+                {
+                    var replacement = string.Empty;
+                    foreach (var pair in _widgets)
+                    {
+                        if (string.Equals(pair.Value.Id, widgetId, StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (replacement.Length > 0) { replacement = string.Empty; break; }
+                            replacement = pair.Key;
+                        }
+                    }
+                    if (replacement.Length == 0) _widgetIdIndex.Remove(widgetId);
+                    else _widgetIdIndex[widgetId] = replacement;
+                }
+            }
+            return true;
+        }
+
         public void Apply(Esp32Message message)
         {
             if (message == null || string.IsNullOrEmpty(message.WidgetId))
