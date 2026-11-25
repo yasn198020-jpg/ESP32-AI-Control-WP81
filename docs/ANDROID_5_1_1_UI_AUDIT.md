@@ -118,7 +118,7 @@ The Android MainActivity currently has these destinations:
 - 7: Permission audit.
 - 8: Application cleanup.
 - 9: Delayed Marfa commands.
-- 10: Delete widget.
+- No separate top-level Delete Widget destination was found in the inspected Android `MainActivity.kt`; the initial audit entry was incorrect.
 
 The bottom NavigationBar exposes Dashboard, Marfa voice action, Commands (trained commands), History, and Delayed commands. The hamburger dropdown exposes service, settings, diagnostics and app actions. The top bar also exposes the current destination title, info/last-update toggle, connection state, and dashboard page tabs.
 
@@ -244,3 +244,12 @@ Remaining limitations:
 - The WP81 voice phrase matcher is implemented natively but still requires on-device Russian recognition testing. TTS voice availability depends on the voices installed in Windows Phone.
 - Settings, scenario, history and delayed-command screens retain existing WP81 application logic and controls; they have not all been fully restyled/visually inspected against Android screenshots yet.
 - No Windows Phone 8.1 build or Lumia 830 device verification was available in this session. A build and on-device inspection remain mandatory before treating this branch as release-ready.
+
+
+## Visual port implementation — phase 5 (2026-11-26)
+
+- The top-bar info action now matches the Android behavior: it toggles last-updated labels under dashboard widgets, formats elapsed time in seconds/minutes/hours/days, and refreshes once per second only while enabled.
+- The app-wide font scale now caches each control's original font size and walks the XAML visual tree child-first before resizing its parents, avoiding cumulative scaling after repeated changes.
+- Rechecked the Android MQTT config source: `widget` remains the logical control type; `name` is the IoTManager renderer definition; `topic` is the exact raw publish topic; `after` is the display unit. WP81 stores these separately, matching the reference model.
+
+Current branch remains a functional visual port in progress, not release-verified. No WP8.1 compiler or Lumia 830 hardware was available in this session, so the final compile/runtime pass must be performed with the WP8.1 toolchain and the phone.
