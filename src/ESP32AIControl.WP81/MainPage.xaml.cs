@@ -3048,7 +3048,7 @@ namespace ESP32AIControl.WP81
                 _graphSelectedIndex = _graphNumericPoints.Count - 1;
             DrawSelectedGraphPoint(numeric, minValue, maxValue, height, padding);
             if (GraphZoomLabel != null)
-                GraphZoomLabel.Text = "×" + _graphZoom.ToString("0.0", CultureInfo.InvariantCulture);
+                GraphZoomLabel.Text = "×" + _graphZoom.ToString("0.0", CultureInfo.GetCultureInfo("ru-RU"));
         }
 
         private void DrawSelectedGraphPoint(IList<Tuple<double, double>> numeric, double minValue, double maxValue, double height, double padding)
