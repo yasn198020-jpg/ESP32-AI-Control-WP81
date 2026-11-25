@@ -223,7 +223,7 @@
                     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                     <StackPanel Grid.Row="0" Margin="4,4,4,12">
                         
-                        <TextBlock Text="Отложенные команды" FontSize="24" FontWeight="SemiBold" Margin="0,2,0,2"/>
+                        <TextBlock Text="Планировщик команд ESP32" FontSize="24" FontWeight="SemiBold" Margin="0,2,0,2"/>
                         <TextBlock Text="Команда будет отправлена устройству в указанное время." FontSize="13" Foreground="#FFACADB8"/>
                     </StackPanel>
                     <Border Grid.Row="1" Background="#FF2B2C34" CornerRadius="16" BorderBrush="#FF41434D" BorderThickness="1" Padding="12" Margin="0,0,0,10">
