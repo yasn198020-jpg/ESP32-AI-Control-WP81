@@ -3272,6 +3272,16 @@ namespace ESP32AIControl.WP81
                 HorizontalAlignment = HorizontalAlignment.Right,
                 Margin = new Thickness(8, 4, 8, 8)
             };
+            var cancel = new Button { Content = "Отмена", Margin = new Thickness(0, 0, 6, 0) };
+            cancel.Click += delegate
+            {
+                if (_trainingPopup != null) _trainingPopup.IsOpen = false;
+                _trainingTarget = null;
+                _trainingPhraseBox = null;
+                _trainingModeBox = null;
+                _trainingExistingPhraseBox = null;
+                _trainingActionBox = null;
+            };
             var record = new Button { Content = "🎤 Записать", Margin = new Thickness(0, 0, 6, 0) };
             record.Click += async delegate
             {
@@ -3298,6 +3308,7 @@ namespace ESP32AIControl.WP81
                     : _trainingPhraseBox.Text;
                 SaveTrainedCommand(phrase);
             };
+            actions.Children.Add(cancel);
             actions.Children.Add(record);
             actions.Children.Add(save);
             body.Children.Add(actions);
@@ -3405,6 +3416,13 @@ namespace ESP32AIControl.WP81
                 HorizontalAlignment = HorizontalAlignment.Right,
                 Margin = new Thickness(8)
             };
+            var cancel = new Button { Content = "Отмена", Margin = new Thickness(0, 0, 6, 0) };
+            cancel.Click += delegate
+            {
+                if (_variantPopup != null) _variantPopup.IsOpen = false;
+                _variantPhraseTarget = null;
+                _variantPhraseBox = null;
+            };
             var record = new Button { Content = "🎤 Записать", Margin = new Thickness(0, 0, 6, 0) };
             record.Click += async delegate
             {
@@ -3430,6 +3448,7 @@ namespace ESP32AIControl.WP81
                 VoiceResultText.Text = "Вариант фразы добавлен.";
                 RefreshTrainedCommandsScreen();
             };
+            actions.Children.Add(cancel);
             actions.Children.Add(record);
             actions.Children.Add(add);
             body.Children.Add(actions);
@@ -3683,7 +3702,13 @@ namespace ESP32AIControl.WP81
             try
             {
                 if (_speechSynthesizer == null)
+                {
                     _speechSynthesizer = new SpeechSynthesizer();
+                    var russianVoice = SpeechSynthesizer.AllVoices.FirstOrDefault(v =>
+                        (v.Language ?? string.Empty).StartsWith("ru", StringComparison.OrdinalIgnoreCase));
+                    if (russianVoice != null)
+                        _speechSynthesizer.Voice = russianVoice;
+                }
                 var stream = await _speechSynthesizer.SynthesizeTextToStreamAsync(text);
                 _speechPlayback.SetSource(stream, stream.ContentType);
                 _speechPlayback.Play();
