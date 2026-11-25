@@ -100,3 +100,45 @@ Do not copy Material 3 defaults blindly. Use exact values and patterns found in 
 ## Current status
 
 Initial repository and shell audit completed. No application code changed. This document is the baseline for the full interface port.
+
+
+## Expanded navigation comparison (verified from source)
+
+### Android top-level destinations
+
+The Android MainActivity currently has these destinations:
+
+- 0: Dashboard / live devices.
+- 1: Trained commands.
+- 2: MQTT connection.
+- 3: Diagnostic log.
+- 4: Marfa / ESP32 scenario hub.
+- 5: Voice settings.
+- 6: History and graphs.
+- 7: Permission audit.
+- 8: Application cleanup.
+- 9: Delayed Marfa commands.
+- 10: Delete widget.
+
+The bottom NavigationBar exposes Dashboard, Marfa voice action, Commands (trained commands), History, and Delayed commands. The hamburger dropdown exposes service, settings, diagnostics and app actions. The top bar also exposes the current destination title, info/last-update toggle, connection state, and dashboard page tabs.
+
+### WP81 navigation and current mismatch
+
+The WP81 bottom bar exposes Home, Marfa voice action, Commands, History and Delayed. Its main section switcher has only Home, Graphs, Tasks and Settings; the menu opens additional settings pivots.
+
+A verified navigation mismatch needs attention during the port:
+
+- Android bottom item **Commands** opens destination 1, **TrainedCommandsScreen**.
+- WP81 `NavigateCommands_Click` currently opens `SettingsSection` and sets `SettingsPivot.SelectedIndex = 3`, which is the **Voice** settings pivot, not a dedicated trained-commands destination.
+- WP81 Marfa bottom item is a voice action, as in Android, but the WP81 target does not currently expose the Android trained-commands destination as a corresponding screen in the inspected XAML.
+
+This should be resolved as part of navigation parity, not by changing voice recognition or command execution logic.
+
+### Priority order for the full port
+
+1. **Navigation parity first:** match Android destinations, labels, menu grouping, selected states and back behavior. Do not route Commands to Voice settings.
+2. **Global shell:** top bar, bottom bar, menu, content margins, status indicator and consistent screen title.
+3. **Screen parity:** dashboard, trained commands, MQTT, log, scenarios, voice settings, history/graphs, permissions, cleanup, delayed commands and widget deletion.
+4. **Reusable controls:** card, field, setting row, toggle, slider, button, list row, dialog and progress indicator.
+5. **Polish and device verification:** typography, icon assets, touch targets, scroll/keyboard behavior and 720x1280 Lumia layout.
+
