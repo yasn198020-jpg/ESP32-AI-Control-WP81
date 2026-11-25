@@ -3467,6 +3467,7 @@ namespace ESP32AIControl.WP81
         {
             var text = NormalizeTrainedPhrase(spokenText);
             if (text.Length == 0) return new List<TrainedVoiceCommand>();
+
             var exactPhrases = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var command in _trainedCommands)
             {
@@ -3491,24 +3492,141 @@ namespace ESP32AIControl.WP81
             if (containedPhrases.Count > 0)
                 return _trainedCommands.Where(c => containedPhrases.Contains(NormalizeTrainedPhrase(c.Phrase))).ToList();
 
-            var words = text.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-            if (words.Length > 0 && words.All(w => w.Length >= 3))
+            var spokenWords = text.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            if (spokenWords.Length > 0 && spokenWords.All(w => w.Length >= 3))
             {
-                var fuzzy = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var partialPhrases = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var command in _trainedCommands)
                 {
                     var phrases = (command.Variants ?? new List<string>()).Concat(new[] { command.Phrase });
-                    if (phrases.Any(p =>
-                    {
-                        var candidateWords = NormalizeTrainedPhrase(p).Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-                        return candidateWords.Length > 0 && words.All(w => candidateWords.Contains(w, StringComparer.OrdinalIgnoreCase));
-                    }))
-                        fuzzy.Add(NormalizeTrainedPhrase(command.Phrase));
+                    if (phrases.Any(p => PhraseWordsContainedInText(text, NormalizeTrainedPhrase(p))))
+                        partialPhrases.Add(NormalizeTrainedPhrase(command.Phrase));
                 }
-                if (fuzzy.Count > 0)
-                    return _trainedCommands.Where(c => fuzzy.Contains(NormalizeTrainedPhrase(c.Phrase))).ToList();
+                if (partialPhrases.Count > 0)
+                    return _trainedCommands.Where(c => partialPhrases.Contains(NormalizeTrainedPhrase(c.Phrase))).ToList();
             }
-            return new List<TrainedVoiceCommand>();
+
+            var candidates = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+            foreach (var group in _trainedCommands.GroupBy(c => NormalizeTrainedPhrase(c.Phrase)))
+            {
+                if (string.IsNullOrWhiteSpace(group.Key)) continue;
+                var best = 0.0;
+                foreach (var command in group)
+                {
+                    var phrases = (command.Variants ?? new List<string>()).Concat(new[] { command.Phrase });
+                    foreach (var phrase in phrases)
+                    {
+                        var candidate = NormalizeTrainedPhrase(phrase);
+                        if (candidate.Length == 0) continue;
+                        best = Math.Max(best, SimilarityAgainstTrainedText(text, candidate));
+                    }
+                }
+                if (best >= 0.78)
+                    candidates[group.Key] = best;
+            }
+
+            if (candidates.Count == 0) return new List<TrainedVoiceCommand>();
+            var bestScore = candidates.Values.Max();
+            var bestGroups = new HashSet<string>(
+                candidates.Where(pair => pair.Value >= bestScore - 0.04).Select(pair => pair.Key),
+                StringComparer.OrdinalIgnoreCase);
+            return _trainedCommands.Where(c => bestGroups.Contains(NormalizeTrainedPhrase(c.Phrase))).ToList();
+        }
+
+        private static bool PhraseWordsContainedInText(string text, string phrase)
+        {
+            var textWords = text.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(StemTrainedWord).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            var phraseWords = phrase.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(StemTrainedWord).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            if (textWords.Count == 0 || phraseWords.Count == 0) return false;
+            if (textWords.Any(word => word.Length < 3)) return false;
+            return textWords.All(spoken => phraseWords.Contains(spoken, StringComparer.OrdinalIgnoreCase));
+        }
+
+        private static string StemTrainedWord(string word)
+        {
+            var value = (word ?? string.Empty).ToLowerInvariant();
+            var endings = new[]
+            {
+                "иями", "ами", "ого", "ему", "ому", "ыми", "ими",
+                "ать", "ить", "еть", "ять", "уй", "ой", "ый", "ий",
+                "ая", "яя", "ое", "ее", "ые", "ие", "ы", "и", "а", "я", "о", "е"
+            };
+            foreach (var ending in endings)
+            {
+                if (value.Length > ending.Length + 2 && value.EndsWith(ending, StringComparison.Ordinal))
+                    return value.Substring(0, value.Length - ending.Length);
+            }
+            return value;
+        }
+
+        private static double SimilarityAgainstTrainedText(string text, string phrase)
+        {
+            if (text == phrase) return 1.0;
+            if (text.Contains(phrase)) return 0.96;
+
+            var textWords = text.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            var phraseWords = phrase.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            if (phraseWords.Length == 0 || textWords.Length == 0) return 0.0;
+
+            var minSize = Math.Max(1, phraseWords.Length - 1);
+            var maxSize = Math.Min(textWords.Length, phraseWords.Length + 1);
+            var best = 0.0;
+            for (var size = minSize; size <= maxSize; size++)
+            {
+                for (var i = 0; i <= textWords.Length - size; i++)
+                {
+                    var window = string.Join(" ", textWords.Skip(i).Take(size));
+                    best = Math.Max(best, Math.Max(
+                        NormalizedTrainedEditSimilarity(window, phrase),
+                        TrainedTokenSimilarity(window, phrase)));
+                }
+            }
+            return best;
+        }
+
+        private static double TrainedTokenSimilarity(string first, string second)
+        {
+            var a = new HashSet<string>(first.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(StemTrainedWord), StringComparer.OrdinalIgnoreCase);
+            var b = new HashSet<string>(second.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(StemTrainedWord), StringComparer.OrdinalIgnoreCase);
+            if (a.Count == 0 || b.Count == 0) return 0.0;
+            var common = a.Intersect(b, StringComparer.OrdinalIgnoreCase).Count();
+            return (2.0 * common) / (a.Count + b.Count);
+        }
+
+        private static double NormalizedTrainedEditSimilarity(string first, string second)
+        {
+            var maxLength = Math.Max(first.Length, second.Length);
+            if (maxLength == 0) return 1.0;
+            return 1.0 - (double)TrainedLevenshteinDistance(first, second) / maxLength;
+        }
+
+        private static int TrainedLevenshteinDistance(string first, string second)
+        {
+            if (first == second) return 0;
+            if (first.Length == 0) return second.Length;
+            if (second.Length == 0) return first.Length;
+
+            var previous = new int[second.Length + 1];
+            for (var j = 0; j <= second.Length; j++) previous[j] = j;
+
+            for (var i = 0; i < first.Length; i++)
+            {
+                var current = new int[second.Length + 1];
+                current[0] = i + 1;
+                for (var j = 0; j < second.Length; j++)
+                {
+                    var cost = first[i] == second[j] ? 0 : 1;
+                    current[j + 1] = Math.Min(
+                        Math.Min(current[j] + 1, previous[j + 1] + 1),
+                        previous[j] + cost);
+                }
+                previous = current;
+            }
+            return previous[second.Length];
         }
 
         private static string NormalizeTrainedPhrase(string phrase)
