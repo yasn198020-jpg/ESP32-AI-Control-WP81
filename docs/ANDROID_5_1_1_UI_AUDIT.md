@@ -262,3 +262,10 @@ Current branch remains a functional visual port in progress, not release-verifie
 - The WP8.1 implementation does not expose the later SpeechSynthesizer.Options API for rate/pitch controls; those Android settings are not represented by fake sliders. The available system-voice selection and test path are ported instead.
 
 Remaining work before release: compile with the Windows Phone 8.1 toolchain; inspect every screen on a 720x1280 Lumia 830; verify MQTT controls including the distinct /control and config-topic publish routes; exercise trained phrase capture/variants and Russian TTS; refine chart axis/series fidelity and the remaining settings/scenario/dialog visual details.
+
+
+## Visual port implementation — phase 7 (2026-11-26)
+
+- The Voice settings pivot now lists installed Windows speech-synthesis voices, persists the chosen voice ID and provides a test phrase. Trained-command replies use the selected voice, with Russian/system-default fallback when that saved voice is unavailable.
+- Chart widgets now show the number of parsed points, configured series names and a chart-type caption (`chart1`…`chart6`) in addition to the native line/bar rendering.
+- Windows Phone 8.1 does not expose the later SpeechSynthesizer.Options controls for rate/pitch; no unsupported rate/pitch sliders were added.
