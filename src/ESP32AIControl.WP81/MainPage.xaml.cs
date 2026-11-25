@@ -1703,6 +1703,7 @@ namespace ESP32AIControl.WP81
                 visual.ValueText.Visibility = Visibility.Collapsed;
                 visual.ChartCanvas = new Canvas
                 {
+                    Width = 300,
                     Height = 150,
                     MinHeight = 130,
                     HorizontalAlignment = HorizontalAlignment.Stretch,
@@ -2087,10 +2088,23 @@ namespace ESP32AIControl.WP81
         {
             if (state == null || string.IsNullOrEmpty(state.Id))
                 return;
-            if (string.Equals(NormalizeType(state.DefinitionName), "nil", StringComparison.Ordinal))
-                return;
 
+            var isNil = string.Equals(NormalizeType(state.DefinitionName), "nil", StringComparison.Ordinal);
             WidgetVisual visual;
+            if (isNil)
+            {
+                if (_visuals.TryGetValue(state.Key, out visual))
+                {
+                    PageVisual page;
+                    if (_pages.TryGetValue(visual.PageName, out page))
+                        page.Content.Children.Remove(visual.Container);
+                    _visuals.Remove(state.Key);
+                    _widgetIndex.Remove(state.Key);
+                    CleanupEmptyPages();
+                }
+                return;
+            }
+
             if (!_visuals.TryGetValue(state.Key, out visual))
             {
                 visual = CreateWidgetVisual(state);
@@ -2100,13 +2114,31 @@ namespace ESP32AIControl.WP81
             }
             else
             {
-                var newPage = NormalizePage(state.Page);
-                if (!string.Equals(visual.PageName, newPage, StringComparison.Ordinal))
-                    MoveWidgetVisual(visual, newPage);
+                var definitionChanged = !string.Equals(visual.State.DefinitionName, state.DefinitionName, StringComparison.OrdinalIgnoreCase);
+                var configChanged = !string.Equals(visual.State.ConfigJson ?? "{}", state.ConfigJson ?? "{}", StringComparison.Ordinal);
+                if (definitionChanged || configChanged)
+                {
+                    PageVisual oldPage;
+                    if (_pages.TryGetValue(visual.PageName, out oldPage))
+                        oldPage.Content.Children.Remove(visual.Container);
+                    _visuals.Remove(state.Key);
 
-                visual.State = state;
-                ApplyWidgetTitle(visual, state);
-                _widgetIndex[state.Key] = state;
+                    visual = CreateWidgetVisual(state);
+                    _visuals[state.Key] = visual;
+                    _widgetIndex[state.Key] = state;
+                    InsertWidgetVisual(visual);
+                    CleanupEmptyPages();
+                }
+                else
+                {
+                    var newPage = NormalizePage(state.Page);
+                    if (!string.Equals(visual.PageName, newPage, StringComparison.Ordinal))
+                        MoveWidgetVisual(visual, newPage);
+
+                    visual.State = state;
+                    ApplyWidgetTitle(visual, state);
+                    _widgetIndex[state.Key] = state;
+                }
             }
 
             _syncingControls = true;
