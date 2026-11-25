@@ -16,6 +16,8 @@ using Windows.Storage.Pickers;
 using Windows.UI.Notifications;
 using Windows.Data.Xml.Dom;
 using Windows.Data.Json;
+using Windows.Storage;
+using Windows.Media.SpeechSynthesis;
 using ESP32AIControl.WP81.Core;
 using ESP32AIControl.WP81.Core.Export;
 using ESP32AIControl.WP81.Core.History;
@@ -50,6 +52,21 @@ namespace ESP32AIControl.WP81
         private readonly ScheduledCommandService _scheduler;
         private readonly Wp81VoiceCommandService _voice;
         private VoiceCommandParser _voiceParser;
+        private readonly List<TrainedVoiceCommand> _trainedCommands = new List<TrainedVoiceCommand>();
+        private Grid _trainedCommandsSection;
+        private StackPanel _trainedCommandsList;
+        private Popup _trainingPopup;
+        private Popup _variantPopup;
+        private WidgetState _trainingTarget;
+        private string _trainingValue = "1";
+        private TextBox _trainingPhraseBox;
+        private ComboBox _trainingModeBox;
+        private ComboBox _trainingExistingPhraseBox;
+        private ComboBox _trainingActionBox;
+        private TextBox _variantPhraseBox;
+        private string _variantPhraseTarget;
+        private MediaElement _speechPlayback;
+        private SpeechSynthesizer _speechSynthesizer;
 
         private readonly Dictionary<string, WidgetVisual> _visuals =
             new Dictionary<string, WidgetVisual>();
@@ -75,6 +92,21 @@ namespace ESP32AIControl.WP81
         public MainPage()
         {
             InitializeComponent();
+            _trainedCommands.AddRange(LoadTrainedCommands());
+            _trainedCommandsSection = new Grid
+            {
+                Visibility = Visibility.Collapsed,
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 32, 32, 32))
+            };
+            MainSections.Children.Add(_trainedCommandsSection);
+            BuildTrainedCommandsSection();
+            _speechPlayback = new MediaElement
+            {
+                Width = 1, Height = 1, Opacity = 0,
+                IsHitTestVisible = false,
+                AutoPlay = true
+            };
+            MainSections.Children.Add(_speechPlayback);
             LocalScenarioEnabledCheckBox.IsChecked = true;
             LocalScenarioNotificationCheckBox.IsChecked = true;
             if (DashboardEmptyState != null)
@@ -625,8 +657,10 @@ namespace ESP32AIControl.WP81
 
         private void ShowSection(int index)
         {
-            _selectedSection = Math.Max(0, Math.Min(3, index));
+            _selectedSection = Math.Max(0, Math.Min(4, index));
             UpdateNavigationState();
+            if (_selectedSection == 4)
+                RefreshTrainedCommandsScreen();
         }
 
         private Popup _navigationPopup;
@@ -640,6 +674,9 @@ namespace ESP32AIControl.WP81
             }
 
             var items = new StackPanel { Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 36, 37, 42)) };
+            AddPopupMenuHeader(items, "КОМАНДЫ");
+            AddPopupMenuItem(items, "Обученные команды", delegate { ShowSection(4); });
+            AddPopupMenuSeparator(items);
             AddPopupMenuHeader(items, "ОБСЛУЖИВАНИЕ");
             AddPopupSettingsItem(items, "Сценарии ESP32 / IoTManager", 4);
             AddPopupSettingsItem(items, "Автосценарии", 5);
@@ -762,6 +799,8 @@ namespace ESP32AIControl.WP81
             GraphsSection.Visibility = _selectedSection == 1 ? Visibility.Visible : Visibility.Collapsed;
             TasksSection.Visibility = _selectedSection == 2 ? Visibility.Visible : Visibility.Collapsed;
             SettingsSection.Visibility = _selectedSection == 3 ? Visibility.Visible : Visibility.Collapsed;
+            if (_trainedCommandsSection != null)
+                _trainedCommandsSection.Visibility = _selectedSection == 4 ? Visibility.Visible : Visibility.Collapsed;
 
             if (_selectedSection == 0)
                 PageSubtitle.Text = "Главная";
@@ -769,13 +808,14 @@ namespace ESP32AIControl.WP81
                 PageSubtitle.Text = "История и графики";
             else if (_selectedSection == 2)
                 PageSubtitle.Text = "Отложенные";
-            else
+            else if (_selectedSection == 3)
                 PageSubtitle.Text = "Настройки";
+            else
+                PageSubtitle.Text = "Обученные команды";
 
             SetNavigationButton(NavHomeButton, _selectedSection == 0);
             SetNavigationButton(NavMarfaButton, false);
-            SetNavigationButton(NavCommandsButton,
-                _selectedSection == 3 && SettingsPivot != null && SettingsPivot.SelectedIndex == 3);
+            SetNavigationButton(NavCommandsButton, _selectedSection == 4);
             SetNavigationButton(NavGraphsButton, _selectedSection == 1);
             SetNavigationButton(NavTasksButton, _selectedSection == 2);
             // Settings stays available from the hamburger menu, not the bottom bar.
@@ -814,10 +854,8 @@ namespace ESP32AIControl.WP81
         private void NavigateMarfa_Click(object sender, RoutedEventArgs e) { VoiceButton_Click(sender, e); }
         private void NavigateCommands_Click(object sender, RoutedEventArgs e)
         {
-            ShowSection(3);
-            if (SettingsPivot != null)
-                SettingsPivot.SelectedIndex = 3;
-            UpdateNavigationState();
+            ShowSection(4);
+            RefreshTrainedCommandsScreen();
         }
         private void NavigateGraphs_Click(object sender, RoutedEventArgs e) { ShowSection(1); }
         private void NavigateTasks_Click(object sender, RoutedEventArgs e) { ShowSection(2); }
