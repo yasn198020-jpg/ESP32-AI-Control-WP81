@@ -72,6 +72,13 @@ namespace ESP32AIControl.WP81.Core.Protocol
             return _mqtt.PublishAsync("/" + _settings.Prefix, "HELLO", 1, false);
         }
 
+        public Task PublishWidgetAsync(string topic, string value)
+        {
+            if (string.IsNullOrWhiteSpace(topic))
+                throw new ArgumentException("Widget topic is empty.", "topic");
+            return _mqtt.PublishAsync(topic, value ?? string.Empty, 1, false);
+        }
+
         public Task DisconnectAsync()
         {
             return _mqtt.DisconnectAsync();
