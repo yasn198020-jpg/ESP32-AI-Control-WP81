@@ -93,6 +93,7 @@ namespace ESP32AIControl.WP81.Core.Protocol
                 Topic = topic,
                 DeviceId = parts.Length >= 1 ? parts[0] : string.Empty,
                 WidgetId = widgetId,
+                ConfigTopic = dto.Topic,
                 Description = First(dto.Description, dto.Label, dto.Name, widgetId),
                 WidgetType = First(dto.Widget, "status"),
                 DefinitionName = First(dto.Name, dto.Widget, "status"),
