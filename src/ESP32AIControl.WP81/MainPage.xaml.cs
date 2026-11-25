@@ -91,6 +91,11 @@ namespace ESP32AIControl.WP81
             new List<ScheduledCommand>();
         private readonly List<MeasurementPoint> _lastGraphPoints =
             new List<MeasurementPoint>();
+        private readonly List<MeasurementPoint> _graphNumericPoints =
+            new List<MeasurementPoint>();
+        private readonly List<double> _graphPointXPositions = new List<double>();
+        private double _graphZoom = 1.0;
+        private int _graphSelectedIndex = -1;
         private readonly Dictionary<FrameworkElement, double> _fontBaseSizes =
             new Dictionary<FrameworkElement, double>();
         private double _currentFontScale = 1.0;
@@ -110,6 +115,7 @@ namespace ESP32AIControl.WP81
         public MainPage()
         {
             InitializeComponent();
+            GraphCanvas.Tapped += GraphCanvas_Tapped;
             _trainedCommands.AddRange(LoadTrainedCommands());
             _trainedCommandsSection = new Grid
             {
@@ -2949,11 +2955,13 @@ namespace ESP32AIControl.WP81
         private void DrawGraph(IList<MeasurementPoint> points)
         {
             GraphCanvas.Children.Clear();
+            _graphNumericPoints.Clear();
+            _graphPointXPositions.Clear();
             if (points == null || points.Count < 2) return;
 
             var numeric = new List<Tuple<double, double>>();
-            DateTimeOffset minTime = points[0].Timestamp;
-            DateTimeOffset maxTime = points[points.Count - 1].Timestamp;
+            DateTimeOffset minTime = DateTimeOffset.MaxValue;
+            DateTimeOffset maxTime = DateTimeOffset.MinValue;
             double minValue = double.MaxValue;
             double maxValue = double.MinValue;
 
@@ -2963,7 +2971,10 @@ namespace ESP32AIControl.WP81
                 if (!double.TryParse((p.Value ?? string.Empty).Replace(',', '.'),
                     NumberStyles.Float, CultureInfo.InvariantCulture, out value))
                     continue;
-                numeric.Add(Tuple.Create((p.Timestamp - minTime).TotalSeconds, value));
+                numeric.Add(Tuple.Create(0.0, value));
+                _graphNumericPoints.Add(p);
+                minTime = p.Timestamp < minTime ? p.Timestamp : minTime;
+                maxTime = p.Timestamp > maxTime ? p.Timestamp : maxTime;
                 minValue = Math.Min(minValue, value);
                 maxValue = Math.Max(maxValue, value);
             }
@@ -2971,14 +2982,20 @@ namespace ESP32AIControl.WP81
             if (numeric.Count < 2) return;
             if (Math.Abs(maxValue - minValue) < 0.000001) maxValue = minValue + 1;
 
-            var width = Math.Max(280.0, GraphCanvas.ActualWidth > 0 ? GraphCanvas.ActualWidth : ActualWidth - 40.0);
-            GraphCanvas.Width = width;
-            var height = 300.0;
-            var padding = 18.0;
             var timeSpan = Math.Max(1.0, (maxTime - minTime).TotalSeconds);
+            for (var i = 0; i < _graphNumericPoints.Count; i++)
+            {
+                var seconds = (_graphNumericPoints[i].Timestamp - minTime).TotalSeconds;
+                numeric[i] = Tuple.Create(seconds, numeric[i].Item2);
+            }
 
-            // Subtle horizontal guides make values easier to compare without
-            // competing with the sensor series.
+            var baseWidth = Math.Max(280.0, ActualWidth > 0 ? ActualWidth - 40.0 : 680.0);
+            var width = baseWidth * Math.Max(1.0, Math.Min(20.0, _graphZoom));
+            GraphCanvas.Width = width;
+            GraphCanvas.Height = 300;
+            var height = 300.0;
+            var padding = 24.0;
+
             for (var gridIndex = 0; gridIndex <= 4; gridIndex++)
             {
                 var y = padding + (height - padding * 2) * gridIndex / 4.0;
@@ -2993,27 +3010,28 @@ namespace ESP32AIControl.WP81
                 });
             }
 
-            var axis = new Line
+            GraphCanvas.Children.Add(new Line
             {
                 X1 = padding, Y1 = height - padding,
                 X2 = width - padding, Y2 = height - padding,
                 Stroke = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 130, 132, 145)),
                 StrokeThickness = 1
-            };
-            GraphCanvas.Children.Add(axis);
+            });
 
-            for (var i = 1; i < numeric.Count; i++)
+            for (var i = 0; i < numeric.Count; i++)
             {
-                var a = numeric[i - 1];
-                var b = numeric[i];
-                var x1 = padding + (a.Item1 / timeSpan) * (width - padding * 2);
-                var y1 = padding + (1 - (a.Item2 - minValue) / (maxValue - minValue)) * (height - padding * 2);
-                var x2 = padding + (b.Item1 / timeSpan) * (width - padding * 2);
-                var y2 = padding + (1 - (b.Item2 - minValue) / (maxValue - minValue)) * (height - padding * 2);
+                var x = padding + (numeric[i].Item1 / timeSpan) * (width - padding * 2);
+                _graphPointXPositions.Add(x);
+                if (i == 0) continue;
 
+                var previous = numeric[i - 1];
+                var current = numeric[i];
+                var x1 = padding + (previous.Item1 / timeSpan) * (width - padding * 2);
+                var y1 = padding + (1 - (previous.Item2 - minValue) / (maxValue - minValue)) * (height - padding * 2);
+                var y2 = padding + (1 - (current.Item2 - minValue) / (maxValue - minValue)) * (height - padding * 2);
                 GraphCanvas.Children.Add(new Line
                 {
-                    X1 = x1, Y1 = y1, X2 = x2, Y2 = y2,
+                    X1 = x1, Y1 = y1, X2 = x, Y2 = y2,
                     Stroke = new SolidColorBrush(Windows.UI.Colors.DodgerBlue),
                     StrokeThickness = 2
                 });
@@ -3025,6 +3043,76 @@ namespace ESP32AIControl.WP81
             Canvas.SetLeft(low, 2); Canvas.SetTop(low, height - 30);
             GraphCanvas.Children.Add(high);
             GraphCanvas.Children.Add(low);
+
+            if (_graphSelectedIndex < 0 || _graphSelectedIndex >= _graphNumericPoints.Count)
+                _graphSelectedIndex = _graphNumericPoints.Count - 1;
+            DrawSelectedGraphPoint(numeric, minValue, maxValue, height, padding);
+            if (GraphZoomLabel != null)
+                GraphZoomLabel.Text = "×" + _graphZoom.ToString("0.0", CultureInfo.InvariantCulture);
+        }
+
+        private void DrawSelectedGraphPoint(IList<Tuple<double, double>> numeric, double minValue, double maxValue, double height, double padding)
+        {
+            if (_graphSelectedIndex < 0 || _graphSelectedIndex >= numeric.Count) return;
+            var width = GraphCanvas.Width;
+            var timeSpan = Math.Max(1.0, (numeric[numeric.Count - 1].Item1 - numeric[0].Item1));
+            var point = numeric[_graphSelectedIndex];
+            var x = padding + (point.Item1 / timeSpan) * (width - padding * 2);
+            var y = padding + (1 - (point.Item2 - minValue) / (maxValue - minValue)) * (height - padding * 2);
+            var marker = new Ellipse
+            {
+                Width = 12,
+                Height = 12,
+                Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255)),
+                Stroke = new SolidColorBrush(Windows.UI.Colors.White),
+                StrokeThickness = 1
+            };
+            Canvas.SetLeft(marker, x - 6);
+            Canvas.SetTop(marker, y - 6);
+            GraphCanvas.Children.Add(marker);
+        }
+
+        private void GraphCanvas_Tapped(object sender, Windows.UI.Xaml.Input.TappedRoutedEventArgs e)
+        {
+            if (_graphPointXPositions.Count == 0 || _graphNumericPoints.Count == 0) return;
+            var x = e.GetPosition(GraphCanvas).X;
+            var bestIndex = 0;
+            var bestDistance = double.MaxValue;
+            for (var i = 0; i < _graphPointXPositions.Count; i++)
+            {
+                var distance = Math.Abs(_graphPointXPositions[i] - x);
+                if (distance < bestDistance)
+                {
+                    bestDistance = distance;
+                    bestIndex = i;
+                }
+            }
+            _graphSelectedIndex = bestIndex;
+            DrawGraph(_lastGraphPoints);
+            var selected = _graphNumericPoints[bestIndex];
+            GraphSummary.Text = "Выбрано: " +
+                selected.Timestamp.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss", CultureInfo.InvariantCulture) +
+                " • " + selected.Value;
+        }
+
+        private void ZoomInGraphButton_Click(object sender, RoutedEventArgs e)
+        {
+            _graphZoom = Math.Min(20.0, _graphZoom * 1.5);
+            DrawGraph(_lastGraphPoints);
+        }
+
+        private void ZoomOutGraphButton_Click(object sender, RoutedEventArgs e)
+        {
+            _graphZoom = Math.Max(1.0, _graphZoom / 1.5);
+            DrawGraph(_lastGraphPoints);
+        }
+
+        private void ResetGraphZoomButton_Click(object sender, RoutedEventArgs e)
+        {
+            _graphZoom = 1.0;
+            _graphSelectedIndex = -1;
+            DrawGraph(_lastGraphPoints);
+            if (GraphZoomLabel != null) GraphZoomLabel.Text = "×1,0";
         }
 
         private async void ExportGraphButton_Click(object sender, RoutedEventArgs e)
