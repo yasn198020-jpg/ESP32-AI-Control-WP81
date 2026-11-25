@@ -11,6 +11,7 @@ namespace ESP32AIControl.WP81.Models
         public string DefinitionName { get; set; }
         public string ConfigJson { get; set; }
         public string Unit { get; set; }
+        public string Topic { get; set; }
         public string Page { get; set; }
         public int Order { get; set; }
         public string Value { get; set; }
@@ -32,6 +33,7 @@ namespace ESP32AIControl.WP81.Models
                 DefinitionName = DefinitionName,
                 ConfigJson = ConfigJson,
                 Unit = Unit,
+                Topic = Topic,
                 Page = Page,
                 Order = Order,
                 Value = Value,
