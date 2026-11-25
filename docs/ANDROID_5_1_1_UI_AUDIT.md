@@ -283,3 +283,11 @@ Settings UI restyling pass:
 - Kept the seven existing settings categories and their current WP81 controls intact; this is a visual pass, not a claim that every Android setting has a one-to-one WP81 platform equivalent.
 
 Still outstanding: inspect and restyle the hamburger popup's nested submenus and confirmation dialogs, compare every settings category against Android screenshots, and perform a Windows Phone 8.1 compile plus Lumia 830 runtime check. No build or device verification was available during this phase.
+
+
+## Visual port implementation — phase 9 (2026-11-26)
+
+- Restyled the hamburger menu's submenu rows to use a consistent 48px touch target, a muted Material-style leading icon and aligned title text. The menu's grouped sections and existing navigation actions are unchanged.
+- Used Windows Phone 8.1-compatible layout properties; avoided newer UWP-only StackPanel spacing APIs.
+- Verified the settings Pivot still contains all seven existing categories, that the Android-like header template is actually assigned, and that all XAML event-handler names in the page have matching code-behind methods.
+- No Windows Phone build or device run was available; this source-level check is not a substitute for compilation.
