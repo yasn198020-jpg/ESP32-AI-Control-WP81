@@ -208,8 +208,18 @@
                             <StackPanel>
                                 <TextBlock Text="Результат" FontSize="17" FontWeight="SemiBold" Margin="2,0,2,4"/>
                                 <TextBlock x:Name="GraphSummary" Text="Выберите датчик и период" Foreground="#FFACADB8" FontSize="12" TextWrapping="Wrap" Margin="2,0,2,8"/>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,6">
+                                    <Button Content="−" Click="ZoomOutGraphButton_Click" MinWidth="44" MinHeight="40"/>
+                                    <TextBlock x:Name="GraphZoomLabel" Text="×1,0" VerticalAlignment="Center" Margin="8,0"/>
+                                    <Button Content="＋" Click="ZoomInGraphButton_Click" MinWidth="44" MinHeight="40"/>
+                                    <Button Content="Сброс" Click="ResetGraphZoomButton_Click" MinHeight="40" Margin="6,0,0,0"/>
+                                </StackPanel>
                                 <Border Background="#FF202020" CornerRadius="10" Padding="6">
-                                    <Canvas x:Name="GraphCanvas" Height="300" HorizontalAlignment="Stretch"/>
+                                    <ScrollViewer x:Name="GraphHorizontalScroll" Height="320"
+                                                  HorizontalScrollBarVisibility="Auto"
+                                                  VerticalScrollBarVisibility="Disabled">
+                                        <Canvas x:Name="GraphCanvas" Height="300" HorizontalAlignment="Left"/>
+                                    </ScrollViewer>
                                 </Border>
                             </StackPanel>
                         </Border>
