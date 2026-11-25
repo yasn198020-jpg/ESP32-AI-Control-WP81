@@ -1441,6 +1441,38 @@ namespace ESP32AIControl.WP81
             });
         }
 
+        private FrameworkElement CreateWidgetIcon(WidgetState state, string title, out string visibleTitle)
+        {
+            string emoji;
+            if (WidgetIconCatalog.TryGetLeadingEmoji(title, out emoji, out visibleTitle))
+                return WidgetIconCatalog.CreateForEmoji(emoji);
+
+            visibleTitle = title;
+            var iconName = GetWidgetConfigString(state, "icon").Trim().ToLowerInvariant();
+            string glyph;
+            switch (iconName)
+            {
+                case "thermometer": glyph = "🌡"; break;
+                case "water": glyph = "💧"; break;
+                case "walk": glyph = "🚶"; break;
+                case "body": glyph = "◉"; break;
+                case "speedometer": glyph = "◌"; break;
+                case "sunny": glyph = "☀"; break;
+                default: glyph = "•"; break;
+            }
+
+            return new TextBlock
+            {
+                Text = glyph,
+                FontSize = 21,
+                Width = 34,
+                TextAlignment = TextAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255))
+            };
+        }
+
         private WidgetVisual CreateWidgetVisual(WidgetState state)
         {
             var pageName = NormalizePage(state.Page);
@@ -1494,39 +1526,25 @@ namespace ESP32AIControl.WP81
             // WP8.1 may not contain glyphs for modern emoji. Detect supported emoji
             // by their exact Unicode sequence and draw an app-owned vector equivalent.
             // The underlying MQTT state is never modified.
-            string receivedEmoji;
             string visibleTitle;
-            if (WidgetIconCatalog.TryGetLeadingEmoji(GetTitle(state), out receivedEmoji, out visibleTitle))
+            var iconElement = CreateWidgetIcon(state, GetTitle(state), out visibleTitle);
+            if (iconElement != null)
             {
-                var emojiIcon = WidgetIconCatalog.CreateForEmoji(receivedEmoji);
-                visual.EmojiIcon = emojiIcon;
-                emojiIcon.VerticalAlignment = VerticalAlignment.Center;
-                emojiIcon.HorizontalAlignment = HorizontalAlignment.Center;
-                Grid.SetColumn(emojiIcon, 0);
-                row.Children.Add(emojiIcon);
-                visual.Title = new TextBlock
-                {
-                    Text = visibleTitle,
-                    FontSize = 17,
-                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 243, 244, 246)),
-                    TextWrapping = TextWrapping.Wrap,
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Margin = new Thickness(0, 0, 8, 0)
-                };
+                visual.EmojiIcon = iconElement;
+                iconElement.VerticalAlignment = VerticalAlignment.Center;
+                iconElement.HorizontalAlignment = HorizontalAlignment.Center;
+                Grid.SetColumn(iconElement, 0);
+                row.Children.Add(iconElement);
             }
-            else
+            visual.Title = new TextBlock
             {
-                // Unsupported emoji are not guessed or removed; preserve the MQTT title.
-                visual.Title = new TextBlock
-                {
-                    Text = GetTitle(state),
-                    FontSize = 16,
-                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 243, 244, 246)),
-                    TextWrapping = TextWrapping.Wrap,
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Margin = new Thickness(0, 0, 8, 0)
-                };
-            }
+                Text = visibleTitle,
+                FontSize = iconElement == null ? 16 : 17,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 243, 244, 246)),
+                TextWrapping = TextWrapping.Wrap,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 8, 0)
+            };
             Grid.SetColumn(visual.Title, 1);
             row.Children.Add(visual.Title);
 
@@ -1852,7 +1870,7 @@ namespace ESP32AIControl.WP81
 
             if (fill)
             {
-                var clip = new EllipseGeometry
+                canvas.Clip = new EllipseGeometry
                 {
                     Center = new Point(size / 2, size / 2),
                     RadiusX = size / 2 - 4,
@@ -1871,8 +1889,7 @@ namespace ESP32AIControl.WP81
                     Height = (size - 8) * fraction,
                     Fill = new SolidColorBrush(ParseWidgetColor(GetWidgetConfigString(state, "waveColor"),
                         Windows.UI.Color.FromArgb(180, 0, 188, 212))),
-                    VerticalAlignment = VerticalAlignment.Bottom,
-                    Clip = clip
+                    VerticalAlignment = VerticalAlignment.Bottom
                 };
                 Canvas.SetLeft(wave, 4);
                 Canvas.SetTop(wave, 4 + (size - 8) * (1 - fraction));
@@ -2291,30 +2308,23 @@ namespace ESP32AIControl.WP81
         private void ApplyWidgetTitle(WidgetVisual visual, WidgetState state)
         {
             var title = GetTitle(state);
-            string emoji;
             string visibleTitle;
-            bool hasEmoji = WidgetIconCatalog.TryGetLeadingEmoji(title, out emoji, out visibleTitle);
+            var icon = CreateWidgetIcon(state, title, out visibleTitle);
+            visual.Title.Text = visibleTitle;
 
-            if (hasEmoji)
+            if (visual.Row != null)
             {
-                visual.Title.Text = visibleTitle;
-                if (visual.Row != null)
-                {
-                    if (visual.EmojiIcon != null)
-                        visual.Row.Children.Remove(visual.EmojiIcon);
-                    visual.EmojiIcon = WidgetIconCatalog.CreateForEmoji(emoji);
-                    visual.EmojiIcon.VerticalAlignment = VerticalAlignment.Center;
-                    visual.EmojiIcon.HorizontalAlignment = HorizontalAlignment.Center;
-                    Grid.SetColumn(visual.EmojiIcon, 0);
-                    visual.Row.Children.Insert(0, visual.EmojiIcon);
-                }
-            }
-            else
-            {
-                visual.Title.Text = title;
-                if (visual.Row != null && visual.EmojiIcon != null)
+                if (visual.EmojiIcon != null)
                     visual.Row.Children.Remove(visual.EmojiIcon);
-                visual.EmojiIcon = null;
+
+                visual.EmojiIcon = icon;
+                if (icon != null)
+                {
+                    icon.VerticalAlignment = VerticalAlignment.Center;
+                    icon.HorizontalAlignment = HorizontalAlignment.Center;
+                    Grid.SetColumn(icon, 0);
+                    visual.Row.Children.Insert(0, icon);
+                }
             }
         }
 
