@@ -313,9 +313,16 @@
                 <PivotItem Header="Голос">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel Margin="8,0,8,8">
-                            <TextBlock Text="ГОЛОСОВОЕ УПРАВЛЕНИЕ" FontSize="18" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,20,0,4"/>
+                            <TextBlock Text="ГОЛОСОВОЕ УПРАВЛЕНИЕ" FontSize="18" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,12,0,4"/>
+                        <TextBlock Text="СИНТЕЗ РЕЧИ" FontSize="13" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,14,0,2"/>
+                        <TextBlock Text="Голос используется для ответа Марфы после выполнения обученной команды." FontSize="12" Opacity="0.75" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                        <ComboBox x:Name="TtsVoiceBox" Header="Системный голос" MinHeight="48"/>
+                        <Button Content="Проверить голос" Click="TtsTestButton_Click" Margin="0,4,0,0"/>
+                        <TextBlock x:Name="TtsVoiceStatus" Text="Выберите голос и запустите проверку." FontSize="12" Opacity="0.75" TextWrapping="Wrap" Margin="0,4,0,10"/>
+                        <TextBlock Text="КОМАНДЫ ПО УМОЛЧАНИЮ" FontSize="13" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,14,0,2"/>
                         <TextBox x:Name="VoiceOpenCommandBox" Header="Команда «открой теплицу»" PlaceholderText="device/widget=1"/>
                         <TextBox x:Name="VoiceCloseCommandBox" Header="Команда «закрой теплицу»" PlaceholderText="device/widget=0"/>
+                        <TextBlock Text="Сохранённые обученные фразы и их варианты находятся в отдельном разделе «Команды»." FontSize="12" Opacity="0.75" TextWrapping="Wrap" Margin="0,4,0,8"/>
                         </StackPanel>
                     </ScrollViewer>
                 </PivotItem>
