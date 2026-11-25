@@ -2443,14 +2443,33 @@ namespace ESP32AIControl.WP81
         {
             try
             {
-                if (_mqtt.State != MqttConnectionState.Connected)
-                {
-                    Log("MQTT не подключён: " + visual.State.Id);
+                if (visual == null || visual.State == null)
                     return;
-                }
 
-                await _mqtt.PublishControlAsync(visual.State.DeviceId, visual.State.Id, value);
-                Log("TX control " + visual.State.DeviceId + "/" + visual.State.Id + " = " + value);
+                var state = visual.State;
+                var type = NormalizeType(state.WidgetType);
+                var definition = NormalizeType(state.DefinitionName);
+                var isControlCommand =
+                    type == "toggle" || type == "switch" ||
+                    type == "button" || type == "action" ||
+                    type == "vbtn" || type == "btn" || type == "buttonout" ||
+                    definition == "toggle" || definition == "button" ||
+                    definition == "vbtn" || definition == "btn";
+
+                if (isControlCommand)
+                {
+                    await _mqtt.PublishControlAsync(state.DeviceId, state.Id, value);
+                    Log("TX control " + state.DeviceId + "/" + state.Id + " = " + value);
+                }
+                else if (!string.IsNullOrWhiteSpace(state.Topic))
+                {
+                    await _mqtt.PublishWidgetAsync(state.Topic, value);
+                    Log("TX widget " + state.Topic + " = " + value);
+                }
+                else
+                {
+                    Log("MQTT CONFIG не содержит topic для " + state.DeviceId + "/" + state.Id);
+                }
             }
             catch (Exception ex)
             {
