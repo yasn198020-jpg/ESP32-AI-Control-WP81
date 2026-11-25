@@ -124,7 +124,11 @@ namespace ESP32AIControl.WP81.Core.State
                     if (IsDuplicate(key, message.Value))
                         return;
 
-                    state.Value = message.Value;
+                    var isChart = (state.DefinitionName ?? string.Empty).StartsWith("chart", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(GetConfigString(state.ConfigJson, "widget"), "chart", StringComparison.OrdinalIgnoreCase);
+                    state.Value = isChart && !string.IsNullOrWhiteSpace(message.RawPayload)
+                        ? message.RawPayload
+                        : message.Value;
                     state.UpdatedAt = DateTimeOffset.Now;
                 }
             }
@@ -132,6 +136,21 @@ namespace ESP32AIControl.WP81.Core.State
             var handler = WidgetChanged;
             if (handler != null)
                 handler(this, state.Clone());
+        }
+
+        private static string GetConfigString(string json, string key)
+        {
+            try
+            {
+                Windows.Data.Json.JsonObject root;
+                Windows.Data.Json.IJsonValue value;
+                if (Windows.Data.Json.JsonObject.TryParse(json ?? "{}", out root) &&
+                    root.TryGetValue(key, out value) &&
+                    value.ValueType == Windows.Data.Json.JsonValueType.String)
+                    return value.GetString();
+            }
+            catch { }
+            return string.Empty;
         }
 
         private void UpdateWidgetIdIndex(string widgetId, string key)
