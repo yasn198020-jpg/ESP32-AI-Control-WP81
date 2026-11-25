@@ -1993,16 +1993,31 @@ namespace ESP32AIControl.WP81
             else if (isChart)
             {
                 visual.ValueText.Visibility = Visibility.Collapsed;
+                visual.ChartMeta = new TextBlock
+                {
+                    FontSize = 11,
+                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 172, 173, 184)),
+                    Margin = new Thickness(34, 3, 8, 0),
+                    TextWrapping = TextWrapping.Wrap
+                };
+                visual.Container.Children.Add(visual.ChartMeta);
                 visual.ChartCanvas = new Canvas
                 {
                     Width = 300,
                     Height = 150,
                     MinHeight = 130,
                     HorizontalAlignment = HorizontalAlignment.Stretch,
-                    Margin = new Thickness(34, 6, 8, 6),
+                    Margin = new Thickness(34, 4, 8, 4),
                     Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 32, 32, 32))
                 };
                 visual.Container.Children.Add(visual.ChartCanvas);
+                visual.ChartFooter = new TextBlock
+                {
+                    FontSize = 11,
+                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 172, 173, 184)),
+                    Margin = new Thickness(34, 0, 8, 2)
+                };
+                visual.Container.Children.Add(visual.ChartFooter);
                 DrawWidgetChart(visual, state.Value);
             }
 
@@ -2251,6 +2266,25 @@ namespace ESP32AIControl.WP81
             return fallback;
         }
 
+        private static IList<string> GetWidgetConfigStringArray(WidgetState state, string key)
+        {
+            var result = new List<string>();
+            try
+            {
+                JsonObject config;
+                IJsonValue raw;
+                if (state != null && JsonObject.TryParse(state.ConfigJson ?? "{}", out config) &&
+                    config.TryGetValue(key, out raw) && raw.ValueType == JsonValueType.Array)
+                {
+                    foreach (var item in raw.GetArray())
+                        if (item.ValueType == JsonValueType.String && !string.IsNullOrWhiteSpace(item.GetString()))
+                            result.Add(item.GetString().Trim());
+                }
+            }
+            catch { }
+            return result;
+        }
+
         private static IList<IList<double>> ParseWidgetChartValues(string payload)
         {
             var output = new List<IList<double>> { new List<double>(), new List<double>(), new List<double>() };
@@ -2288,6 +2322,29 @@ namespace ESP32AIControl.WP81
             var height = 142.0;
             var values = ParseWidgetChartValues(payload);
             var series = values.Where(v => v.Count > 0).ToList();
+            var pointCount = series.Count == 0 ? 0 : series.Max(v => v.Count);
+            var seriesNames = GetWidgetConfigStringArray(visual.State, "series");
+            if (visual.ChartMeta != null)
+            {
+                var label = "Точек: " + pointCount.ToString(CultureInfo.InvariantCulture);
+                if (seriesNames.Count > 0)
+                    label += "  •  " + string.Join("  •  ", seriesNames);
+                visual.ChartMeta.Text = label;
+            }
+            if (visual.ChartFooter != null)
+            {
+                var definition = NormalizeType(visual.State == null ? string.Empty : visual.State.DefinitionName);
+                switch (definition)
+                {
+                    case "chart1": visual.ChartFooter.Text = "График без точек"; break;
+                    case "chart2": visual.ChartFooter.Text = "График с точками"; break;
+                    case "chart3": visual.ChartFooter.Text = "Дневной"; break;
+                    case "chart4": visual.ChartFooter.Text = "Часовой"; break;
+                    case "chart5": visual.ChartFooter.Text = "Двойной"; break;
+                    case "chart6": visual.ChartFooter.Text = "Тройной"; break;
+                    default: visual.ChartFooter.Text = "График"; break;
+                }
+            }
             canvas.Children.Add(new Rectangle
             {
                 Width = width, Height = height,
@@ -4405,6 +4462,8 @@ namespace ESP32AIControl.WP81
             public TextBlock ValueText { get; set; }
             public FrameworkElement Control { get; set; }
             public Canvas ChartCanvas { get; set; }
+            public TextBlock ChartMeta { get; set; }
+            public TextBlock ChartFooter { get; set; }
             public TextBlock UpdatedAtText { get; set; }
         }
 
