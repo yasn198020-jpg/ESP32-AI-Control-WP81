@@ -924,8 +924,7 @@ namespace ESP32AIControl.WP81
             var content = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
-                VerticalAlignment = VerticalAlignment.Center,
-                Spacing = 14
+                VerticalAlignment = VerticalAlignment.Center
             };
             content.Children.Add(new TextBlock
             {
@@ -939,6 +938,7 @@ namespace ESP32AIControl.WP81
             content.Children.Add(new TextBlock
             {
                 Text = title,
+                Margin = new Thickness(14, 0, 0, 0),
                 FontSize = 15,
                 Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 244, 244, 244)),
                 VerticalAlignment = VerticalAlignment.Center,
