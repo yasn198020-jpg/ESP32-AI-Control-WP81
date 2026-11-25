@@ -37,6 +37,8 @@ namespace ESP32AIControl.WP81.Core.Protocol
             [DataMember(Name="page")] public string Page { get; set; }
             [DataMember(Name="order")] public int Order { get; set; }
             [DataMember(Name="val")] public object Value { get; set; }
+            [DataMember(Name="unit")] public string Unit { get; set; }
+            [DataMember(Name="after")] public string After { get; set; }
         }
 
         public static Esp32Message Parse(Esp32MessageKind kind, string topic, string payload, Esp32TopicParser topics)
@@ -95,7 +97,9 @@ namespace ESP32AIControl.WP81.Core.Protocol
                 WidgetType = First(dto.Widget, dto.Subtype, dto.Type),
                 Page = dto.Page,
                 Order = dto.Order,
+                Unit = First(dto.Unit, dto.After),
                 Value = ValueToString(dto.Value),
+                RawPayload = payload,
                 RawPayload = payload
             };
         }
