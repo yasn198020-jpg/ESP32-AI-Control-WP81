@@ -55,6 +55,7 @@ namespace ESP32AIControl.WP81
         private readonly List<TrainedVoiceCommand> _trainedCommands = new List<TrainedVoiceCommand>();
         private Grid _trainedCommandsSection;
         private Grid _cleanupSection;
+        private Grid _permissionsSection;
         private TextBlock _cleanupResultText;
         private StackPanel _trainedCommandsList;
         private Popup _trainingPopup;
@@ -110,6 +111,13 @@ namespace ESP32AIControl.WP81
             };
             MainSections.Children.Add(_cleanupSection);
             BuildCleanupSection();
+            _permissionsSection = new Grid
+            {
+                Visibility = Visibility.Collapsed,
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 32, 32, 32))
+            };
+            MainSections.Children.Add(_permissionsSection);
+            BuildPermissionsSection();
             _speechPlayback = new MediaElement
             {
                 Width = 1, Height = 1, Opacity = 0,
@@ -667,7 +675,7 @@ namespace ESP32AIControl.WP81
 
         private void ShowSection(int index)
         {
-            _selectedSection = Math.Max(0, Math.Min(5, index));
+            _selectedSection = Math.Max(0, Math.Min(6, index));
             UpdateNavigationState();
             if (_selectedSection == 4)
                 RefreshTrainedCommandsScreen();
@@ -689,6 +697,7 @@ namespace ESP32AIControl.WP81
             AddPopupMenuItem(items, "Очистка приложения", delegate { ShowSection(5); });
             AddPopupMenuSeparator(items);
             AddPopupMenuHeader(items, "ОБСЛУЖИВАНИЕ");
+            AddPopupMenuItem(items, "Выданные разрешения", delegate { ShowSection(6); });
             AddPopupSettingsItem(items, "Сценарии ESP32 / IoTManager", 4);
             AddPopupSettingsItem(items, "Автосценарии", 5);
             AddPopupSettingsItem(items, "Журнал", 6);
@@ -814,6 +823,8 @@ namespace ESP32AIControl.WP81
                 _trainedCommandsSection.Visibility = _selectedSection == 4 ? Visibility.Visible : Visibility.Collapsed;
             if (_cleanupSection != null)
                 _cleanupSection.Visibility = _selectedSection == 5 ? Visibility.Visible : Visibility.Collapsed;
+            if (_permissionsSection != null)
+                _permissionsSection.Visibility = _selectedSection == 6 ? Visibility.Visible : Visibility.Collapsed;
 
             if (_selectedSection == 0)
                 PageSubtitle.Text = "Главная";
@@ -825,8 +836,10 @@ namespace ESP32AIControl.WP81
                 PageSubtitle.Text = "Настройки";
             else if (_selectedSection == 4)
                 PageSubtitle.Text = "Обученные команды";
-            else
+            else if (_selectedSection == 5)
                 PageSubtitle.Text = "Очистка приложения";
+            else
+                PageSubtitle.Text = "Разрешения приложения";
 
             SetNavigationButton(NavHomeButton, _selectedSection == 0);
             SetNavigationButton(NavMarfaButton, false);
@@ -3049,6 +3062,130 @@ namespace ESP32AIControl.WP81
                 ApplicationData.Current.LocalSettings.Values[TrainedCommandsStorageKey] = array.ToString();
             }
             catch (Exception ex) { Log("TRAINED SAVE ERROR: " + ex.Message); }
+        }
+
+        private void BuildPermissionsSection()
+        {
+            var root = new Grid();
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+            var header = new StackPanel { Margin = new Thickness(16, 14, 16, 10) };
+            header.Children.Add(new TextBlock
+            {
+                Text = "БЕЗОПАСНОСТЬ",
+                FontSize = 11,
+                FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255))
+            });
+            header.Children.Add(new TextBlock
+            {
+                Text = "Возможности приложения",
+                FontSize = 24,
+                FontWeight = Windows.UI.Text.FontWeights.SemiBold
+            });
+            header.Children.Add(new TextBlock
+            {
+                Text = "Проверка деклараций из Package.appxmanifest для Windows Phone 8.1.",
+                FontSize = 13,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 172, 173, 184)),
+                TextWrapping = TextWrapping.Wrap
+            });
+            root.Children.Add(header);
+
+            var scroll = new ScrollViewer
+            {
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                Margin = new Thickness(12, 0, 12, 12)
+            };
+            var content = new StackPanel();
+            content.Children.Add(CreateCapabilityCard(
+                "Интернет",
+                "internetClient",
+                "Объявлено в манифесте. Используется для подключения к удалённому MQTT-брокеру и проверки обновлений."));
+            content.Children.Add(CreateCapabilityCard(
+                "Локальная сеть",
+                "privateNetworkClientServer",
+                "Объявлено в манифесте. Используется для обнаружения ESP32 по UDP и локального обмена данными."));
+            content.Children.Add(CreateCapabilityCard(
+                "Микрофон",
+                "DeviceCapability: microphone",
+                "Объявлено в манифесте. Требуется для голосового управления и записи команд."));
+            content.Children.Add(CreateCapabilityCard(
+                "Библиотека изображений",
+                "picturesLibrary",
+                "Объявлено в манифесте. Доступ используется системными сценариями выбора и сохранения файлов изображений."));
+
+            var note = new Border
+            {
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 43, 44, 52)),
+                CornerRadius = new CornerRadius(12),
+                Padding = new Thickness(14),
+                Margin = new Thickness(0, 2, 0, 8),
+                Child = new TextBlock
+                {
+                    Text = "Важно: этот экран проверяет наличие возможностей в манифесте пакета. Windows Phone 8.1 не предоставляет тот же механизм динамической выдачи разрешений, что современные версии Android; фактическая доступность микрофона и сетевых служб дополнительно зависит от системных настроек и состояния устройства.",
+                    FontSize = 12,
+                    TextWrapping = TextWrapping.Wrap,
+                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 190, 192, 201))
+                }
+            };
+            content.Children.Add(note);
+            scroll.Content = content;
+            Grid.SetRow(scroll, 1);
+            root.Children.Add(scroll);
+            _permissionsSection.Children.Add(root);
+        }
+
+        private Border CreateCapabilityCard(string title, string capability, string description)
+        {
+            var card = new Border
+            {
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 43, 44, 52)),
+                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 65, 67, 77)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(14),
+                Padding = new Thickness(14),
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+            var content = new StackPanel();
+            var heading = new Grid();
+            heading.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            heading.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            heading.Children.Add(new TextBlock
+            {
+                Text = title,
+                FontSize = 17,
+                FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            var state = new TextBlock
+            {
+                Text = "В МАНИФЕСТЕ",
+                FontSize = 10,
+                FontWeight = Windows.UI.Text.FontWeights.Bold,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255)),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(state, 1);
+            heading.Children.Add(state);
+            content.Children.Add(heading);
+            content.Children.Add(new TextBlock
+            {
+                Text = capability,
+                FontSize = 12,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255)),
+                Margin = new Thickness(0, 3, 0, 5)
+            });
+            content.Children.Add(new TextBlock
+            {
+                Text = description,
+                FontSize = 13,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 190, 192, 201)),
+                TextWrapping = TextWrapping.Wrap
+            });
+            card.Child = content;
+            return card;
         }
 
         private void BuildCleanupSection()
