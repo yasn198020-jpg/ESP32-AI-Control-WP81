@@ -14,6 +14,7 @@ using Windows.Media.SpeechRecognition;
 using Windows.Storage.Pickers;
 using Windows.UI.Notifications;
 using Windows.Data.Xml.Dom;
+using Windows.Data.Json;
 using ESP32AIControl.WP81.Core;
 using ESP32AIControl.WP81.Core.Export;
 using ESP32AIControl.WP81.Core.History;
@@ -1414,22 +1415,24 @@ namespace ESP32AIControl.WP81
             // small vertical rhythm, and no oversized fixed-width controls.
             visual.Container = new StackPanel
             {
-                Margin = new Thickness(0, 0, 0, 6),
+                Margin = new Thickness(0, 0, 0, 2),
                 Tag = state.Key
             };
 
             var type = NormalizeType(state.WidgetType);
-            var isSwitch = type == "switch" || type == "toggle" ||
+            var definition = NormalizeType(string.IsNullOrWhiteSpace(state.DefinitionName) ? state.WidgetType : state.DefinitionName);
+            var isSwitch = definition == "toggle" || type == "switch" || type == "toggle" ||
                            type == "checkbox" || type == "vbutton" ||
                            type == "vbtn" || type == "buttonin";
-            var isAction = type == "button" || type == "action" || type == "buttonout";
-            var isSlider = type == "slider" || type == "range" || type == "inputdgt";
+            var isAction = definition == "button" || definition == "vbtn" || definition == "btn" || type == "button" || type == "action" || type == "buttonout";
+            var isSlider = definition == "range" || definition == "rangeservo" || type == "slider" || type == "range" || type == "inputdgt";
+            var isProgress = definition == "progressline";
 
             var shell = new Border
             {
-                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 43, 44, 52)),
-                CornerRadius = new CornerRadius(14),
-                Padding = new Thickness(16, 10, 16, 10),
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 43, 44, 52)),
+                CornerRadius = new CornerRadius(0),
+                Padding = new Thickness(16, 6, 16, 6),
                 BorderThickness = new Thickness(0)
             };
 
@@ -1483,7 +1486,7 @@ namespace ESP32AIControl.WP81
 
             visual.ValueText = new TextBlock
             {
-                Text = string.IsNullOrEmpty(state.Value) ? "—" : state.Value,
+                Text = (string.IsNullOrEmpty(state.Value) ? "—" : state.Value) + (string.IsNullOrWhiteSpace(state.Unit) ? string.Empty : " " + state.Unit),
                 FontSize = 18,
                 FontWeight = Windows.UI.Text.FontWeights.SemiBold,
                 Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 98, 168, 255)),
@@ -1544,10 +1547,13 @@ namespace ESP32AIControl.WP81
 
             if (isSlider)
             {
+                double sliderMin = GetWidgetConfigNumber(state, "min", 0);
+                double sliderMax = GetWidgetConfigNumber(state, "max", definition == "rangeservo" ? 180 : 100);
+                if (sliderMax <= sliderMin) sliderMax = sliderMin + 1;
                 var slider = new Slider
                 {
-                    Minimum = 0,
-                    Maximum = 100,
+                    Minimum = sliderMin,
+                    Maximum = sliderMax,
                     StepFrequency = 1,
                     HorizontalAlignment = HorizontalAlignment.Stretch,
                     Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255)),
@@ -1561,8 +1567,36 @@ namespace ESP32AIControl.WP81
                 visual.Control = slider;
                 visual.Container.Children.Add(slider);
             }
+            else if (isProgress)
+            {
+                var progress = new ProgressBar
+                {
+                    Minimum = 0,
+                    Maximum = Math.Max(0.0001, GetWidgetConfigNumber(state, "max", 100)),
+                    Height = Math.Max(4, GetWidgetConfigNumber(state, "stroke", 10)),
+                    Margin = new Thickness(34, 4, 8, 2),
+                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255)),
+                    Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 65, 67, 77))
+                };
+                visual.Control = progress;
+                visual.Container.Children.Add(progress);
+            }
 
             return visual;
+        }
+
+        private static double GetWidgetConfigNumber(WidgetState state, string key, double fallback)
+        {
+            try
+            {
+                if (state == null || string.IsNullOrWhiteSpace(state.ConfigJson)) return fallback;
+                JsonObject config;
+                if (!JsonObject.TryParse(state.ConfigJson, out config)) return fallback;
+                IJsonValue value;
+                if (!config.TryGetValue(key, out value) || value.ValueType != JsonValueType.Number) return fallback;
+                return value.GetNumber();
+            }
+            catch { return fallback; }
         }
 
         private void UpdateWidgetVisual(WidgetState state)
@@ -1732,12 +1766,21 @@ namespace ESP32AIControl.WP81
         private void ApplyValueToVisual(WidgetVisual visual, string value)
         {
             if (visual.ValueText != null)
-                visual.ValueText.Text = string.IsNullOrEmpty(value) ? "—" : value;
+                visual.ValueText.Text = (string.IsNullOrEmpty(value) ? "—" : value) + (visual.State == null || string.IsNullOrWhiteSpace(visual.State.Unit) ? string.Empty : " " + visual.State.Unit);
 
             var toggle = visual.Control as ToggleSwitch;
             if (toggle != null)
             {
                 toggle.IsOn = ParseBoolean(value);
+                return;
+            }
+
+            var progress = visual.Control as ProgressBar;
+            if (progress != null)
+            {
+                double progressValue;
+                if (double.TryParse((value ?? string.Empty).Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out progressValue))
+                    progress.Value = Math.Max(progress.Minimum, Math.Min(progress.Maximum, progressValue));
                 return;
             }
 
