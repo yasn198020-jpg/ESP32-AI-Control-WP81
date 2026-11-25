@@ -637,7 +637,7 @@ namespace ESP32AIControl.WP81
                 return;
             }
 
-            var items = new StackPanel { Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 36, 37, 45)) };
+            var items = new StackPanel { Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 36, 37, 42)) };
             AddPopupMenuHeader(items, "ОБСЛУЖИВАНИЕ");
             AddPopupSettingsItem(items, "Сценарии ESP32 / IoTManager", 4);
             AddPopupSettingsItem(items, "Автосценарии", 5);
@@ -673,7 +673,7 @@ namespace ESP32AIControl.WP81
             {
                 Child = frame,
                 HorizontalOffset = 4,
-                VerticalOffset = 58,
+                VerticalOffset = 78,
                 IsOpen = true
             };
         }
@@ -685,7 +685,7 @@ namespace ESP32AIControl.WP81
                 Text = title,
                 FontSize = 11,
                 FontWeight = Windows.UI.Text.FontWeights.SemiBold,
-                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 128, 101, 232)),
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255)),
                 Margin = new Thickness(14, 10, 10, 4)
             });
         }
@@ -795,7 +795,7 @@ namespace ESP32AIControl.WP81
             // the selected destination gets a soft surface and an accent icon,
             // rather than turning the entire navigation tile bright purple.
             button.Background = new SolidColorBrush(isSelected
-                ? Windows.UI.Color.FromArgb(255, 51, 44, 68)
+                ? Windows.UI.Color.FromArgb(255, 74, 68, 88)
                 : Windows.UI.Color.FromArgb(255, 36, 37, 45));
             button.Foreground = new SolidColorBrush(isSelected
                 ? Windows.UI.Color.FromArgb(255, 244, 244, 244)
