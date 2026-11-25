@@ -60,6 +60,7 @@ namespace ESP32AIControl.WP81
         private StackPanel _trainedCommandsList;
         private Popup _trainingPopup;
         private Popup _variantPopup;
+        private Popup _textSizePopup;
         private WidgetState _trainingTarget;
         private string _trainingValue = "1";
         private TextBox _trainingPhraseBox;
@@ -694,9 +695,9 @@ namespace ESP32AIControl.WP81
             var items = new StackPanel { Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 36, 37, 42)) };
             AddPopupMenuHeader(items, "КОМАНДЫ");
             AddPopupMenuItem(items, "Обученные команды", delegate { ShowSection(4); });
-            AddPopupMenuItem(items, "Очистка приложения", delegate { ShowSection(5); });
             AddPopupMenuSeparator(items);
             AddPopupMenuHeader(items, "ОБСЛУЖИВАНИЕ");
+            AddPopupMenuItem(items, "Очистка приложения", delegate { ShowSection(5); });
             AddPopupMenuItem(items, "Выданные разрешения", delegate { ShowSection(6); });
             AddPopupSettingsItem(items, "Сценарии ESP32 / IoTManager", 4);
             AddPopupSettingsItem(items, "Автосценарии", 5);
@@ -709,6 +710,12 @@ namespace ESP32AIControl.WP81
             AddPopupSettingsItem(items, "Хранение истории", 1);
             AddPopupSettingsItem(items, "Сохранённые профили", 2);
             AddPopupSettingsItem(items, "Голос и команды", 3);
+            AddPopupMenuItem(items, "Размер текста", ShowTextSizeDialog);
+
+            AddPopupMenuSeparator(items);
+            AddPopupMenuHeader(items, "О ПРИЛОЖЕНИИ");
+            AddPopupMenuItem(items, "Проверка Марфы", delegate { VoiceButton_Click(NavMarfaButton, null); });
+            AddPopupMenuItem(items, "О приложении", delegate { TopInfoButton_Click(TopInfoButton, null); });
 
             var scroll = new ScrollViewer
             {
@@ -735,6 +742,101 @@ namespace ESP32AIControl.WP81
                 VerticalOffset = 78,
                 IsOpen = true
             };
+        }
+
+        private void ShowTextSizeDialog()
+        {
+            var initial = _appSettings == null
+                ? (float)UiFontScaleSlider.Value
+                : (_appSettings.UiFontScale <= 0 ? (float)UiFontScaleSlider.Value : _appSettings.UiFontScale);
+            var slider = new Slider
+            {
+                Minimum = 0.7,
+                Maximum = 1.1,
+                StepFrequency = 0.05,
+                Value = initial,
+                Margin = new Thickness(16, 8, 16, 8)
+            };
+            var valueLabel = new TextBlock
+            {
+                Text = "Масштаб: " + initial.ToString("0.00", CultureInfo.InvariantCulture),
+                FontSize = 15,
+                Margin = new Thickness(16, 2, 16, 8),
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255))
+            };
+            slider.ValueChanged += delegate
+            {
+                valueLabel.Text = "Масштаб: " + slider.Value.ToString("0.00", CultureInfo.InvariantCulture);
+                ApplyFontScale(slider.Value);
+            };
+
+            var body = new StackPanel();
+            body.Children.Add(new TextBlock
+            {
+                Text = "Размер текста",
+                FontSize = 20,
+                FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                Margin = new Thickness(16, 16, 16, 4)
+            });
+            body.Children.Add(new TextBlock
+            {
+                Text = "Переместите ползунок, чтобы подобрать удобный размер. Изменение сразу применяется к вкладкам дашборда и настроек.",
+                FontSize = 13,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(16, 0, 16, 4),
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 190, 192, 201))
+            });
+            body.Children.Add(slider);
+            body.Children.Add(valueLabel);
+
+            var actions = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(8)
+            };
+            var cancel = new Button { Content = "Отмена", Margin = new Thickness(0, 0, 6, 0) };
+            cancel.Click += delegate
+            {
+                ApplyFontScale(initial);
+                if (_textSizePopup != null) _textSizePopup.IsOpen = false;
+            };
+            var save = new Button
+            {
+                Content = "Сохранить",
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255)),
+                Foreground = new SolidColorBrush(Windows.UI.Colors.White)
+            };
+            save.Click += async delegate
+            {
+                try
+                {
+                    ApplyFontScale(slider.Value);
+                    if (_appSettings != null)
+                    {
+                        _appSettings.UiFontScale = (float)slider.Value;
+                        await _settingsStore.SaveAsync(_appSettings);
+                    }
+                    if (_textSizePopup != null) _textSizePopup.IsOpen = false;
+                    Log("UI FONT SCALE: " + slider.Value.ToString("0.00", CultureInfo.InvariantCulture));
+                }
+                catch (Exception ex) { Log("FONT SCALE SAVE ERROR: " + ex.Message); }
+            };
+            actions.Children.Add(cancel);
+            actions.Children.Add(save);
+            body.Children.Add(actions);
+            _textSizePopup = CreateAppPopup(body, 330, 360);
+        }
+
+        private void ApplyFontScale(double scale)
+        {
+            scale = Math.Max(0.7, Math.Min(1.1, scale));
+            if (UiFontScaleSlider != null)
+                UiFontScaleSlider.Value = scale;
+            if (WidgetPages != null)
+                WidgetPages.FontSize = 14 * scale;
+            if (SettingsPivot != null)
+                SettingsPivot.FontSize = 14 * scale;
         }
 
         private void AddPopupMenuHeader(Panel panel, string title)
