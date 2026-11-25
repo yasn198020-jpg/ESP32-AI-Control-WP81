@@ -99,7 +99,6 @@ namespace ESP32AIControl.WP81.Core.Protocol
                 Order = dto.Order,
                 Unit = First(dto.Unit, dto.After),
                 Value = ValueToString(dto.Value),
-                RawPayload = payload,
                 RawPayload = payload
             };
         }
