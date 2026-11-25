@@ -1588,6 +1588,22 @@ namespace ESP32AIControl.WP81
                 row.Children.Add(visual.ValueText);
             }
 
+            if (isSwitch || isAction ||
+                definition.StartsWith("anydata") || definition.StartsWith("chart") ||
+                definition == "progressline" || definition == "progressround" ||
+                definition == "fillgauge" || type == "status" || type == "value")
+            {
+                shell.IsHoldingEnabled = true;
+                shell.Holding += delegate(object sender, Windows.UI.Xaml.Input.HoldingRoutedEventArgs args)
+                {
+                    if (args.HoldingState == Windows.UI.Input.HoldingState.Started)
+                    {
+                        args.Handled = true;
+                        OpenTrainingDialog(state);
+                    }
+                };
+            }
+
             shell.Child = row;
             visual.Container.Children.Add(shell);
 
@@ -2850,6 +2866,21 @@ namespace ESP32AIControl.WP81
                 VoiceResultText.Text = "Распознано: " + text;
                 try
                 {
+                    if (_trainingTarget != null)
+                    {
+                        if (_trainingPhraseBox != null) _trainingPhraseBox.Text = text;
+                        VoiceResultText.Text = "Фраза для обучения: " + text;
+                        return;
+                    }
+                    if (!string.IsNullOrWhiteSpace(_variantPhraseTarget))
+                    {
+                        if (_variantPhraseBox != null) _variantPhraseBox.Text = text;
+                        VoiceResultText.Text = "Вариант фразы: " + text;
+                        return;
+                    }
+                    if (await ExecuteTrainedCommandsAsync(text))
+                        return;
+
                     var parsed = _voiceParser.Parse(text);
                     if (parsed == null)
                     {
@@ -3374,6 +3405,143 @@ namespace ESP32AIControl.WP81
             actions.Children.Add(add);
             body.Children.Add(actions);
             _variantPopup = CreateAppPopup(body, 330, 420);
+        }
+
+        private async Task<bool> ExecuteTrainedCommandsAsync(string spokenText)
+        {
+            var matches = MatchTrainedCommands(spokenText);
+            if (matches.Count == 0) return false;
+            var replies = new List<string>();
+            foreach (var command in matches)
+            {
+                var state = _devices.Get(command.DeviceId, command.WidgetId);
+                if (command.Value == TrainedReadValue)
+                {
+                    if (state == null || string.IsNullOrWhiteSpace(state.Value))
+                        replies.Add("Нет актуального значения " + command.WidgetId);
+                    else
+                        replies.Add(GetTitle(state) + ": " + state.Value + (string.IsNullOrWhiteSpace(state.Unit) ? string.Empty : " " + state.Unit));
+                    continue;
+                }
+
+                if (state == null)
+                {
+                    replies.Add("Виджет не найден: " + command.WidgetId);
+                    continue;
+                }
+                try
+                {
+                    var type = NormalizeType(state.WidgetType);
+                    if (type == "toggle" || type == "button")
+                        await _mqtt.PublishControlAsync(command.DeviceId, command.WidgetId, command.Value);
+                    else if (!string.IsNullOrWhiteSpace(state.Topic))
+                        await _mqtt.PublishWidgetAsync(state.Topic, command.Value);
+                    else
+                    {
+                        replies.Add("Нет MQTT topic для " + command.WidgetId);
+                        continue;
+                    }
+                    replies.Add("Команда отправлена: " + GetTitle(state));
+                }
+                catch (Exception ex) { replies.Add("Ошибка " + command.WidgetId + ": " + ex.Message); }
+            }
+
+            var reply = string.Join(". ", replies);
+            VoiceResultText.Text = reply;
+            if (reply.Length > 0) await SpeakTextAsync(reply);
+            Log("TRAINED COMMAND: " + spokenText + " => " + reply);
+            return true;
+        }
+
+        private List<TrainedVoiceCommand> MatchTrainedCommands(string spokenText)
+        {
+            var text = NormalizeTrainedPhrase(spokenText);
+            if (text.Length == 0) return new List<TrainedVoiceCommand>();
+            var exactPhrases = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var command in _trainedCommands)
+            {
+                var phrases = (command.Variants ?? new List<string>()).Concat(new[] { command.Phrase });
+                if (phrases.Any(p => NormalizeTrainedPhrase(p) == text))
+                    exactPhrases.Add(NormalizeTrainedPhrase(command.Phrase));
+            }
+            if (exactPhrases.Count > 0)
+                return _trainedCommands.Where(c => exactPhrases.Contains(NormalizeTrainedPhrase(c.Phrase))).ToList();
+
+            var containedPhrases = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var command in _trainedCommands)
+            {
+                var phrases = (command.Variants ?? new List<string>()).Concat(new[] { command.Phrase });
+                if (phrases.Any(p =>
+                {
+                    var candidate = NormalizeTrainedPhrase(p);
+                    return candidate.Length > 0 && (" " + text + " ").Contains(" " + candidate + " ");
+                }))
+                    containedPhrases.Add(NormalizeTrainedPhrase(command.Phrase));
+            }
+            if (containedPhrases.Count > 0)
+                return _trainedCommands.Where(c => containedPhrases.Contains(NormalizeTrainedPhrase(c.Phrase))).ToList();
+
+            var words = text.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            if (words.Length > 0 && words.All(w => w.Length >= 3))
+            {
+                var fuzzy = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var command in _trainedCommands)
+                {
+                    var phrases = (command.Variants ?? new List<string>()).Concat(new[] { command.Phrase });
+                    if (phrases.Any(p =>
+                    {
+                        var candidateWords = NormalizeTrainedPhrase(p).Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                        return candidateWords.Length > 0 && words.All(w => candidateWords.Contains(w, StringComparer.OrdinalIgnoreCase));
+                    }))
+                        fuzzy.Add(NormalizeTrainedPhrase(command.Phrase));
+                }
+                if (fuzzy.Count > 0)
+                    return _trainedCommands.Where(c => fuzzy.Contains(NormalizeTrainedPhrase(c.Phrase))).ToList();
+            }
+            return new List<TrainedVoiceCommand>();
+        }
+
+        private static string NormalizeTrainedPhrase(string phrase)
+        {
+            var result = new System.Text.StringBuilder();
+            var previousSpace = true;
+            foreach (var ch in (phrase ?? string.Empty).ToLowerInvariant().Replace('ё', 'е'))
+            {
+                if (char.IsLetterOrDigit(ch))
+                {
+                    result.Append(ch);
+                    previousSpace = false;
+                }
+                else if (!previousSpace)
+                {
+                    result.Append(' ');
+                    previousSpace = true;
+                }
+            }
+            var normalized = result.ToString().Trim();
+            var prefixes = new[] { "марфа ", "марфу ", "марфе ", "марфой " };
+            foreach (var prefix in prefixes)
+            {
+                if (normalized.StartsWith(prefix, StringComparison.Ordinal))
+                {
+                    normalized = normalized.Substring(prefix.Length).Trim();
+                    break;
+                }
+            }
+            return normalized;
+        }
+
+        private async Task SpeakTextAsync(string text)
+        {
+            try
+            {
+                if (_speechSynthesizer == null)
+                    _speechSynthesizer = new SpeechSynthesizer();
+                var stream = await _speechSynthesizer.SynthesizeTextToStreamAsync(text);
+                _speechPlayback.SetSource(stream, stream.ContentType);
+                _speechPlayback.Play();
+            }
+            catch (Exception ex) { Log("TTS ERROR: " + ex.Message); }
         }
 
         private void Log(string text)
