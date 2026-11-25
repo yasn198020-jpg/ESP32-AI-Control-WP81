@@ -3378,13 +3378,6 @@ namespace ESP32AIControl.WP81
             var header = new StackPanel { Margin = new Thickness(16, 14, 16, 10) };
             header.Children.Add(new TextBlock
             {
-                Text = "БЕЗОПАСНОСТЬ",
-                FontSize = 11,
-                FontWeight = Windows.UI.Text.FontWeights.SemiBold,
-                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255))
-            });
-            header.Children.Add(new TextBlock
-            {
                 Text = "Возможности приложения",
                 FontSize = 24,
                 FontWeight = Windows.UI.Text.FontWeights.SemiBold
@@ -3667,12 +3660,6 @@ namespace ESP32AIControl.WP81
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
             var header = new StackPanel { Margin = new Thickness(16, 14, 16, 8) };
-            header.Children.Add(new TextBlock
-            {
-                Text = "ГОЛОСОВОЕ УПРАВЛЕНИЕ",
-                FontSize = 11, FontWeight = Windows.UI.Text.FontWeights.SemiBold,
-                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255))
-            });
             header.Children.Add(new TextBlock { Text = "Обученные команды", FontSize = 24, FontWeight = Windows.UI.Text.FontWeights.SemiBold });
             header.Children.Add(new TextBlock
             {
