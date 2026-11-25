@@ -54,6 +54,8 @@ namespace ESP32AIControl.WP81
         private VoiceCommandParser _voiceParser;
         private readonly List<TrainedVoiceCommand> _trainedCommands = new List<TrainedVoiceCommand>();
         private Grid _trainedCommandsSection;
+        private Grid _cleanupSection;
+        private TextBlock _cleanupResultText;
         private StackPanel _trainedCommandsList;
         private Popup _trainingPopup;
         private Popup _variantPopup;
@@ -101,6 +103,13 @@ namespace ESP32AIControl.WP81
             };
             MainSections.Children.Add(_trainedCommandsSection);
             BuildTrainedCommandsSection();
+            _cleanupSection = new Grid
+            {
+                Visibility = Visibility.Collapsed,
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 32, 32, 32))
+            };
+            MainSections.Children.Add(_cleanupSection);
+            BuildCleanupSection();
             _speechPlayback = new MediaElement
             {
                 Width = 1, Height = 1, Opacity = 0,
@@ -658,7 +667,7 @@ namespace ESP32AIControl.WP81
 
         private void ShowSection(int index)
         {
-            _selectedSection = Math.Max(0, Math.Min(4, index));
+            _selectedSection = Math.Max(0, Math.Min(5, index));
             UpdateNavigationState();
             if (_selectedSection == 4)
                 RefreshTrainedCommandsScreen();
@@ -677,6 +686,7 @@ namespace ESP32AIControl.WP81
             var items = new StackPanel { Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 36, 37, 42)) };
             AddPopupMenuHeader(items, "КОМАНДЫ");
             AddPopupMenuItem(items, "Обученные команды", delegate { ShowSection(4); });
+            AddPopupMenuItem(items, "Очистка приложения", delegate { ShowSection(5); });
             AddPopupMenuSeparator(items);
             AddPopupMenuHeader(items, "ОБСЛУЖИВАНИЕ");
             AddPopupSettingsItem(items, "Сценарии ESP32 / IoTManager", 4);
@@ -802,6 +812,8 @@ namespace ESP32AIControl.WP81
             SettingsSection.Visibility = _selectedSection == 3 ? Visibility.Visible : Visibility.Collapsed;
             if (_trainedCommandsSection != null)
                 _trainedCommandsSection.Visibility = _selectedSection == 4 ? Visibility.Visible : Visibility.Collapsed;
+            if (_cleanupSection != null)
+                _cleanupSection.Visibility = _selectedSection == 5 ? Visibility.Visible : Visibility.Collapsed;
 
             if (_selectedSection == 0)
                 PageSubtitle.Text = "Главная";
@@ -811,8 +823,10 @@ namespace ESP32AIControl.WP81
                 PageSubtitle.Text = "Отложенные";
             else if (_selectedSection == 3)
                 PageSubtitle.Text = "Настройки";
-            else
+            else if (_selectedSection == 4)
                 PageSubtitle.Text = "Обученные команды";
+            else
+                PageSubtitle.Text = "Очистка приложения";
 
             SetNavigationButton(NavHomeButton, _selectedSection == 0);
             SetNavigationButton(NavMarfaButton, false);
@@ -3035,6 +3049,174 @@ namespace ESP32AIControl.WP81
                 ApplicationData.Current.LocalSettings.Values[TrainedCommandsStorageKey] = array.ToString();
             }
             catch (Exception ex) { Log("TRAINED SAVE ERROR: " + ex.Message); }
+        }
+
+        private void BuildCleanupSection()
+        {
+            var root = new Grid();
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+            var header = new StackPanel { Margin = new Thickness(16, 14, 16, 10) };
+            header.Children.Add(new TextBlock
+            {
+                Text = "ХРАНЕНИЕ ДАННЫХ",
+                FontSize = 11,
+                FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255))
+            });
+            header.Children.Add(new TextBlock
+            {
+                Text = "Очистка приложения",
+                FontSize = 24,
+                FontWeight = Windows.UI.Text.FontWeights.SemiBold
+            });
+            header.Children.Add(new TextBlock
+            {
+                Text = "Можно удалить старые измерения и диагностические записи. Настройки подключения и управления не затрагиваются.",
+                FontSize = 13,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 172, 173, 184)),
+                TextWrapping = TextWrapping.Wrap
+            });
+            root.Children.Add(header);
+
+            var scroll = new ScrollViewer
+            {
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                Margin = new Thickness(12, 0, 12, 12)
+            };
+            var content = new StackPanel();
+
+            var historyCard = new Border
+            {
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 43, 44, 52)),
+                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 65, 67, 77)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(14),
+                Padding = new Thickness(14),
+                Margin = new Thickness(0, 0, 0, 10)
+            };
+            var historyBody = new StackPanel();
+            historyBody.Children.Add(new TextBlock
+            {
+                Text = "Старые измерения",
+                FontSize = 18,
+                FontWeight = Windows.UI.Text.FontWeights.SemiBold
+            });
+            historyBody.Children.Add(new TextBlock
+            {
+                Text = "Будут удалены только точки истории старше установленного срока хранения. Текущие MQTT-виджеты и их значения не удаляются.",
+                FontSize = 13,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 190, 192, 201)),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 5, 0, 8)
+            });
+            var historyButton = new Button
+            {
+                Content = "Очистить старые измерения",
+                MinHeight = 46,
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255)),
+                Foreground = new SolidColorBrush(Windows.UI.Colors.White)
+            };
+            historyButton.Click += async delegate
+            {
+                var days = _appSettings == null ? 7 : Math.Max(1, _appSettings.RetentionDays);
+                var dialog = new Windows.UI.Popups.MessageDialog(
+                    "Удалить записи истории старше " + days.ToString(CultureInfo.InvariantCulture) +
+                    " дн.? Более новые измерения сохранятся.",
+                    "Очистка истории");
+                dialog.Commands.Add(new Windows.UI.Popups.UICommand("Удалить старые записи"));
+                dialog.Commands.Add(new Windows.UI.Popups.UICommand("Отмена"));
+                var result = await dialog.ShowAsync();
+                if (result == null || result.Label != "Удалить старые записи") return;
+
+                try
+                {
+                    await CleanupHistoryAsync();
+                    _cleanupResultText.Text = "История очищена. Срок хранения: " +
+                        days.ToString(CultureInfo.InvariantCulture) + " дн.";
+                    Log("CLEANUP: удалены измерения старше " + days + " дн.");
+                }
+                catch (Exception ex)
+                {
+                    _cleanupResultText.Text = "Ошибка очистки истории: " + ex.Message;
+                    Log("CLEANUP ERROR: " + ex.Message);
+                }
+            };
+            historyBody.Children.Add(historyButton);
+            historyCard.Child = historyBody;
+            content.Children.Add(historyCard);
+
+            var logCard = new Border
+            {
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 43, 44, 52)),
+                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 65, 67, 77)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(14),
+                Padding = new Thickness(14),
+                Margin = new Thickness(0, 0, 0, 10)
+            };
+            var logBody = new StackPanel();
+            logBody.Children.Add(new TextBlock
+            {
+                Text = "Диагностический журнал",
+                FontSize = 18,
+                FontWeight = Windows.UI.Text.FontWeights.SemiBold
+            });
+            logBody.Children.Add(new TextBlock
+            {
+                Text = "Удаляются сохранённые записи подключения, UDP и сетевых ошибок, а также текущий список журнала на экране. История измерений и обученные голосовые команды останутся.",
+                FontSize = 13,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 190, 192, 201)),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 5, 0, 8)
+            });
+            var logButton = new Button
+            {
+                Content = "Очистить журнал",
+                MinHeight = 46
+            };
+            logButton.Click += async delegate
+            {
+                var dialog = new Windows.UI.Popups.MessageDialog(
+                    "Удалить сохранённый диагностический журнал?",
+                    "Очистка журнала");
+                dialog.Commands.Add(new Windows.UI.Popups.UICommand("Очистить"));
+                dialog.Commands.Add(new Windows.UI.Popups.UICommand("Отмена"));
+                var result = await dialog.ShowAsync();
+                if (result == null || result.Label != "Очистить") return;
+
+                _connectionJournal.Clear();
+                if (LogText != null) LogText.Text = string.Empty;
+                _cleanupResultText.Text = "Диагностический журнал очищен.";
+            };
+            logBody.Children.Add(logButton);
+            logCard.Child = logBody;
+            content.Children.Add(logCard);
+
+            var note = new TextBlock
+            {
+                Text = "Примечание: Windows Phone 8.1 не использует Android cacheDir и систему runtime-разрешений Android. Поэтому очистка не затрагивает системные данные, APK и настройки приложения.",
+                FontSize = 12,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 172, 173, 184)),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(4, 2, 4, 8)
+            };
+            content.Children.Add(note);
+            _cleanupResultText = new TextBlock
+            {
+                Text = "Действия очистки не выполняются автоматически.",
+                FontSize = 13,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255)),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(4, 4, 4, 8)
+            };
+            content.Children.Add(_cleanupResultText);
+
+            scroll.Content = content;
+            Grid.SetRow(scroll, 1);
+            root.Children.Add(scroll);
+            _cleanupSection.Children.Add(root);
         }
 
         private void BuildTrainedCommandsSection()
