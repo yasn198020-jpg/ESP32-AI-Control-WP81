@@ -291,3 +291,15 @@ Still outstanding: inspect and restyle the hamburger popup's nested submenus and
 - Used Windows Phone 8.1-compatible layout properties; avoided newer UWP-only StackPanel spacing APIs.
 - Verified the settings Pivot still contains all seven existing categories, that the Android-like header template is actually assigned, and that all XAML event-handler names in the page have matching code-behind methods.
 - No Windows Phone build or device run was available; this source-level check is not a substitute for compilation.
+
+
+## Visual port implementation — phase 10 (2026-11-26)
+
+- Standardized custom in-app popup surfaces: dark elevated surface, subtle lavender border, rounded corners and responsive vertical centering rather than a fixed top offset. The shared popup factory applies to training, phrase variants, text sizing and other custom dialogs.
+- Standardized dialog action buttons with a 44px minimum touch height and dark text on the lavender primary action.
+- Refined the history/graphs and delayed-command screens: removed legacy uppercase eyebrow labels, aligned page title scale to the settings hierarchy, and corrected primary action foreground contrast.
+- Refined settings subsection headings to use readable sentence case rather than all-caps labels.
+- Removed legacy eyebrow labels from trained-command and capability screens so their title hierarchy matches the rest of the app.
+- Preserved existing control names and event handlers. No command, MQTT, schedule, profile or scenario semantics were intentionally changed in this visual pass.
+
+Remaining verification: compile the WP8.1 solution with its original Windows Phone toolchain, inspect all seven settings tabs plus every popup on a Lumia 830, and compare screenshots against the Android 5.1.1 build. This session did not have that compiler/device execution path; source edits are not a build-success claim.
