@@ -88,6 +88,8 @@ namespace ESP32AIControl.WP81
         private double _currentFontScale = 1.0;
 
         private DispatcherTimer _autoExportTimer;
+        private DispatcherTimer _lastUpdatedTimer;
+        private bool _showLastUpdated;
         private DispatcherTimer _mqttSupervisorTimer;
         private bool _syncingControls;
         private bool _initializing;
@@ -943,14 +945,62 @@ namespace ESP32AIControl.WP81
             await new Windows.UI.Popups.MessageDialog(message, "UDP устройства").ShowAsync();
         }
 
-        private async void TopInfoButton_Click(object sender, RoutedEventArgs e)
+        private void TopInfoButton_Click(object sender, RoutedEventArgs e)
         {
-            var state = ConnectionText == null ? "Состояние MQTT неизвестно." : ConnectionText.Text;
-            var dialog = new Windows.UI.Popups.MessageDialog(
-                state + Environment.NewLine +
-                "Дополнительные разделы, сценарии, журнал и сетевые настройки доступны через меню ☰.",
-                "ESP32 AI Control");
-            await dialog.ShowAsync();
+            _showLastUpdated = !_showLastUpdated;
+            if (TopInfoButton != null)
+            {
+                TopInfoButton.Foreground = new SolidColorBrush(
+                    _showLastUpdated
+                        ? Windows.UI.Color.FromArgb(255, 208, 188, 255)
+                        : Windows.UI.Color.FromArgb(255, 234, 241, 247));
+            }
+
+            if (_showLastUpdated)
+            {
+                if (_lastUpdatedTimer == null)
+                {
+                    _lastUpdatedTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+                    _lastUpdatedTimer.Tick += delegate { RefreshLastUpdatedLabels(); };
+                }
+                _lastUpdatedTimer.Start();
+            }
+            else if (_lastUpdatedTimer != null)
+            {
+                _lastUpdatedTimer.Stop();
+            }
+
+            RefreshLastUpdatedLabels();
+        }
+
+        private void RefreshLastUpdatedLabels()
+        {
+            foreach (var visual in _visuals.Values)
+                UpdateLastUpdatedLabel(visual);
+        }
+
+        private void UpdateLastUpdatedLabel(WidgetVisual visual)
+        {
+            if (visual == null || visual.UpdatedAtText == null)
+                return;
+
+            var updated = visual.State == null ? DateTimeOffset.MinValue : visual.State.UpdatedAt;
+            var visible = _showLastUpdated && updated > DateTimeOffset.MinValue;
+            visual.UpdatedAtText.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+            if (!visible) return;
+
+            var seconds = Math.Max(1, (long)(DateTimeOffset.Now - updated).TotalSeconds);
+            string text;
+            if (seconds < 60)
+                text = "обновлено " + seconds.ToString(CultureInfo.InvariantCulture) + " сек назад";
+            else if (seconds < 3600)
+                text = "обновлено " + (seconds / 60).ToString(CultureInfo.InvariantCulture) + " мин назад";
+            else if (seconds < 86400)
+                text = "обновлено " + (seconds / 3600).ToString(CultureInfo.InvariantCulture) + " ч назад";
+            else
+                text = "обновлено " + (seconds / 86400).ToString(CultureInfo.InvariantCulture) + " дн назад";
+
+            visual.UpdatedAtText.Text = text;
         }
 
         private void UpdateNavigationState()
@@ -1956,6 +2006,17 @@ namespace ESP32AIControl.WP81
                 DrawWidgetChart(visual, state.Value);
             }
 
+            visual.UpdatedAtText = new TextBlock
+            {
+                FontSize = 11,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 172, 173, 184)),
+                Margin = new Thickness(50, 0, 8, 2),
+                TextWrapping = TextWrapping.NoWrap,
+                Visibility = Visibility.Collapsed
+            };
+            visual.Container.Children.Add(visual.UpdatedAtText);
+            UpdateLastUpdatedLabel(visual);
+
             return visual;
         }
 
@@ -2387,6 +2448,7 @@ namespace ESP32AIControl.WP81
             _syncingControls = true;
             try { ApplyValueToVisual(visual, state.Value); }
             finally { _syncingControls = false; }
+            UpdateLastUpdatedLabel(visual);
         }
 
         private void InsertWidgetVisual(WidgetVisual visual)
@@ -4251,6 +4313,7 @@ namespace ESP32AIControl.WP81
             public TextBlock ValueText { get; set; }
             public FrameworkElement Control { get; set; }
             public Canvas ChartCanvas { get; set; }
+            public TextBlock UpdatedAtText { get; set; }
         }
 
         private sealed class PageVisual
