@@ -83,6 +83,9 @@ namespace ESP32AIControl.WP81
             new List<ScheduledCommand>();
         private readonly List<MeasurementPoint> _lastGraphPoints =
             new List<MeasurementPoint>();
+        private readonly Dictionary<FrameworkElement, double> _fontBaseSizes =
+            new Dictionary<FrameworkElement, double>();
+        private double _currentFontScale = 0.85;
 
         private DispatcherTimer _autoExportTimer;
         private DispatcherTimer _mqttSupervisorTimer;
@@ -831,12 +834,41 @@ namespace ESP32AIControl.WP81
         private void ApplyFontScale(double scale)
         {
             scale = Math.Max(0.7, Math.Min(1.1, scale));
-            if (UiFontScaleSlider != null)
+            _currentFontScale = scale;
+            if (UiFontScaleSlider != null && Math.Abs(UiFontScaleSlider.Value - scale) > 0.001)
                 UiFontScaleSlider.Value = scale;
             if (WidgetPages != null)
                 WidgetPages.FontSize = 14 * scale;
             if (SettingsPivot != null)
                 SettingsPivot.FontSize = 14 * scale;
+            ApplyFontScaleToTree(this, scale);
+        }
+
+        private void ApplyFontScaleToTree(DependencyObject root, double scale)
+        {
+            if (root == null) return;
+
+            var text = root as TextBlock;
+            if (text != null)
+            {
+                if (!_fontBaseSizes.ContainsKey(text))
+                    _fontBaseSizes[text] = text.FontSize;
+                text.FontSize = _fontBaseSizes[text] * scale;
+            }
+            else
+            {
+                var control = root as Control;
+                if (control != null)
+                {
+                    if (!_fontBaseSizes.ContainsKey(control))
+                        _fontBaseSizes[control] = control.FontSize;
+                    control.FontSize = _fontBaseSizes[control] * scale;
+                }
+            }
+
+            var count = VisualTreeHelper.GetChildrenCount(root);
+            for (var i = 0; i < count; i++)
+                ApplyFontScaleToTree(VisualTreeHelper.GetChild(root, i), scale);
         }
 
         private void AddPopupMenuHeader(Panel panel, string title)
