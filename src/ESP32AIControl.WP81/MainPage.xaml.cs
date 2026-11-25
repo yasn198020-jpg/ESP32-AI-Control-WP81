@@ -56,6 +56,11 @@ namespace ESP32AIControl.WP81
         private Grid _trainedCommandsSection;
         private Grid _cleanupSection;
         private Grid _permissionsSection;
+        private Grid _pendingMarfaSection;
+        private Grid _deleteWidgetSection;
+        private StackPanel _pendingMarfaList;
+        private StackPanel _deleteWidgetList;
+        private DispatcherTimer _pendingMarfaTimer;
         private TextBlock _cleanupResultText;
         private StackPanel _trainedCommandsList;
         private Popup _trainingPopup;
@@ -124,6 +129,20 @@ namespace ESP32AIControl.WP81
             };
             MainSections.Children.Add(_permissionsSection);
             BuildPermissionsSection();
+            _pendingMarfaSection = new Grid
+            {
+                Visibility = Visibility.Collapsed,
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 32, 32, 32))
+            };
+            MainSections.Children.Add(_pendingMarfaSection);
+            BuildPendingMarfaSection();
+            _deleteWidgetSection = new Grid
+            {
+                Visibility = Visibility.Collapsed,
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 32, 32, 32))
+            };
+            MainSections.Children.Add(_deleteWidgetSection);
+            BuildDeleteWidgetSection();
             _speechPlayback = new MediaElement
             {
                 Width = 1, Height = 1, Opacity = 0,
@@ -681,10 +700,24 @@ namespace ESP32AIControl.WP81
 
         private void ShowSection(int index)
         {
-            _selectedSection = Math.Max(0, Math.Min(6, index));
+            _selectedSection = Math.Max(0, Math.Min(8, index));
             UpdateNavigationState();
             if (_selectedSection == 4)
                 RefreshTrainedCommandsScreen();
+            if (_selectedSection == 7)
+            {
+                RefreshPendingMarfaCommandsScreen();
+                if (_pendingMarfaTimer == null)
+                {
+                    _pendingMarfaTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+                    _pendingMarfaTimer.Tick += delegate { RefreshPendingMarfaCommandsScreen(); };
+                }
+                _pendingMarfaTimer.Start();
+            }
+            else if (_pendingMarfaTimer != null)
+                _pendingMarfaTimer.Stop();
+            if (_selectedSection == 8)
+                RefreshDeleteWidgetScreen();
         }
 
         private Popup _navigationPopup;
@@ -700,6 +733,9 @@ namespace ESP32AIControl.WP81
             var items = new StackPanel { Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 36, 37, 42)) };
             AddPopupMenuHeader(items, "КОМАНДЫ");
             AddPopupMenuItem(items, "Обученные команды", delegate { ShowSection(4); });
+            AddPopupMenuItem(items, "Отложенные команды Марфы", delegate { ShowSection(7); });
+            AddPopupMenuItem(items, "Удалить элемент", delegate { ShowSection(8); });
+            AddPopupMenuItem(items, "Планировщик команд ESP32", delegate { ShowSection(2); });
             AddPopupMenuSeparator(items);
             AddPopupMenuHeader(items, "ОБСЛУЖИВАНИЕ");
             AddPopupMenuItem(items, "Очистка приложения", delegate { ShowSection(5); });
@@ -720,7 +756,7 @@ namespace ESP32AIControl.WP81
             AddPopupMenuSeparator(items);
             AddPopupMenuHeader(items, "О ПРИЛОЖЕНИИ");
             AddPopupMenuItem(items, "Проверка Марфы", delegate { VoiceButton_Click(NavMarfaButton, null); });
-            AddPopupMenuItem(items, "О приложении", delegate { TopInfoButton_Click(TopInfoButton, null); });
+            AddPopupMenuItem(items, "О приложении", ShowAboutDialog);
 
             var scroll = new ScrollViewer
             {
@@ -747,6 +783,14 @@ namespace ESP32AIControl.WP81
                 VerticalOffset = 78,
                 IsOpen = true
             };
+        }
+
+        private async void ShowAboutDialog()
+        {
+            var dialog = new Windows.UI.Popups.MessageDialog(
+                "ESP32 AI Control для Windows Phone 8.1\\n\\nУправление ESP32 через MQTT, UDP и WebSocket. Голосовое управление, сценарии, история измерений и планирование команд.",
+                "О приложении");
+            await dialog.ShowAsync();
         }
 
         private void ShowTextSizeDialog()
@@ -1059,27 +1103,35 @@ namespace ESP32AIControl.WP81
                 _cleanupSection.Visibility = _selectedSection == 5 ? Visibility.Visible : Visibility.Collapsed;
             if (_permissionsSection != null)
                 _permissionsSection.Visibility = _selectedSection == 6 ? Visibility.Visible : Visibility.Collapsed;
+            if (_pendingMarfaSection != null)
+                _pendingMarfaSection.Visibility = _selectedSection == 7 ? Visibility.Visible : Visibility.Collapsed;
+            if (_deleteWidgetSection != null)
+                _deleteWidgetSection.Visibility = _selectedSection == 8 ? Visibility.Visible : Visibility.Collapsed;
 
             if (_selectedSection == 0)
                 PageSubtitle.Text = "Главная";
             else if (_selectedSection == 1)
                 PageSubtitle.Text = "История и графики";
             else if (_selectedSection == 2)
-                PageSubtitle.Text = "Отложенные";
+                PageSubtitle.Text = "Планировщик ESP32";
             else if (_selectedSection == 3)
                 PageSubtitle.Text = "Настройки";
             else if (_selectedSection == 4)
                 PageSubtitle.Text = "Обученные команды";
             else if (_selectedSection == 5)
                 PageSubtitle.Text = "Очистка приложения";
-            else
+            else if (_selectedSection == 6)
                 PageSubtitle.Text = "Разрешения приложения";
+            else if (_selectedSection == 7)
+                PageSubtitle.Text = "Отложенные команды Марфы";
+            else
+                PageSubtitle.Text = "Удаление элемента";
 
             SetNavigationButton(NavHomeButton, _selectedSection == 0);
             SetNavigationButton(NavMarfaButton, false);
             SetNavigationButton(NavCommandsButton, _selectedSection == 4);
             SetNavigationButton(NavGraphsButton, _selectedSection == 1);
-            SetNavigationButton(NavTasksButton, _selectedSection == 2);
+            SetNavigationButton(NavTasksButton, _selectedSection == 7);
             // Settings stays available from the hamburger menu, not the bottom bar.
         }
 
@@ -1120,7 +1172,7 @@ namespace ESP32AIControl.WP81
             RefreshTrainedCommandsScreen();
         }
         private void NavigateGraphs_Click(object sender, RoutedEventArgs e) { ShowSection(1); }
-        private void NavigateTasks_Click(object sender, RoutedEventArgs e) { ShowSection(2); }
+        private void NavigateTasks_Click(object sender, RoutedEventArgs e) { ShowSection(7); }
         private void NavigateSettings_Click(object sender, RoutedEventArgs e) { ShowSection(3); }
 
         private async void ConnectButton_Click(object sender, RoutedEventArgs e)
@@ -3254,7 +3306,7 @@ namespace ESP32AIControl.WP81
 
                     if (parsed.ExecuteAt.HasValue)
                     {
-                        await _scheduler.ScheduleAsync(parsed.Command, parsed.ExecuteAt.Value);
+                        await _scheduler.ScheduleVoiceAsync(parsed.Command, parsed.ExecuteAt.Value);
                         await RefreshScheduleAsync();
                         Log("VOICE SCHEDULE: " + parsed.Command + " @ " + parsed.ExecuteAt.Value);
                     }
@@ -3652,6 +3704,256 @@ namespace ESP32AIControl.WP81
             Grid.SetRow(scroll, 1);
             root.Children.Add(scroll);
             _cleanupSection.Children.Add(root);
+        }
+
+
+        private void BuildPendingMarfaSection()
+        {
+            var root = new Grid();
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+            var header = new StackPanel { Margin = new Thickness(16, 14, 16, 10) };
+            header.Children.Add(new TextBlock
+            {
+                Text = "Отложенные голосовые команды",
+                FontSize = 24,
+                FontWeight = Windows.UI.Text.FontWeights.SemiBold
+            });
+            header.Children.Add(new TextBlock
+            {
+                Text = "Здесь отображаются команды, которые Марфа уже приняла и ожидает к выполнению. Планировщик MQTT-команд ESP32 находится отдельно.",
+                FontSize = 13,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 185, 187, 198))
+            });
+            root.Children.Add(header);
+
+            var scroll = new ScrollViewer
+            {
+                Margin = new Thickness(12, 0, 12, 10),
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+            };
+            _pendingMarfaList = new StackPanel();
+            scroll.Content = _pendingMarfaList;
+            Grid.SetRow(scroll, 1);
+            root.Children.Add(scroll);
+            _pendingMarfaSection.Children.Add(root);
+        }
+
+        private async void RefreshPendingMarfaCommandsScreen()
+        {
+            if (_pendingMarfaList == null || _scheduler == null) return;
+            try
+            {
+                var all = await _scheduler.GetAllAsync();
+                var pending = all.Where(item =>
+                    string.Equals(item.Origin, "Voice", StringComparison.OrdinalIgnoreCase) &&
+                    (item.Status == "Scheduled" || item.Status == "Executing"))
+                    .OrderBy(item => item.ExecuteAt).ToList();
+
+                _pendingMarfaList.Children.Clear();
+                if (pending.Count == 0)
+                {
+                    _pendingMarfaList.Children.Add(new TextBlock
+                    {
+                        Text = "Сейчас отложенных команд Марфы нет.",
+                        FontSize = 16,
+                        TextWrapping = TextWrapping.Wrap,
+                        Margin = new Thickness(8, 18, 8, 18),
+                        Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 190, 192, 201))
+                    });
+                    return;
+                }
+
+                foreach (var item in pending)
+                {
+                    var remaining = item.ExecuteAt - DateTimeOffset.Now;
+                    var seconds = Math.Max(0, (long)remaining.TotalSeconds);
+                    var hours = seconds / 3600;
+                    var minutes = (seconds % 3600) / 60;
+                    var rest = seconds % 60;
+                    var remainingText = hours > 0
+                        ? "Через " + hours + " ч " + minutes + " мин"
+                        : minutes > 0
+                            ? "Через " + minutes + " мин " + rest + " сек"
+                            : "Через " + rest + " сек";
+
+                    var panel = new StackPanel { Margin = new Thickness(12) };
+                    panel.Children.Add(new TextBlock
+                    {
+                        Text = item.Command,
+                        FontSize = 17,
+                        FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                        TextWrapping = TextWrapping.Wrap
+                    });
+                    panel.Children.Add(new TextBlock
+                    {
+                        Text = "Выполнение: " + item.ExecuteAt.ToLocalTime().ToString("dd.MM.yyyy  HH:mm", CultureInfo.InvariantCulture),
+                        FontSize = 13,
+                        Margin = new Thickness(0, 5, 0, 0),
+                        Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 190, 192, 201))
+                    });
+                    panel.Children.Add(new TextBlock
+                    {
+                        Text = remainingText,
+                        FontSize = 14,
+                        Margin = new Thickness(0, 3, 0, 5),
+                        Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255))
+                    });
+                    var cancel = new Button
+                    {
+                        Content = "Удалить из очереди",
+                        MinHeight = 42,
+                        HorizontalAlignment = HorizontalAlignment.Left
+                    };
+                    var commandId = item.Id;
+                    cancel.Click += async delegate
+                    {
+                        try
+                        {
+                            await _scheduler.CancelAsync(commandId);
+                            RefreshPendingMarfaCommandsScreen();
+                            await RefreshScheduleAsync();
+                        }
+                        catch (Exception ex) { Log("MARFA QUEUE CANCEL ERROR: " + ex.Message); }
+                    };
+                    panel.Children.Add(cancel);
+                    _pendingMarfaList.Children.Add(new Border
+                    {
+                        Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 43, 44, 52)),
+                        BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 70, 72, 82)),
+                        BorderThickness = new Thickness(1),
+                        CornerRadius = new CornerRadius(12),
+                        Margin = new Thickness(2, 3, 2, 7),
+                        Child = panel
+                    });
+                }
+            }
+            catch (Exception ex) { Log("MARFA QUEUE ERROR: " + ex.Message); }
+        }
+
+        private void BuildDeleteWidgetSection()
+        {
+            var root = new Grid();
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+            var header = new StackPanel { Margin = new Thickness(16, 14, 16, 10) };
+            header.Children.Add(new TextBlock
+            {
+                Text = "Удаление элемента",
+                FontSize = 24,
+                FontWeight = Windows.UI.Text.FontWeights.SemiBold
+            });
+            header.Children.Add(new TextBlock
+            {
+                Text = "Удаляется только локальная запись приложения. ESP32 не получает команд. Если элемент снова пришлёт CONFIG или STATE, он появится автоматически. История измерений при этом сохраняется.",
+                FontSize = 13,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 185, 187, 198))
+            });
+            root.Children.Add(header);
+
+            var scroll = new ScrollViewer
+            {
+                Margin = new Thickness(12, 0, 12, 10),
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+            };
+            _deleteWidgetList = new StackPanel();
+            scroll.Content = _deleteWidgetList;
+            Grid.SetRow(scroll, 1);
+            root.Children.Add(scroll);
+            _deleteWidgetSection.Children.Add(root);
+        }
+
+        private void RefreshDeleteWidgetScreen()
+        {
+            if (_deleteWidgetList == null || _devices == null) return;
+            _deleteWidgetList.Children.Clear();
+            var widgets = _devices.GetWidgetsSnapshot()
+                .OrderBy(item => item.DeviceId)
+                .ThenBy(item => item.Page)
+                .ThenBy(item => item.Order)
+                .ToList();
+
+            if (widgets.Count == 0)
+            {
+                _deleteWidgetList.Children.Add(new TextBlock
+                {
+                    Text = "Нет известных элементов для удаления.",
+                    FontSize = 16,
+                    Margin = new Thickness(8, 18, 8, 18)
+                });
+                return;
+            }
+
+            foreach (var state in widgets)
+            {
+                var panel = new StackPanel { Margin = new Thickness(12) };
+                panel.Children.Add(new TextBlock
+                {
+                    Text = string.IsNullOrWhiteSpace(state.Description) ? state.Id : state.Description,
+                    FontSize = 17,
+                    FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                    TextWrapping = TextWrapping.Wrap
+                });
+                panel.Children.Add(new TextBlock
+                {
+                    Text = "ESP: " + state.DeviceId + "   •   ID: " + state.Id + "   •   Страница: " + NormalizePage(state.Page),
+                    FontSize = 12,
+                    TextWrapping = TextWrapping.Wrap,
+                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 185, 187, 198)),
+                    Margin = new Thickness(0, 4, 0, 7)
+                });
+                var remove = new Button
+                {
+                    Content = "Удалить локально",
+                    MinHeight = 42,
+                    HorizontalAlignment = HorizontalAlignment.Left
+                };
+                var deviceId = state.DeviceId;
+                var widgetId = state.Id;
+                remove.Click += async delegate
+                {
+                    var dialog = new Windows.UI.Popups.MessageDialog(
+                        "Будет удалена только локальная запись " + deviceId + "/" + widgetId +
+                        ". Команда на ESP32 не отправляется. При следующем сообщении элемент появится снова.",
+                        "Удалить элемент?");
+                    dialog.Commands.Add(new Windows.UI.Popups.UICommand("Удалить"));
+                    dialog.Commands.Add(new Windows.UI.Popups.UICommand("Отмена"));
+                    var choice = await dialog.ShowAsync();
+                    if (choice == null || choice.Label != "Удалить") return;
+
+                    var key = deviceId + "/" + widgetId;
+                    if (_devices.RemoveLocal(deviceId, widgetId))
+                    {
+                        WidgetVisual visual;
+                        if (_visuals.TryGetValue(key, out visual))
+                        {
+                            PageVisual page;
+                            if (_pages.TryGetValue(visual.PageName, out page))
+                                page.Content.Children.Remove(visual.Container);
+                            _visuals.Remove(key);
+                        }
+                        _widgetIndex.Remove(key);
+                        CleanupEmptyPages();
+                        RefreshGraphWidgets();
+                        RefreshDeleteWidgetScreen();
+                        Log("WIDGET REMOVED LOCALLY: " + key);
+                    }
+                };
+                panel.Children.Add(remove);
+                _deleteWidgetList.Children.Add(new Border
+                {
+                    Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 43, 44, 52)),
+                    BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 70, 72, 82)),
+                    BorderThickness = new Thickness(1),
+                    CornerRadius = new CornerRadius(12),
+                    Margin = new Thickness(2, 3, 2, 7),
+                    Child = panel
+                });
+            }
         }
 
         private void BuildTrainedCommandsSection()
