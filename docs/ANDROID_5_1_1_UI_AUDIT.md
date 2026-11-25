@@ -136,9 +136,9 @@ The Commands/Voice-settings navigation collision is resolved; the remaining appl
 
 ### Priority order for the full port
 
-1. **Navigation parity first:** match Android destinations, labels, menu grouping, selected states and back behavior. Do not route Commands to Voice settings.
+1. **Navigation parity:** map all Android destinations to native WP8.1 screens/pivots and preserve the Marfa voice action on the bottom bar.
 2. **Global shell:** top bar, bottom bar, menu, content margins, status indicator and consistent screen title.
-3. **Screen parity:** dashboard, trained commands, MQTT, log, scenarios, voice settings, history/graphs, permissions, cleanup, delayed commands and widget deletion.
+3. **Screen parity:** dashboard, trained commands, MQTT, log, scenarios, voice settings, history/graphs, capabilities, cleanup and delayed commands.
 4. **Reusable controls:** card, field, setting row, toggle, slider, button, list row, dialog and progress indicator.
 5. **Polish and device verification:** typography, icon assets, touch targets, scroll/keyboard behavior and 720x1280 Lumia layout.
 
@@ -228,3 +228,19 @@ Trained-command/navigation additions:
 Files changed in phases 2–3 include the WP81 widget model, MQTT protocol parser/message, device repository, MQTT publish facade, and MainPage renderer/navigation.
 
 Limitations: this is a functional port pass, not verified full parity. The matcher is a smaller WP81-compatible implementation than Android's full fuzzy matcher; chart rendering is a native approximation and does not yet reproduce every Android series label/time axis/style detail. Permissions audit, cleanup, delete-widget, complete Marfa scenario hub navigation, all settings/dialogs and the Android back-stack still need a full pass. No WP81 build or Lumia 830 device test was available in this session.
+
+
+## Visual port implementation — phase 4 (2026-11-26)
+
+- Added an application cleanup destination. It offers a confirmed deletion of measurements older than the configured retention period and a separate confirmed deletion of the persistent connection journal. It deliberately leaves MQTT settings, scenarios and trained commands untouched; WP8.1 does not have Android's cacheDir or its runtime-permission model.
+- Added a capability audit destination based on the actual WP81 Package.appxmanifest declarations: internetClient, privateNetworkClientServer, picturesLibrary and DeviceCapability microphone. The UI clearly labels these as manifest declarations, not a live runtime grant check.
+- Reorganized the menu into Commands, Service, Settings and About groups; added the Android-like text-size popup and applied the saved scale to native text/controls, dashboard rows, trained-command cards and popup content.
+- Corrected the top-bar info action to match Android: it toggles per-widget “обновлено N сек/мин/ч/дн назад” labels and refreshes them every second only while enabled.
+- Made font scaling non-cumulative by preserving each control's base font size and processing visual-tree children before parents.
+
+Remaining limitations:
+
+- This is a substantial functional parity pass, not a completed pixel-perfect port. The chart1–chart6 renderer is a compact WP8.1 drawing approximation; series labels, detailed time axes and all Android chart options are not yet reproduced. Some Android-only platform features have no direct WP8.1 equivalent and are represented by an explicit capability/feature explanation rather than a fake control.
+- The WP81 voice phrase matcher is implemented natively but still requires on-device Russian recognition testing. TTS voice availability depends on the voices installed in Windows Phone.
+- Settings, scenario, history and delayed-command screens retain existing WP81 application logic and controls; they have not all been fully restyled/visually inspected against Android screenshots yet.
+- No Windows Phone 8.1 build or Lumia 830 device verification was available in this session. A build and on-device inspection remain mandatory before treating this branch as release-ready.
