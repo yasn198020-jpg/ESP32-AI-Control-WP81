@@ -85,7 +85,7 @@ namespace ESP32AIControl.WP81
             new List<MeasurementPoint>();
         private readonly Dictionary<FrameworkElement, double> _fontBaseSizes =
             new Dictionary<FrameworkElement, double>();
-        private double _currentFontScale = 0.85;
+        private double _currentFontScale = 1.0;
 
         private DispatcherTimer _autoExportTimer;
         private DispatcherTimer _mqttSupervisorTimer;
@@ -834,25 +834,32 @@ namespace ESP32AIControl.WP81
         private void ApplyFontScale(double scale)
         {
             scale = Math.Max(0.7, Math.Min(1.1, scale));
+            ApplyFontScaleToTree(this, scale);
             _currentFontScale = scale;
             if (UiFontScaleSlider != null && Math.Abs(UiFontScaleSlider.Value - scale) > 0.001)
                 UiFontScaleSlider.Value = scale;
-            if (WidgetPages != null)
-                WidgetPages.FontSize = 14 * scale;
-            if (SettingsPivot != null)
-                SettingsPivot.FontSize = 14 * scale;
-            ApplyFontScaleToTree(this, scale);
         }
 
         private void ApplyFontScaleToTree(DependencyObject root, double scale)
         {
             if (root == null) return;
 
+            // Process children first. This captures inherited sizes before their
+            // parent is rescaled, avoiding cumulative font growth/shrinkage.
+            var count = VisualTreeHelper.GetChildrenCount(root);
+            for (var i = 0; i < count; i++)
+                ApplyFontScaleToTree(VisualTreeHelper.GetChild(root, i), scale);
+
             var text = root as TextBlock;
             if (text != null)
             {
                 if (!_fontBaseSizes.ContainsKey(text))
-                    _fontBaseSizes[text] = text.FontSize;
+                {
+                    var localValue = text.ReadLocalValue(TextBlock.FontSizeProperty);
+                    _fontBaseSizes[text] = localValue == DependencyProperty.UnsetValue
+                        ? text.FontSize / Math.Max(0.01, _currentFontScale)
+                        : text.FontSize;
+                }
                 text.FontSize = _fontBaseSizes[text] * scale;
             }
             else
@@ -861,14 +868,15 @@ namespace ESP32AIControl.WP81
                 if (control != null)
                 {
                     if (!_fontBaseSizes.ContainsKey(control))
-                        _fontBaseSizes[control] = control.FontSize;
+                    {
+                        var localValue = control.ReadLocalValue(Control.FontSizeProperty);
+                        _fontBaseSizes[control] = localValue == DependencyProperty.UnsetValue
+                            ? control.FontSize / Math.Max(0.01, _currentFontScale)
+                            : control.FontSize;
+                    }
                     control.FontSize = _fontBaseSizes[control] * scale;
                 }
             }
-
-            var count = VisualTreeHelper.GetChildrenCount(root);
-            for (var i = 0; i < count; i++)
-                ApplyFontScaleToTree(VisualTreeHelper.GetChild(root, i), scale);
         }
 
         private void AddPopupMenuHeader(Panel panel, string title)
@@ -1174,8 +1182,7 @@ namespace ESP32AIControl.WP81
                 _appSettings.ClientId = _settings.ClientId;
                 _appSettings.UseTls = _settings.UseTls;
                 _appSettings.UiFontScale = (float)UiFontScaleSlider.Value;
-                WidgetPages.FontSize = 14 * (double)_appSettings.UiFontScale;
-                SettingsPivot.FontSize = 14 * (double)_appSettings.UiFontScale;
+                ApplyFontScale(UiFontScaleSlider.Value);
                 _appSettings.MeasurementIntervalSeconds = Math.Max(1, interval);
                 _appSettings.RetentionDays = Math.Max(1, retention);
                 _appSettings.AutoExportPeriod = GetAutoExportTag();
