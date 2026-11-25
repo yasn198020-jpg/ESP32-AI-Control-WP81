@@ -10,6 +10,7 @@ using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Controls.Primitives;
 using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Shapes;
+using Windows.Foundation;
 using Windows.Media.SpeechRecognition;
 using Windows.Storage.Pickers;
 using Windows.UI.Notifications;
@@ -1427,6 +1428,13 @@ namespace ESP32AIControl.WP81
             var isAction = definition == "button" || definition == "vbtn" || definition == "btn" || type == "button" || type == "action" || type == "buttonout";
             var isSlider = definition == "range" || definition == "rangeservo" || type == "slider" || type == "range" || type == "inputdgt";
             var isProgress = definition == "progressline";
+            var isRoundProgress = definition == "progressround";
+            var isFillGauge = definition == "fillgauge";
+            var isChart = definition.StartsWith("chart") || IsWidgetConfigChart(state);
+            var isSelect = definition == "select";
+            var isTextInput = definition == "inputtxt" || definition == "inputdgt" || definition == "input";
+            var isDateInput = definition == "inputdate";
+            var isTimeInput = definition == "inputtm";
 
             var shell = new Border
             {
@@ -1562,7 +1570,9 @@ namespace ESP32AIControl.WP81
                 slider.ValueChanged += async delegate(object s, RangeBaseValueChangedEventArgs ev)
                 {
                     if (_syncingControls) return;
-                    await PublishControl(visual, ev.NewValue.ToString(CultureInfo.InvariantCulture));
+                    var scale = GetWidgetConfigNumber(visual.State, "k", 1);
+                    if (Math.Abs(scale) < 0.000001) scale = 1;
+                    await PublishControl(visual, (ev.NewValue / scale).ToString(CultureInfo.InvariantCulture));
                 };
                 visual.Control = slider;
                 visual.Container.Children.Add(slider);
@@ -1580,6 +1590,127 @@ namespace ESP32AIControl.WP81
                 };
                 visual.Control = progress;
                 visual.Container.Children.Add(progress);
+            }
+            else if (isSelect)
+            {
+                visual.ValueText.Visibility = Visibility.Collapsed;
+                var picker = new ComboBox
+                {
+                    MinWidth = 112,
+                    MaxWidth = 150,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 37, 38, 45)),
+                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 234, 241, 247)),
+                    BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 75, 76, 88))
+                };
+                foreach (var option in GetWidgetOptions(state))
+                    picker.Items.Add(option);
+                picker.SelectionChanged += async delegate
+                {
+                    if (_syncingControls || picker.SelectedIndex < 0) return;
+                    await PublishControl(visual, picker.SelectedIndex.ToString(CultureInfo.InvariantCulture));
+                };
+                visual.Control = picker;
+                Grid.SetColumn(picker, 2);
+                row.Children.Add(picker);
+            }
+            else if (isTextInput || isDateInput || isTimeInput)
+            {
+                visual.ValueText.Visibility = Visibility.Collapsed;
+                var inputPanel = new Grid { Margin = new Thickness(34, 4, 8, 4) };
+                inputPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                inputPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+                FrameworkElement editor;
+                if (isDateInput)
+                {
+                    var datePicker = new DatePicker
+                    {
+                        Header = GetTitle(state),
+                        HorizontalAlignment = HorizontalAlignment.Stretch,
+                        Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 234, 241, 247))
+                    };
+                    DateTimeOffset dateValue;
+                    if (DateTimeOffset.TryParse(state.Value, CultureInfo.CurrentCulture, DateTimeStyles.None, out dateValue))
+                        datePicker.Date = dateValue;
+                    editor = datePicker;
+                }
+                else if (isTimeInput)
+                {
+                    var timePicker = new TimePicker
+                    {
+                        Header = GetTitle(state),
+                        HorizontalAlignment = HorizontalAlignment.Stretch,
+                        ClockIdentifier = "24HourClock",
+                        Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 234, 241, 247))
+                    };
+                    TimeSpan timeValue;
+                    if (TimeSpan.TryParse(state.Value, CultureInfo.CurrentCulture, out timeValue))
+                        timePicker.Time = timeValue;
+                    editor = timePicker;
+                }
+                else
+                {
+                    var textBox = new TextBox
+                    {
+                        Text = state.Value ?? string.Empty,
+                        Header = GetTitle(state),
+                        MinWidth = 130,
+                        VerticalAlignment = VerticalAlignment.Center
+                    };
+                    editor = textBox;
+                }
+
+                visual.Control = editor;
+                Grid.SetColumn(editor, 0);
+                inputPanel.Children.Add(editor);
+
+                var sendButton = new Button
+                {
+                    Content = "Отправить",
+                    MinWidth = 84,
+                    Margin = new Thickness(6, 0, 0, 0),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255)),
+                    Foreground = new SolidColorBrush(Windows.UI.Colors.White)
+                };
+                sendButton.Click += async delegate
+                {
+                    string outbound = string.Empty;
+                    var textBox = editor as TextBox;
+                    var datePicker = editor as DatePicker;
+                    var timePicker = editor as TimePicker;
+                    if (textBox != null) outbound = textBox.Text ?? string.Empty;
+                    else if (datePicker != null) outbound = datePicker.Date.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture);
+                    else if (timePicker != null) outbound = timePicker.Time.ToString(@"hh\:mm", CultureInfo.InvariantCulture);
+                    await PublishControl(visual, outbound);
+                };
+                Grid.SetColumn(sendButton, 1);
+                inputPanel.Children.Add(sendButton);
+                visual.Container.Children.Add(inputPanel);
+            }
+            else if (isRoundProgress || isFillGauge)
+            {
+                visual.ValueText.Visibility = Visibility.Collapsed;
+                var gauge = CreateGaugeCanvas(isFillGauge);
+                visual.Control = gauge;
+                Grid.SetColumn(gauge, 2);
+                row.Children.Add(gauge);
+                UpdateGaugeCanvas(gauge, state, isFillGauge);
+            }
+            else if (isChart)
+            {
+                visual.ValueText.Visibility = Visibility.Collapsed;
+                visual.ChartCanvas = new Canvas
+                {
+                    Height = 150,
+                    MinHeight = 130,
+                    HorizontalAlignment = HorizontalAlignment.Stretch,
+                    Margin = new Thickness(34, 6, 8, 6),
+                    Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 32, 32, 32))
+                };
+                visual.Container.Children.Add(visual.ChartCanvas);
+                DrawWidgetChart(visual, state.Value);
             }
 
             return visual;
@@ -1599,9 +1730,364 @@ namespace ESP32AIControl.WP81
             catch { return fallback; }
         }
 
+        private static bool IsWidgetConfigChart(WidgetState state)
+        {
+            var widget = GetWidgetConfigString(state, "widget");
+            return string.Equals(widget, "chart", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string GetWidgetConfigString(WidgetState state, string key)
+        {
+            try
+            {
+                if (state == null || string.IsNullOrWhiteSpace(state.ConfigJson)) return string.Empty;
+                JsonObject config;
+                IJsonValue value;
+                if (!JsonObject.TryParse(state.ConfigJson, out config) ||
+                    !config.TryGetValue(key, out value) || value.ValueType != JsonValueType.String)
+                    return string.Empty;
+                return value.GetString();
+            }
+            catch { return string.Empty; }
+        }
+
+        private static IList<string> GetWidgetOptions(WidgetState state)
+        {
+            var result = new List<string>();
+            try
+            {
+                JsonObject config;
+                IJsonValue raw;
+                if (!string.IsNullOrWhiteSpace(state.ConfigJson) &&
+                    JsonObject.TryParse(state.ConfigJson, out config) &&
+                    config.TryGetValue("options", out raw) && raw.ValueType == JsonValueType.Array)
+                {
+                    var array = raw.GetArray();
+                    for (uint i = 0; i < array.Count; i++)
+                    {
+                        var item = array.GetAt(i);
+                        if (item.ValueType == JsonValueType.String)
+                            result.Add(item.GetString());
+                    }
+                }
+            }
+            catch { }
+            if (result.Count == 0) { result.Add("Выключен"); result.Add("Включен"); }
+            return result;
+        }
+
+        private static Canvas CreateGaugeCanvas(bool fill)
+        {
+            return new Canvas { Width = fill ? 86 : 82, Height = fill ? 86 : 82 };
+        }
+
+        private static void UpdateGaugeCanvas(Canvas canvas, WidgetState state, bool fill)
+        {
+            if (canvas == null || state == null) return;
+            canvas.Children.Clear();
+            var size = fill ? 86.0 : 82.0;
+            double value;
+            if (!double.TryParse((state.Value ?? string.Empty).Replace(',', '.'),
+                NumberStyles.Float, CultureInfo.InvariantCulture, out value)) value = 0;
+            var max = fill ? 100.0 : GetWidgetConfigNumber(state, "max", 100);
+            if (max <= 0) max = 100;
+            var fraction = Math.Max(0, Math.Min(1, value / max));
+            var primary = ParseWidgetColor(GetWidgetConfigString(state, fill ? "circleColor" : "color"),
+                Windows.UI.Color.FromArgb(255, 208, 188, 255));
+
+            if (fill)
+            {
+                var clip = new EllipseGeometry
+                {
+                    Center = new Point(size / 2, size / 2),
+                    RadiusX = size / 2 - 4,
+                    RadiusY = size / 2 - 4
+                };
+                canvas.Children.Add(new Ellipse
+                {
+                    Width = size - 8, Height = size - 8,
+                    Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 37, 38, 45)),
+                    Stroke = new SolidColorBrush(primary), StrokeThickness = 5,
+                    Margin = new Thickness(4)
+                });
+                var wave = new Rectangle
+                {
+                    Width = size - 8,
+                    Height = (size - 8) * fraction,
+                    Fill = new SolidColorBrush(ParseWidgetColor(GetWidgetConfigString(state, "waveColor"),
+                        Windows.UI.Color.FromArgb(180, 0, 188, 212))),
+                    VerticalAlignment = VerticalAlignment.Bottom,
+                    Clip = clip
+                };
+                Canvas.SetLeft(wave, 4);
+                Canvas.SetTop(wave, 4 + (size - 8) * (1 - fraction));
+                canvas.Children.Add(wave);
+                var label = new TextBlock
+                {
+                    Text = Math.Round(fraction * 100).ToString(CultureInfo.InvariantCulture) + "%",
+                    FontSize = 16,
+                    FontWeight = Windows.UI.Text.FontWeights.Bold,
+                    Foreground = new SolidColorBrush(Windows.UI.Colors.White),
+                    Width = size, TextAlignment = TextAlignment.Center
+                };
+                Canvas.SetTop(label, size / 2 - 12);
+                canvas.Children.Add(label);
+                return;
+            }
+
+            canvas.Children.Add(new Ellipse
+            {
+                Width = size - 12, Height = size - 12,
+                Stroke = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 85, 85, 85)),
+                StrokeThickness = Math.Max(4, GetWidgetConfigNumber(state, "stroke", 12)),
+                Margin = new Thickness(6)
+            });
+            var arc = new Polyline
+            {
+                Stroke = new SolidColorBrush(primary),
+                StrokeThickness = Math.Max(4, GetWidgetConfigNumber(state, "stroke", 12)),
+                StrokeLineJoin = PenLineJoin.Round
+            };
+            var semi = string.Equals(GetWidgetConfigString(state, "semicircle"), "1", StringComparison.Ordinal);
+            var start = semi ? 180.0 : -90.0;
+            var sweep = (semi ? 180.0 : 360.0) * fraction;
+            var radius = (size - 12) / 2.0;
+            var center = size / 2.0;
+            var samples = Math.Max(2, (int)(Math.Abs(sweep) / 5) + 1);
+            for (var i = 0; i < samples; i++)
+            {
+                var angle = (start + sweep * i / (samples - 1)) * Math.PI / 180.0;
+                arc.Points.Add(new Point(center + radius * Math.Cos(angle), center + radius * Math.Sin(angle)));
+            }
+            canvas.Children.Add(arc);
+            var text = new TextBlock
+            {
+                Text = Math.Round(value).ToString(CultureInfo.InvariantCulture),
+                FontSize = 16, FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(Windows.UI.Colors.White),
+                Width = size, TextAlignment = TextAlignment.Center
+            };
+            Canvas.SetTop(text, size / 2 - 11);
+            canvas.Children.Add(text);
+        }
+
+        private static Windows.UI.Color ParseWidgetColor(string raw, Windows.UI.Color fallback)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) return fallback;
+            try
+            {
+                var text = raw.Trim();
+                if (text.StartsWith("#")) text = text.Substring(1);
+                if (text.Length == 6)
+                    return Windows.UI.Color.FromArgb(255,
+                        Convert.ToByte(text.Substring(0, 2), 16),
+                        Convert.ToByte(text.Substring(2, 2), 16),
+                        Convert.ToByte(text.Substring(4, 2), 16));
+                if (text.Length == 8)
+                    return Windows.UI.Color.FromArgb(
+                        Convert.ToByte(text.Substring(0, 2), 16),
+                        Convert.ToByte(text.Substring(2, 2), 16),
+                        Convert.ToByte(text.Substring(4, 2), 16),
+                        Convert.ToByte(text.Substring(6, 2), 16));
+            }
+            catch { }
+            switch (raw.Trim().ToLowerInvariant())
+            {
+                case "red": return Windows.UI.Colors.Red;
+                case "green": return Windows.UI.Colors.Green;
+                case "blue": return Windows.UI.Colors.Blue;
+                case "cyan": return Windows.UI.Colors.Cyan;
+                case "yellow": return Windows.UI.Colors.Yellow;
+                case "orange": return Windows.UI.Color.FromArgb(255, 255, 152, 0);
+                case "white": return Windows.UI.Colors.White;
+                case "black": return Windows.UI.Colors.Black;
+                default: return fallback;
+            }
+        }
+
+        private static Windows.UI.Color GetWidgetValueColor(WidgetState state, string value)
+        {
+            var fallback = Windows.UI.Color.FromArgb(255, 144, 202, 249);
+            double numeric;
+            if (!double.TryParse((value ?? string.Empty).Replace(',', '.'),
+                NumberStyles.Float, CultureInfo.InvariantCulture, out numeric))
+                return fallback;
+            try
+            {
+                JsonObject config;
+                IJsonValue raw;
+                if (!JsonObject.TryParse(state.ConfigJson ?? "{}", out config) ||
+                    !config.TryGetValue("color", out raw)) return fallback;
+                if (raw.ValueType == JsonValueType.String)
+                    return ParseWidgetColor(raw.GetString(), fallback);
+                if (raw.ValueType == JsonValueType.Array)
+                {
+                    var array = raw.GetArray();
+                    var selectedLevel = double.NegativeInfinity;
+                    var selected = fallback;
+                    foreach (var entry in array)
+                    {
+                        if (entry.ValueType != JsonValueType.Object) continue;
+                        var item = entry.GetObject();
+                        IJsonValue levelRaw, colorRaw;
+                        if (!item.TryGetValue("level", out levelRaw) ||
+                            !item.TryGetValue("value", out colorRaw) ||
+                            levelRaw.ValueType != JsonValueType.Number ||
+                            colorRaw.ValueType != JsonValueType.String) continue;
+                        var level = levelRaw.GetNumber();
+                        if (level <= numeric && level >= selectedLevel)
+                        {
+                            selectedLevel = level;
+                            selected = ParseWidgetColor(colorRaw.GetString(), fallback);
+                        }
+                    }
+                    return selected;
+                }
+            }
+            catch { }
+            return fallback;
+        }
+
+        private static IList<IList<double>> ParseWidgetChartValues(string payload)
+        {
+            var output = new List<IList<double>> { new List<double>(), new List<double>(), new List<double>() };
+            try
+            {
+                JsonObject root;
+                IJsonValue statusRaw;
+                if (!JsonObject.TryParse(payload ?? string.Empty, out root) ||
+                    !root.TryGetValue("status", out statusRaw) || statusRaw.ValueType != JsonValueType.Array)
+                    return output;
+                var status = statusRaw.GetArray();
+                foreach (var item in status)
+                {
+                    if (item.ValueType != JsonValueType.Object) continue;
+                    var point = item.GetObject();
+                    for (var i = 0; i < 3; i++)
+                    {
+                        IJsonValue value;
+                        var key = "y" + (i + 1).ToString(CultureInfo.InvariantCulture);
+                        if (point.TryGetValue(key, out value) && value.ValueType == JsonValueType.Number)
+                            output[i].Add(value.GetNumber());
+                    }
+                }
+            }
+            catch { }
+            return output;
+        }
+
+        private static void DrawWidgetChart(WidgetVisual visual, string payload)
+        {
+            var canvas = visual == null ? null : visual.ChartCanvas;
+            if (canvas == null) return;
+            canvas.Children.Clear();
+            var width = 300.0;
+            var height = 142.0;
+            var values = ParseWidgetChartValues(payload);
+            var series = values.Where(v => v.Count > 0).ToList();
+            canvas.Children.Add(new Rectangle
+            {
+                Width = width, Height = height,
+                Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 32, 32, 32)),
+                Stroke = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 65, 67, 77)),
+                StrokeThickness = 1
+            });
+            for (var grid = 1; grid <= 3; grid++)
+            {
+                var y = 12 + (height - 24) * grid / 4.0;
+                canvas.Children.Add(new Line
+                {
+                    X1 = 8, X2 = width - 8, Y1 = y, Y2 = y,
+                    Stroke = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 58, 60, 68)),
+                    StrokeThickness = 1
+                });
+            }
+            if (series.Count == 0 || series.All(v => v.Count < 2))
+            {
+                var empty = new TextBlock
+                {
+                    Text = "Нет данных графика",
+                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 172, 173, 184)),
+                    FontSize = 12
+                };
+                Canvas.SetLeft(empty, 92);
+                Canvas.SetTop(empty, 62);
+                canvas.Children.Add(empty);
+                return;
+            }
+
+            var colors = new[]
+            {
+                Windows.UI.Color.FromArgb(255, 66, 165, 245),
+                Windows.UI.Color.FromArgb(255, 102, 187, 106),
+                Windows.UI.Color.FromArgb(255, 255, 179, 0)
+            };
+            var def = NormalizeType(visual.State == null ? string.Empty : visual.State.DefinitionName);
+            var isBar = def == "chart3" || def == "chart4" ||
+                string.Equals(GetWidgetConfigString(visual.State, "type"), "bar", StringComparison.OrdinalIgnoreCase);
+            var seriesIndex = 0;
+            foreach (var data in series)
+            {
+                var min = data.Min();
+                var max = data.Max();
+                if (Math.Abs(max - min) < 0.000001) max = min + 1;
+                var color = colors[Math.Min(seriesIndex, colors.Length - 1)];
+                if (isBar)
+                {
+                    var visible = data.Skip(Math.Max(0, data.Count - 42)).ToList();
+                    var barWidth = (width - 24) / Math.Max(1, visible.Count);
+                    for (var i = 0; i < visible.Count; i++)
+                    {
+                        var normalized = (visible[i] - min) / (max - min);
+                        var barHeight = Math.Max(2, (height - 28) * normalized);
+                        var bar = new Rectangle
+                        {
+                            Width = Math.Max(1, barWidth - 2), Height = barHeight,
+                            Fill = new SolidColorBrush(color)
+                        };
+                        Canvas.SetLeft(bar, 12 + i * barWidth);
+                        Canvas.SetTop(bar, height - 14 - barHeight);
+                        canvas.Children.Add(bar);
+                    }
+                }
+                else
+                {
+                    var line = new Polyline
+                    {
+                        Stroke = new SolidColorBrush(color),
+                        StrokeThickness = 2.5,
+                        StrokeLineJoin = PenLineJoin.Round
+                    };
+                    for (var i = 0; i < data.Count; i++)
+                    {
+                        var x = data.Count == 1 ? width / 2 : 10 + (width - 20) * i / (data.Count - 1);
+                        var y = height - 12 - (height - 24) * (data[i] - min) / (max - min);
+                        line.Points.Add(new Point(x, y));
+                    }
+                    canvas.Children.Add(line);
+                    var showPoints = GetWidgetConfigNumber(visual.State, "pointRadius", 2) > 0 && def != "chart1";
+                    if (showPoints)
+                    {
+                        for (var i = 0; i < data.Count; i++)
+                        {
+                            var x = data.Count == 1 ? width / 2 : 10 + (width - 20) * i / (data.Count - 1);
+                            var y = height - 12 - (height - 24) * (data[i] - min) / (max - min);
+                            var point = new Ellipse { Width = 5, Height = 5, Fill = new SolidColorBrush(color) };
+                            Canvas.SetLeft(point, x - 2.5);
+                            Canvas.SetTop(point, y - 2.5);
+                            canvas.Children.Add(point);
+                        }
+                    }
+                }
+                seriesIndex++;
+            }
+        }
+
         private void UpdateWidgetVisual(WidgetState state)
         {
             if (state == null || string.IsNullOrEmpty(state.Id))
+                return;
+            if (string.Equals(NormalizeType(state.DefinitionName), "nil", StringComparison.Ordinal))
                 return;
 
             WidgetVisual visual;
@@ -1766,7 +2252,10 @@ namespace ESP32AIControl.WP81
         private void ApplyValueToVisual(WidgetVisual visual, string value)
         {
             if (visual.ValueText != null)
+            {
                 visual.ValueText.Text = (string.IsNullOrEmpty(value) ? "—" : value) + (visual.State == null || string.IsNullOrWhiteSpace(visual.State.Unit) ? string.Empty : " " + visual.State.Unit);
+                visual.ValueText.Foreground = new SolidColorBrush(GetWidgetValueColor(visual.State, value));
+            }
 
             var toggle = visual.Control as ToggleSwitch;
             if (toggle != null)
@@ -1790,8 +2279,55 @@ namespace ESP32AIControl.WP81
                 double number;
                 if (double.TryParse((value ?? string.Empty).Replace(',', '.'),
                     NumberStyles.Float, CultureInfo.InvariantCulture, out number))
-                    slider.Value = Math.Max(slider.Minimum, Math.Min(slider.Maximum, number));
+                {
+                    var scale = GetWidgetConfigNumber(visual.State, "k", 1);
+                    if (Math.Abs(scale) < 0.000001) scale = 1;
+                    var display = number * scale;
+                    slider.Value = Math.Max(slider.Minimum, Math.Min(slider.Maximum, display));
+                }
+                return;
             }
+
+            var combo = visual.Control as ComboBox;
+            if (combo != null)
+            {
+                int selected;
+                if (int.TryParse(value, out selected) && selected >= 0 && selected < combo.Items.Count)
+                    combo.SelectedIndex = selected;
+                return;
+            }
+
+            var editor = visual.Control as TextBox;
+            if (editor != null) { editor.Text = value ?? string.Empty; return; }
+
+            var datePicker = visual.Control as DatePicker;
+            if (datePicker != null)
+            {
+                DateTimeOffset date;
+                if (DateTimeOffset.TryParse(value, CultureInfo.CurrentCulture, DateTimeStyles.None, out date))
+                    datePicker.Date = date;
+                return;
+            }
+
+            var timePicker = visual.Control as TimePicker;
+            if (timePicker != null)
+            {
+                TimeSpan time;
+                if (TimeSpan.TryParse(value, CultureInfo.CurrentCulture, out time))
+                    timePicker.Time = time;
+                return;
+            }
+
+            var gauge = visual.Control as Canvas;
+            if (gauge != null)
+            {
+                var definition = NormalizeType(visual.State == null ? string.Empty : visual.State.DefinitionName);
+                if (definition == "progressround" || definition == "fillgauge")
+                    UpdateGaugeCanvas(gauge, visual.State, definition == "fillgauge");
+            }
+
+            if (visual.ChartCanvas != null)
+                DrawWidgetChart(visual, value);
         }
 
         private static bool ParseBoolean(string value)
@@ -2328,6 +2864,7 @@ namespace ESP32AIControl.WP81
             public FrameworkElement EmojiIcon { get; set; }
             public TextBlock ValueText { get; set; }
             public FrameworkElement Control { get; set; }
+            public Canvas ChartCanvas { get; set; }
         }
 
         private sealed class PageVisual
