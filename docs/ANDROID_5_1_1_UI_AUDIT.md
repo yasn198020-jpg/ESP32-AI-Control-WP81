@@ -269,3 +269,17 @@ Remaining work before release: compile with the Windows Phone 8.1 toolchain; ins
 - The Voice settings pivot now lists installed Windows speech-synthesis voices, persists the chosen voice ID and provides a test phrase. Trained-command replies use the selected voice, with Russian/system-default fallback when that saved voice is unavailable.
 - Chart widgets now show the number of parsed points, configured series names and a chart-type caption (`chart1`…`chart6`) in addition to the native line/bar rendering.
 - Windows Phone 8.1 does not expose the later SpeechSynthesizer.Options controls for rate/pitch; no unsupported rate/pitch sliders were added.
+
+
+## Visual port implementation — phase 8 (2026-11-26)
+
+Settings UI restyling pass:
+
+- Added a dedicated Android-like category header template to the WP81 Settings Pivot, using consistent rounded dark category chips rather than the default plain Pivot text headers.
+- Simplified the settings page heading and made the available categories explicit: connection, storage, saved profiles, voice, scenarios, local scenarios and log.
+- Standardized inner settings page spacing and the dark rounded panel treatment for connection state and diagnostic log surfaces.
+- Unified section heading size, spacing and muted description colors across the settings subsections.
+- Restyled the persistent save/backup area as a consistent rounded action panel; preserved every existing named control and event handler so MQTT, profile, voice, scenario, import/export and logging behavior remain wired.
+- Kept the seven existing settings categories and their current WP81 controls intact; this is a visual pass, not a claim that every Android setting has a one-to-one WP81 platform equivalent.
+
+Still outstanding: inspect and restyle the hamburger popup's nested submenus and confirmation dialogs, compare every settings category against Android screenshots, and perform a Windows Phone 8.1 compile plus Lumia 830 runtime check. No build or device verification was available during this phase.
