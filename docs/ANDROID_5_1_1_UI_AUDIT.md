@@ -184,3 +184,24 @@ Required next dashboard work:
 4. Verify touch/long-press training behavior and every widget type on the Lumia 830.
 
 Do not simplify the Android widget set to generic labels or static mockups. The renderer port is required for genuine visual parity.
+
+
+## Visual port implementation — phase 2 (2026-11-26)
+
+Implemented the first data-driven dashboard parity layer:
+
+- WidgetState now retains DefinitionName, the original ConfigJson, and Unit; Clone() carries these fields so repository snapshots do not discard renderer metadata.
+- MQTT config parsing now extracts unit / after and preserves the original CONFIG payload.
+- DeviceRepository stores configuration metadata independently of live status/event values. MQTT control topics and payload semantics are unchanged.
+- Dashboard rendering now uses the Android definition name to classify toggle/button/range/progress-line widgets, uses configured range min/max (including the servo default), displays units with telemetry values, and renders progress-line values with a native progress bar.
+- Widget rows were flattened to remove the WP81-only rounded card around every item, bringing spacing and hierarchy closer to Android's compact dashboard rows.
+
+Files changed in this phase:
+
+- src/ESP32AIControl.WP81/Models/WidgetState.cs
+- src/ESP32AIControl.WP81/Core/Protocol/Esp32Message.cs
+- src/ESP32AIControl.WP81/Core/Protocol/Esp32JsonParser.cs
+- src/ESP32AIControl.WP81/Core/State/DeviceRepository.cs
+- src/ESP32AIControl.WP81/MainPage.xaml.cs
+
+Remaining dashboard parity: text/date/time inputs, select options, threshold color parsing, circular progress, fill gauge, chart1..chart6, and command-state feedback. Remaining application-wide parity: trained commands destination, menu destinations, settings screens, dialogs and full visual verification. No WP8.1 build or Lumia 830 device test was available in this editing session; this phase must not be treated as build-verified.
