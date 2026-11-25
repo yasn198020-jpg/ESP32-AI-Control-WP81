@@ -2892,6 +2892,232 @@ namespace ESP32AIControl.WP81
             catch (Exception ex) { Log("RETENTION ERROR: " + ex.Message); }
         }
 
+        private sealed class TrainedVoiceCommand
+        {
+            public string Phrase { get; set; }
+            public string DeviceId { get; set; }
+            public string WidgetId { get; set; }
+            public string Value { get; set; }
+            public List<string> Variants { get; set; }
+        }
+
+        private const string TrainedReadValue = "__READ_VALUE__";
+        private const string TrainedCommandsStorageKey = "trained_voice_commands";
+
+        private static List<TrainedVoiceCommand> LoadTrainedCommands()
+        {
+            var result = new List<TrainedVoiceCommand>();
+            try
+            {
+                var values = ApplicationData.Current.LocalSettings.Values;
+                if (!values.ContainsKey(TrainedCommandsStorageKey)) return result;
+                var raw = values[TrainedCommandsStorageKey] as string;
+                JsonArray array;
+                if (string.IsNullOrWhiteSpace(raw) || !JsonArray.TryParse(raw, out array)) return result;
+                foreach (var item in array)
+                {
+                    if (item.ValueType != JsonValueType.Object) continue;
+                    var obj = item.GetObject();
+                    var command = new TrainedVoiceCommand
+                    {
+                        Phrase = GetJsonString(obj, "phrase"),
+                        DeviceId = GetJsonString(obj, "deviceId"),
+                        WidgetId = GetJsonString(obj, "widgetId"),
+                        Value = GetJsonString(obj, "value"),
+                        Variants = new List<string>()
+                    };
+                    IJsonValue variantsRaw;
+                    if (obj.TryGetValue("variants", out variantsRaw) && variantsRaw.ValueType == JsonValueType.Array)
+                    {
+                        foreach (var variant in variantsRaw.GetArray())
+                            if (variant.ValueType == JsonValueType.String && !string.IsNullOrWhiteSpace(variant.GetString()))
+                                command.Variants.Add(variant.GetString().Trim());
+                    }
+                    if (command.Variants.Count == 0 && !string.IsNullOrWhiteSpace(command.Phrase))
+                        command.Variants.Add(command.Phrase);
+                    if (!string.IsNullOrWhiteSpace(command.Phrase) &&
+                        !string.IsNullOrWhiteSpace(command.DeviceId) &&
+                        !string.IsNullOrWhiteSpace(command.WidgetId))
+                        result.Add(command);
+                }
+            }
+            catch { }
+            return result;
+        }
+
+        private static string GetJsonString(JsonObject obj, string key)
+        {
+            IJsonValue value;
+            if (obj == null || !obj.TryGetValue(key, out value)) return string.Empty;
+            if (value.ValueType == JsonValueType.String) return value.GetString();
+            return value.ToString();
+        }
+
+        private void SaveTrainedCommands()
+        {
+            try
+            {
+                var array = new JsonArray();
+                foreach (var command in _trainedCommands)
+                {
+                    var item = new JsonObject();
+                    item.Insert("phrase", JsonValue.CreateStringValue(command.Phrase ?? string.Empty));
+                    item.Insert("deviceId", JsonValue.CreateStringValue(command.DeviceId ?? string.Empty));
+                    item.Insert("widgetId", JsonValue.CreateStringValue(command.WidgetId ?? string.Empty));
+                    item.Insert("value", JsonValue.CreateStringValue(command.Value ?? string.Empty));
+                    var variants = new JsonArray();
+                    foreach (var variant in (command.Variants ?? new List<string>()).Distinct(StringComparer.OrdinalIgnoreCase))
+                        variants.Add(JsonValue.CreateStringValue(variant));
+                    item.Insert("variants", variants);
+                    array.Add(item);
+                }
+                ApplicationData.Current.LocalSettings.Values[TrainedCommandsStorageKey] = array.ToString();
+            }
+            catch (Exception ex) { Log("TRAINED SAVE ERROR: " + ex.Message); }
+        }
+
+        private void BuildTrainedCommandsSection()
+        {
+            var root = new Grid();
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            var header = new StackPanel { Margin = new Thickness(16, 14, 16, 8) };
+            header.Children.Add(new TextBlock
+            {
+                Text = "ГОЛОСОВОЕ УПРАВЛЕНИЕ",
+                FontSize = 11, FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255))
+            });
+            header.Children.Add(new TextBlock { Text = "Обученные команды", FontSize = 24, FontWeight = Windows.UI.Text.FontWeights.SemiBold });
+            header.Children.Add(new TextBlock
+            {
+                Text = "Фразы, связанные с датчиками и действиями ESP32.",
+                FontSize = 12, Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 172, 173, 184))
+            });
+            root.Children.Add(header);
+
+            var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Margin = new Thickness(12, 0, 12, 10) };
+            _trainedCommandsList = new StackPanel();
+            scroll.Content = _trainedCommandsList;
+            Grid.SetRow(scroll, 1);
+            root.Children.Add(scroll);
+            _trainedCommandsSection.Children.Add(root);
+        }
+
+        private void RefreshTrainedCommandsScreen()
+        {
+            if (_trainedCommandsList == null) return;
+            _trainedCommandsList.Children.Clear();
+
+            var top = new Grid { Margin = new Thickness(2, 2, 2, 8) };
+            top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var count = new TextBlock
+            {
+                Text = "Записанные команды: " + _trainedCommands.Count.ToString(CultureInfo.InvariantCulture),
+                FontSize = 16, FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            top.Children.Add(count);
+            var clear = new Button { Content = "Очистить всё", MinHeight = 42, Padding = new Thickness(10, 6, 10, 6) };
+            clear.Click += async delegate
+            {
+                var dialog = new Windows.UI.Popups.MessageDialog("Будут удалены все сохранённые фразы и их варианты. Настройки MQTT и другие данные не изменятся.", "Очистить обученные команды?");
+                dialog.Commands.Add(new Windows.UI.Popups.UICommand("Удалить всё"));
+                dialog.Commands.Add(new Windows.UI.Popups.UICommand("Отмена"));
+                var result = await dialog.ShowAsync();
+                if (result != null && result.Label == "Удалить всё")
+                {
+                    _trainedCommands.Clear();
+                    SaveTrainedCommands();
+                    RefreshTrainedCommandsScreen();
+                }
+            };
+            Grid.SetColumn(clear, 1);
+            top.Children.Add(clear);
+            _trainedCommandsList.Children.Add(top);
+
+            if (_trainedCommands.Count == 0)
+            {
+                _trainedCommandsList.Children.Add(new Border
+                {
+                    Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 43, 44, 52)),
+                    CornerRadius = new CornerRadius(14),
+                    Padding = new Thickness(18),
+                    Child = new TextBlock
+                    {
+                        Text = "Пока нет обученных команд.\n\nЗажмите виджет на главном экране, чтобы связать с ним голосовую фразу.",
+                        FontSize = 15, TextWrapping = TextWrapping.Wrap,
+                        Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 190, 192, 201))
+                    }
+                });
+                return;
+            }
+
+            foreach (var command in _trainedCommands.ToList())
+            {
+                var card = new Border
+                {
+                    Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 43, 44, 52)),
+                    BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 65, 67, 77)),
+                    BorderThickness = new Thickness(1),
+                    CornerRadius = new CornerRadius(14),
+                    Padding = new Thickness(14),
+                    Margin = new Thickness(0, 0, 0, 8)
+                };
+                var content = new StackPanel();
+                content.Children.Add(new TextBlock
+                {
+                    Text = "«" + command.Phrase + "»",
+                    FontSize = 18, FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 0, 0, 5)
+                });
+                var state = _devices == null ? null : _devices.Get(command.DeviceId, command.WidgetId);
+                var widgetName = state == null ? command.WidgetId : GetTitle(state);
+                content.Children.Add(new TextBlock
+                {
+                    Text = command.DeviceId + "  •  " + widgetName,
+                    FontSize = 13, Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 190, 192, 201)),
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 0, 0, 5)
+                });
+                var action = command.Value == TrainedReadValue ? "ПРОИЗНЕСТИ ЗНАЧЕНИЕ" : command.Value == "1" ? "ВКЛ / ОТКРЫТЬ" : "ВЫКЛ / ЗАКРЫТЬ";
+                content.Children.Add(new TextBlock
+                {
+                    Text = action,
+                    FontSize = 12, FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255)),
+                    Margin = new Thickness(0, 0, 0, 7)
+                });
+                if (command.Variants != null && command.Variants.Count > 1)
+                    content.Children.Add(new TextBlock
+                    {
+                        Text = "Варианты: " + string.Join(", ", command.Variants),
+                        FontSize = 12, Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 172, 173, 184)),
+                        TextWrapping = TextWrapping.Wrap,
+                        Margin = new Thickness(0, 0, 0, 7)
+                    });
+                var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+                var addVariant = new Button { Content = "＋ Вариант фразы", MinHeight = 40, Padding = new Thickness(10, 5, 10, 5), Margin = new Thickness(0, 0, 6, 0) };
+                addVariant.Click += delegate { OpenVariantDialog(command.Phrase); };
+                var remove = new Button { Content = "Удалить", MinHeight = 40, Padding = new Thickness(10, 5, 10, 5) };
+                remove.Click += delegate
+                {
+                    _trainedCommands.RemoveAll(c =>
+                        c.Phrase == command.Phrase && c.DeviceId == command.DeviceId &&
+                        c.WidgetId == command.WidgetId && c.Value == command.Value);
+                    SaveTrainedCommands();
+                    RefreshTrainedCommandsScreen();
+                };
+                buttons.Children.Add(addVariant);
+                buttons.Children.Add(remove);
+                content.Children.Add(buttons);
+                card.Child = content;
+                _trainedCommandsList.Children.Add(card);
+            }
+        }
+
         private void Log(string text)
         {
             var line = "[" + DateTime.Now.ToString("HH:mm:ss") + "] " + text;
