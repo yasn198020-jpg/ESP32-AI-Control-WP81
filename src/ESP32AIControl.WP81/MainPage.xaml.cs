@@ -1469,8 +1469,6 @@ namespace ESP32AIControl.WP81
             ClientIdBox.Text = string.IsNullOrEmpty(_appSettings.ClientId) ? "ESP32-AI-Control-WP81" : _appSettings.ClientId;
             MqttTlsCheckBox.IsChecked = _appSettings.UseTls;
             UiFontScaleSlider.Value = Math.Max(0.7, Math.Min(1.1, _appSettings.UiFontScale <= 0 ? 0.85 : _appSettings.UiFontScale));
-            WidgetPages.FontSize = 14 * (double)UiFontScaleSlider.Value;
-            SettingsPivot.FontSize = 14 * (double)UiFontScaleSlider.Value;
             ApplyFontScale(UiFontScaleSlider.Value);
             PortBox.Text = _appSettings.Port;
             PrefixBox.Text = _appSettings.Prefix;
