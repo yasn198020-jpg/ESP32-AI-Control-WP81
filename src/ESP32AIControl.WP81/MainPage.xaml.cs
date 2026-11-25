@@ -2342,6 +2342,7 @@ namespace ESP32AIControl.WP81
             if (!_visuals.TryGetValue(state.Key, out visual))
             {
                 visual = CreateWidgetVisual(state);
+                ApplyFontScaleToTree(visual.Container, _currentFontScale);
                 _visuals[state.Key] = visual;
                 _widgetIndex[state.Key] = state;
                 InsertWidgetVisual(visual);
@@ -2358,6 +2359,7 @@ namespace ESP32AIControl.WP81
                     _visuals.Remove(state.Key);
 
                     visual = CreateWidgetVisual(state);
+                    ApplyFontScaleToTree(visual.Container, _currentFontScale);
                     _visuals[state.Key] = visual;
                     _widgetIndex[state.Key] = state;
                     InsertWidgetVisual(visual);
@@ -3566,6 +3568,7 @@ namespace ESP32AIControl.WP81
                         Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 190, 192, 201))
                     }
                 });
+                ApplyFontScaleToTree(_trainedCommandsList, _currentFontScale);
                 return;
             }
 
@@ -3631,6 +3634,7 @@ namespace ESP32AIControl.WP81
                 card.Child = content;
                 _trainedCommandsList.Children.Add(card);
             }
+            ApplyFontScaleToTree(_trainedCommandsList, _currentFontScale);
         }
 
         private static bool IsValueWidget(WidgetState state)
@@ -3777,6 +3781,7 @@ namespace ESP32AIControl.WP81
 
         private Popup CreateAppPopup(Panel content, double width, double maxHeight)
         {
+            ApplyFontScaleToTree(content, _currentFontScale);
             var scroll = new ScrollViewer
             {
                 Content = content,
