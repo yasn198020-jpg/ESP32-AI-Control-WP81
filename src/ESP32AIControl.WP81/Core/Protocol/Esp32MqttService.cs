@@ -57,6 +57,7 @@ namespace ESP32AIControl.WP81.Core.Protocol
                 await _mqtt.SubscribeAsync("/" + _settings.Prefix + "/#", 1);
                 await PublishHelloAsync();
                 await FlushPendingControlsAsync();
+                await FlushPendingWidgetPublishesAsync();
             }
             catch
             {
@@ -72,11 +73,77 @@ namespace ESP32AIControl.WP81.Core.Protocol
             return _mqtt.PublishAsync("/" + _settings.Prefix, "HELLO", 1, false);
         }
 
-        public Task PublishWidgetAsync(string topic, string value)
+        public async Task PublishWidgetAsync(string topic, string value)
         {
             if (string.IsNullOrWhiteSpace(topic))
                 throw new ArgumentException("Widget topic is empty.", "topic");
-            return _mqtt.PublishAsync(topic, value ?? string.Empty, 1, false);
+
+            var payload = value ?? string.Empty;
+            if (_mqtt.State != MqttConnectionState.Connected)
+            {
+                EnqueueWidgetPublish(topic, payload);
+                return;
+            }
+
+            try
+            {
+                await _mqtt.PublishAsync(topic, payload, 1, false);
+            }
+            catch
+            {
+                EnqueueWidgetPublish(topic, payload);
+                if (_mqtt.State == MqttConnectionState.Connected)
+                    await _mqtt.DisconnectAsync();
+            }
+        }
+
+        private void EnqueueWidgetPublish(string topic, string payload)
+        {
+            lock (_pendingWidgetLock)
+            {
+                var node = _pendingWidgetPublishes.First;
+                while (node != null)
+                {
+                    var next = node.Next;
+                    if (string.Equals(node.Value.Topic, topic, StringComparison.Ordinal))
+                        _pendingWidgetPublishes.Remove(node);
+                    node = next;
+                }
+
+                _pendingWidgetPublishes.AddLast(new PendingWidgetPublish
+                {
+                    Topic = topic,
+                    Payload = payload
+                });
+                while (_pendingWidgetPublishes.Count > MaxPendingWidgetPublishes)
+                    _pendingWidgetPublishes.RemoveFirst();
+            }
+        }
+
+        private async Task FlushPendingWidgetPublishesAsync()
+        {
+            while (_mqtt.State == MqttConnectionState.Connected)
+            {
+                PendingWidgetPublish item;
+                lock (_pendingWidgetLock)
+                {
+                    if (_pendingWidgetPublishes.Count == 0)
+                        return;
+                    item = _pendingWidgetPublishes.First.Value;
+                    _pendingWidgetPublishes.RemoveFirst();
+                }
+
+                try
+                {
+                    await _mqtt.PublishAsync(item.Topic, item.Payload, 1, false);
+                }
+                catch
+                {
+                    lock (_pendingWidgetLock)
+                        _pendingWidgetPublishes.AddFirst(item);
+                    return;
+                }
+            }
         }
 
         public Task DisconnectAsync()
@@ -113,6 +180,17 @@ namespace ESP32AIControl.WP81.Core.Protocol
             public string WidgetId;
             public string Value;
         }
+
+        private sealed class PendingWidgetPublish
+        {
+            public string Topic;
+            public string Payload;
+        }
+
+        private readonly object _pendingWidgetLock = new object();
+        private readonly System.Collections.Generic.LinkedList<PendingWidgetPublish> _pendingWidgetPublishes =
+            new System.Collections.Generic.LinkedList<PendingWidgetPublish>();
+        private const int MaxPendingWidgetPublishes = 100;
 
         private readonly object _pendingLock = new object();
         private readonly System.Collections.Generic.LinkedList<PendingControl> _pendingControls =
