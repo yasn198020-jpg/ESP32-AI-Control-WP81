@@ -90,6 +90,9 @@ namespace ESP32AIControl.WP81.Core.State
                         Id = message.WidgetId,
                         Description = message.Description,
                         WidgetType = message.WidgetType,
+                        DefinitionName = message.WidgetType,
+                        ConfigJson = message.Kind == Esp32MessageKind.Config ? message.RawPayload : "{}",
+                        Unit = message.Unit,
                         Page = message.Page,
                         Order = message.Order
                     };
@@ -103,7 +106,13 @@ namespace ESP32AIControl.WP81.Core.State
                 if (!string.IsNullOrEmpty(message.Description))
                     state.Description = message.Description;
                 if (!string.IsNullOrEmpty(message.WidgetType))
+                {
                     state.WidgetType = message.WidgetType;
+                    state.DefinitionName = message.WidgetType;
+                }
+                if (!string.IsNullOrEmpty(message.Unit)) state.Unit = message.Unit;
+                if (message.Kind == Esp32MessageKind.Config && !string.IsNullOrWhiteSpace(message.RawPayload))
+                    state.ConfigJson = message.RawPayload;
                 if (!string.IsNullOrEmpty(message.Page))
                     state.Page = message.Page;
                 if (message.Order != 0)
