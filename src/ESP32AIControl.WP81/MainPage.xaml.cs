@@ -800,7 +800,7 @@ namespace ESP32AIControl.WP81
                 HorizontalAlignment = HorizontalAlignment.Right,
                 Margin = new Thickness(8)
             };
-            var cancel = new Button { Content = "Отмена", Margin = new Thickness(0, 0, 6, 0) };
+            var cancel = new Button { Content = "Отмена", Margin = new Thickness(0, 0, 6, 0), MinHeight = 44 };
             cancel.Click += delegate
             {
                 ApplyFontScale(initial);
@@ -810,7 +810,9 @@ namespace ESP32AIControl.WP81
             {
                 Content = "Сохранить",
                 Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255)),
-                Foreground = new SolidColorBrush(Windows.UI.Colors.White)
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 32, 32, 32)),
+                FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                MinHeight = 44
             };
             save.Click += async delegate
             {
@@ -3959,17 +3961,18 @@ namespace ESP32AIControl.WP81
             {
                 Width = Math.Min(width, Math.Max(270, ActualWidth - 24)),
                 MaxHeight = Math.Min(maxHeight, Math.Max(280, ActualHeight - 110)),
-                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 43, 44, 52)),
-                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 65, 67, 77)),
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 36, 37, 42)),
+                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 84, 80, 99)),
                 BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(16),
+                CornerRadius = new CornerRadius(18),
                 Child = scroll
             };
+            // Keep custom dialogs centered on both 720x1280 and smaller WP8.1 layouts.
             var popup = new Popup
             {
                 Child = frame,
                 HorizontalOffset = Math.Max(8, (ActualWidth - frame.Width) / 2),
-                VerticalOffset = 108,
+                VerticalOffset = Math.Max(76, (ActualHeight - Math.Min(maxHeight, ActualHeight - 110)) / 2),
                 IsOpen = true
             };
             return popup;
