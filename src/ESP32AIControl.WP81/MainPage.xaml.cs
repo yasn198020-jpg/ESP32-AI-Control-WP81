@@ -63,6 +63,7 @@ namespace ESP32AIControl.WP81
         private ComboBox _trainingModeBox;
         private ComboBox _trainingExistingPhraseBox;
         private ComboBox _trainingActionBox;
+        private Button _trainingRecordButton;
         private TextBox _variantPhraseBox;
         private string _variantPhraseTarget;
         private MediaElement _speechPlayback;
@@ -3234,6 +3235,8 @@ namespace ESP32AIControl.WP81
                 var attach = _trainingModeBox.SelectedIndex == 1;
                 _trainingExistingPhraseBox.Visibility = attach ? Visibility.Visible : Visibility.Collapsed;
                 _trainingPhraseBox.Visibility = attach ? Visibility.Collapsed : Visibility.Visible;
+                if (_trainingRecordButton != null)
+                    _trainingRecordButton.Visibility = attach ? Visibility.Collapsed : Visibility.Visible;
             };
 
             var body = new StackPanel { Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 43, 44, 52)) };
@@ -3281,8 +3284,10 @@ namespace ESP32AIControl.WP81
                 _trainingModeBox = null;
                 _trainingExistingPhraseBox = null;
                 _trainingActionBox = null;
+                _trainingRecordButton = null;
             };
             var record = new Button { Content = "🎤 Записать", Margin = new Thickness(0, 0, 6, 0) };
+            _trainingRecordButton = record;
             record.Click += async delegate
             {
                 try
@@ -3387,6 +3392,7 @@ namespace ESP32AIControl.WP81
             _trainingModeBox = null;
             _trainingExistingPhraseBox = null;
             _trainingActionBox = null;
+            _trainingRecordButton = null;
             VoiceResultText.Text = "Действие добавлено к команде: " + targetPhrase;
             RefreshTrainedCommandsScreen();
         }
