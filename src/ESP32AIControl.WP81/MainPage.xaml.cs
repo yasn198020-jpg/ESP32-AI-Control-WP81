@@ -1464,7 +1464,7 @@ namespace ESP32AIControl.WP81
                            type == "checkbox" || type == "vbutton" ||
                            type == "vbtn" || type == "buttonin";
             var isAction = definition == "button" || definition == "vbtn" || definition == "btn" || type == "button" || type == "action" || type == "buttonout";
-            var isSlider = definition == "range" || definition == "rangeservo" || type == "slider" || type == "range" || type == "inputdgt";
+            var isSlider = definition == "range" || definition == "rangeservo" || type == "slider" || type == "range";
             var isProgress = definition == "progressline";
             var isRoundProgress = definition == "progressround";
             var isFillGauge = definition == "fillgauge";
@@ -1599,7 +1599,7 @@ namespace ESP32AIControl.WP81
                     if (args.HoldingState == Windows.UI.Input.HoldingState.Started)
                     {
                         args.Handled = true;
-                        OpenTrainingDialog(state);
+                        OpenTrainingDialog(visual.State);
                     }
                 };
             }
@@ -3432,7 +3432,7 @@ namespace ESP32AIControl.WP81
                 try
                 {
                     var type = NormalizeType(state.WidgetType);
-                    if (type == "toggle" || type == "button")
+                    if (type == "toggle" || type == "button" || type == "vbtn" || type == "btn")
                         await _mqtt.PublishControlAsync(command.DeviceId, command.WidgetId, command.Value);
                     else if (!string.IsNullOrWhiteSpace(state.Topic))
                         await _mqtt.PublishWidgetAsync(state.Topic, command.Value);
