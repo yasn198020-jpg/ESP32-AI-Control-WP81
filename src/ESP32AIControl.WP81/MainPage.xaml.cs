@@ -809,7 +809,7 @@ namespace ESP32AIControl.WP81
                 var label = content.Children[i] as TextBlock;
                 if (label == null) continue;
                 label.Foreground = new SolidColorBrush(isSelected && i == 0
-                    ? Windows.UI.Color.FromArgb(255, 128, 101, 232)
+                    ? Windows.UI.Color.FromArgb(255, 208, 188, 255)
                     : (isSelected
                         ? Windows.UI.Color.FromArgb(255, 243, 244, 246)
                         : Windows.UI.Color.FromArgb(255, 156, 163, 175)));
@@ -1527,9 +1527,9 @@ namespace ESP32AIControl.WP81
                     Content = "Нажать",
                     MinWidth = 76,
                     MaxWidth = 128,
-                    Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 128, 101, 232)),
+                    Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255)),
                     Foreground = new SolidColorBrush(Windows.UI.Colors.White),
-                    BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 128, 101, 232)),
+                    BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255)),
                     Padding = new Thickness(12, 7, 12, 7),
                     HorizontalAlignment = HorizontalAlignment.Right,
                     VerticalAlignment = VerticalAlignment.Center,
@@ -1558,7 +1558,7 @@ namespace ESP32AIControl.WP81
                     Maximum = 100,
                     StepFrequency = 1,
                     HorizontalAlignment = HorizontalAlignment.Stretch,
-                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 128, 101, 232)),
+                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255)),
                     Margin = new Thickness(34, 2, 8, 0)
                 };
                 slider.ValueChanged += async delegate(object s, RangeBaseValueChangedEventArgs ev)
