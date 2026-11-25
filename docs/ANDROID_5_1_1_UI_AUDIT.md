@@ -204,7 +204,7 @@ Files changed in this phase:
 - src/ESP32AIControl.WP81/Core/State/DeviceRepository.cs
 - src/ESP32AIControl.WP81/MainPage.xaml.cs
 
-Remaining dashboard parity: text/date/time inputs, select options, threshold color parsing, circular progress, fill gauge, chart1..chart6, and command-state feedback. Remaining application-wide parity: trained commands destination, menu destinations, settings screens, dialogs and full visual verification. No WP8.1 build or Lumia 830 device test was available in this editing session; this phase must not be treated as build-verified.
+At the end of phase 2, the remaining dashboard work included text/date/time inputs, select options, threshold colors, circular progress, fill gauge and charts; these received an implementation pass in phase 3. Remaining dashboard gaps are detailed chart axes/labels, complete config-option parity, offline chart-history fallback and device verification. Remaining application-wide work includes final visual restyling of all settings/scenario screens, dialogs and back navigation. No WP8.1 build or Lumia 830 device test was available in this editing session; this phase must not be treated as build-verified.
 
 
 ## Visual port implementation — phase 3 (2026-11-26)
@@ -227,7 +227,7 @@ Trained-command/navigation additions:
 
 Files changed in phases 2–3 include the WP81 widget model, MQTT protocol parser/message, device repository, MQTT publish facade, and MainPage renderer/navigation.
 
-Limitations: this is a functional port pass, not verified full parity. The matcher is a smaller WP81-compatible implementation than Android's full fuzzy matcher; chart rendering is a native approximation and does not yet reproduce every Android series label/time axis/style detail. Permissions audit, cleanup, delete-widget, complete Marfa scenario hub navigation, all settings/dialogs and the Android back-stack still need a full pass. No WP81 build or Lumia 830 device test was available in this session.
+Limitations: this is a functional port pass, not verified full parity. The matcher is a smaller WP81-compatible implementation than Android's full fuzzy matcher; chart rendering is a native approximation and does not yet reproduce every Android series label/time axis/style detail. The visual restyling of Marfa scenario hub, all settings/dialogs and Android-equivalent back navigation still need a full pass. No WP81 build or Lumia 830 device test was available in this session.
 
 
 ## Visual port implementation — phase 4 (2026-11-26)
@@ -253,3 +253,12 @@ Remaining limitations:
 - Rechecked the Android MQTT config source: `widget` remains the logical control type; `name` is the IoTManager renderer definition; `topic` is the exact raw publish topic; `after` is the display unit. WP81 stores these separately, matching the reference model.
 
 Current branch remains a functional visual port in progress, not release-verified. No WP8.1 compiler or Lumia 830 hardware was available in this session, so the final compile/runtime pass must be performed with the WP8.1 toolchain and the phone.
+
+
+## Visual port implementation — phase 6 (2026-11-26)
+
+- Expanded the WP81 Voice settings pivot with a list of installed Windows speech-synthesis voices and a test phrase button.
+- The selected voice ID is persisted in AppSettings and is used both by the test button and spoken replies to trained commands. If the saved voice is unavailable, the app falls back to an installed Russian voice and then the system default.
+- The WP8.1 implementation does not expose the later SpeechSynthesizer.Options API for rate/pitch controls; those Android settings are not represented by fake sliders. The available system-voice selection and test path are ported instead.
+
+Remaining work before release: compile with the Windows Phone 8.1 toolchain; inspect every screen on a 720x1280 Lumia 830; verify MQTT controls including the distinct /control and config-topic publish routes; exercise trained phrase capture/variants and Russian TTS; refine chart axis/series fidelity and the remaining settings/scenario/dialog visual details.
