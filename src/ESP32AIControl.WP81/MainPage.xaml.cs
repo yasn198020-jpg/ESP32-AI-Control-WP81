@@ -905,16 +905,56 @@ namespace ESP32AIControl.WP81
 
         private void AddPopupMenuItem(Panel panel, string title, Action action)
         {
+            // Android-like dropdown row: compact leading icon, aligned title and full-width touch target.
+            string glyph = "•";
+            if (title.IndexOf("команд", StringComparison.OrdinalIgnoreCase) >= 0) glyph = "🎤";
+            else if (title.IndexOf("очист", StringComparison.OrdinalIgnoreCase) >= 0) glyph = "🧹";
+            else if (title.IndexOf("разреш", StringComparison.OrdinalIgnoreCase) >= 0) glyph = "🔐";
+            else if (title.IndexOf("сценар", StringComparison.OrdinalIgnoreCase) >= 0) glyph = "⚙";
+            else if (title.IndexOf("журнал", StringComparison.OrdinalIgnoreCase) >= 0) glyph = "☷";
+            else if (title.IndexOf("UDP", StringComparison.OrdinalIgnoreCase) >= 0) glyph = "⌁";
+            else if (title.IndexOf("MQTT", StringComparison.OrdinalIgnoreCase) >= 0) glyph = "☁";
+            else if (title.IndexOf("хранен", StringComparison.OrdinalIgnoreCase) >= 0) glyph = "▤";
+            else if (title.IndexOf("профил", StringComparison.OrdinalIgnoreCase) >= 0) glyph = "▣";
+            else if (title.IndexOf("голос", StringComparison.OrdinalIgnoreCase) >= 0) glyph = "♫";
+            else if (title.IndexOf("текст", StringComparison.OrdinalIgnoreCase) >= 0) glyph = "A";
+            else if (title.IndexOf("Марф", StringComparison.OrdinalIgnoreCase) >= 0) glyph = "🎙";
+            else if (title.IndexOf("прилож", StringComparison.OrdinalIgnoreCase) >= 0) glyph = "ⓘ";
+
+            var content = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                VerticalAlignment = VerticalAlignment.Center,
+                Spacing = 14
+            };
+            content.Children.Add(new TextBlock
+            {
+                Text = glyph,
+                Width = 25,
+                FontSize = 17,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255)),
+                VerticalAlignment = VerticalAlignment.Center,
+                TextAlignment = TextAlignment.Center
+            });
+            content.Children.Add(new TextBlock
+            {
+                Text = title,
+                FontSize = 15,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 244, 244, 244)),
+                VerticalAlignment = VerticalAlignment.Center,
+                TextTrimming = TextTrimming.CharacterEllipsis
+            });
+
             var item = new Button
             {
-                Content = title,
+                Content = content,
                 HorizontalContentAlignment = HorizontalAlignment.Left,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0)),
                 Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 244, 244, 244)),
                 BorderThickness = new Thickness(0),
-                Padding = new Thickness(14, 10, 12, 10),
-                MinHeight = 46
+                Padding = new Thickness(16, 9, 14, 9),
+                MinHeight = 48
             };
             item.Click += delegate
             {
