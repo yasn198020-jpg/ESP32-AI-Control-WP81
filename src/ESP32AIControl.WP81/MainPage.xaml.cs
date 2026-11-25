@@ -3355,25 +3355,30 @@ namespace ESP32AIControl.WP81
                 return;
             }
 
-            var existing = _trainedCommands.FirstOrDefault(c =>
+            var previous = _trainedCommands.FirstOrDefault(c =>
                 string.Equals(c.Phrase, targetPhrase, StringComparison.OrdinalIgnoreCase) &&
                 string.Equals(c.DeviceId, _trainingTarget.DeviceId, StringComparison.Ordinal) &&
-                string.Equals(c.WidgetId, _trainingTarget.Id, StringComparison.Ordinal) &&
-                string.Equals(c.Value, _trainingValue, StringComparison.Ordinal));
-            if (existing == null)
+                string.Equals(c.WidgetId, _trainingTarget.Id, StringComparison.Ordinal));
+            var variants = previous == null || previous.Variants == null
+                ? new List<string>()
+                : new List<string>(previous.Variants);
+            if (!variants.Contains(targetPhrase, StringComparer.OrdinalIgnoreCase))
+                variants.Add(targetPhrase);
+
+            // Android replaces an existing phrase/device/widget binding rather
+            // than keeping contradictory ON and OFF actions for one spoken phrase.
+            _trainedCommands.RemoveAll(c =>
+                string.Equals(c.Phrase, targetPhrase, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(c.DeviceId, _trainingTarget.DeviceId, StringComparison.Ordinal) &&
+                string.Equals(c.WidgetId, _trainingTarget.Id, StringComparison.Ordinal));
+            _trainedCommands.Add(new TrainedVoiceCommand
             {
-                existing = new TrainedVoiceCommand
-                {
-                    Phrase = targetPhrase,
-                    DeviceId = _trainingTarget.DeviceId,
-                    WidgetId = _trainingTarget.Id,
-                    Value = _trainingValue,
-                    Variants = new List<string> { targetPhrase }
-                };
-                _trainedCommands.Add(existing);
-            }
-            else if (!existing.Variants.Contains(targetPhrase, StringComparer.OrdinalIgnoreCase))
-                existing.Variants.Add(targetPhrase);
+                Phrase = targetPhrase,
+                DeviceId = _trainingTarget.DeviceId,
+                WidgetId = _trainingTarget.Id,
+                Value = _trainingValue,
+                Variants = variants
+            });
 
             SaveTrainedCommands();
             if (_trainingPopup != null) _trainingPopup.IsOpen = false;
@@ -3533,15 +3538,28 @@ namespace ESP32AIControl.WP81
             var spokenWords = text.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
             if (spokenWords.Length > 0 && spokenWords.All(w => w.Length >= 3))
             {
-                var partialPhrases = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                foreach (var command in _trainedCommands)
+                var partialScores = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+                foreach (var group in _trainedCommands.GroupBy(c => NormalizeTrainedPhrase(c.Phrase)))
                 {
-                    var phrases = (command.Variants ?? new List<string>()).Concat(new[] { command.Phrase });
-                    if (phrases.Any(p => PhraseWordsContainedInText(text, NormalizeTrainedPhrase(p))))
-                        partialPhrases.Add(NormalizeTrainedPhrase(command.Phrase));
+                    var hasPartial = group.Any(command =>
+                        (command.Variants ?? new List<string>()).Concat(new[] { command.Phrase })
+                            .Any(phrase => PhraseWordsContainedInText(text, NormalizeTrainedPhrase(phrase))));
+                    if (!hasPartial) continue;
+
+                    var score = group.SelectMany(command =>
+                            (command.Variants ?? new List<string>()).Concat(new[] { command.Phrase }))
+                        .Select(phrase => SimilarityAgainstTrainedText(text, NormalizeTrainedPhrase(phrase)))
+                        .DefaultIfEmpty(0.0)
+                        .Max();
+                    partialScores[group.Key] = score;
                 }
-                if (partialPhrases.Count > 0)
-                    return _trainedCommands.Where(c => partialPhrases.Contains(NormalizeTrainedPhrase(c.Phrase))).ToList();
+
+                if (partialScores.Count > 0)
+                {
+                    var bestPartial = partialScores.OrderByDescending(pair => pair.Value).First().Key;
+                    return _trainedCommands.Where(c =>
+                        string.Equals(NormalizeTrainedPhrase(c.Phrase), bestPartial, StringComparison.OrdinalIgnoreCase)).ToList();
+                }
             }
 
             var candidates = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
@@ -3685,10 +3703,12 @@ namespace ESP32AIControl.WP81
                 }
             }
             var normalized = result.ToString().Trim();
-            var prefixes = new[] { "марфа ", "марфу ", "марфе ", "марфой " };
+            var prefixes = new[] { "марфой", "марфа", "марфу", "марфе" };
             foreach (var prefix in prefixes)
             {
-                if (normalized.StartsWith(prefix, StringComparison.Ordinal))
+                if (normalized == prefix)
+                    return string.Empty;
+                if (normalized.StartsWith(prefix + " ", StringComparison.Ordinal))
                 {
                     normalized = normalized.Substring(prefix.Length).Trim();
                     break;
