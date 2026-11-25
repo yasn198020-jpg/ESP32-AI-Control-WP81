@@ -801,7 +801,7 @@ namespace ESP32AIControl.WP81
         private async void ShowAboutDialog()
         {
             var dialog = new Windows.UI.Popups.MessageDialog(
-                "ESP32 AI Control для Windows Phone 8.1\\n\\nУправление ESP32 через MQTT, UDP и WebSocket. Голосовое управление, сценарии, история измерений и планирование команд.",
+                "ESP32 AI Control для Windows Phone 8.1\n\nУправление ESP32 через MQTT, UDP и WebSocket. Голосовое управление, сценарии, история измерений и планирование команд.",
                 "О приложении");
             await dialog.ShowAsync();
         }
