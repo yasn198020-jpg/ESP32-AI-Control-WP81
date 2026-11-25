@@ -129,10 +129,10 @@ The WP81 bottom bar exposes Home, Marfa voice action, Commands, History and Dela
 A verified navigation mismatch needs attention during the port:
 
 - Android bottom item **Commands** opens destination 1, **TrainedCommandsScreen**.
-- WP81 `NavigateCommands_Click` currently opens `SettingsSection` and sets `SettingsPivot.SelectedIndex = 3`, which is the **Voice** settings pivot, not a dedicated trained-commands destination.
-- WP81 Marfa bottom item is a voice action, as in Android, but the WP81 target does not currently expose the Android trained-commands destination as a corresponding screen in the inspected XAML.
+- At the time of the initial audit, WP81 `NavigateCommands_Click` opened `SettingsSection` and selected the **Voice** settings pivot. This mismatch was corrected in visual port phase 3: the bottom Commands item now opens a dedicated trained-commands screen.
+- WP81 Marfa bottom item remains a voice action, as in Android. Trained phrase storage, long-press training and phrase execution were added in phase 3 while retaining the existing WP81 voice recognizer and MQTT command transport.
 
-This should be resolved as part of navigation parity, not by changing voice recognition or command execution logic.
+The Commands/Voice-settings navigation collision is resolved; the remaining application destinations still require a complete screen-by-screen parity review.
 
 ### Priority order for the full port
 
@@ -162,7 +162,7 @@ Files changed:
 - `src/ESP32AIControl.WP81/MainPage.xaml`
 - `src/ESP32AIControl.WP81/MainPage.xaml.cs`
 
-This is the first visual shell pass, not completion of the full port. The next implementation passes must cover every Android destination, settings form, history/graph component, dialogs, selection controls, progress UI, and dynamic dashboard widgets. The WP81 Commands bottom item still routes to the existing voice/settings surface because a trained-command repository/screen was not found in the WP81 project; do not claim feature parity until that gap is resolved.
+This is the first visual shell pass, not completion of the full port. The next implementation passes must cover every Android destination, settings form, history/graph component, dialogs, selection controls, progress UI, and dynamic dashboard widgets. The WP81 Commands item was redirected to the dedicated trained-commands screen in phase 3; trained-command storage and interaction were also added.
 
 No MQTT, UDP, WebSocket, voice recognition, scheduler, history persistence, or ESP32 command logic was changed in this phase. A device build and Lumia 830 visual check are still required.
 
@@ -173,17 +173,17 @@ A direct comparison of Android `IoTManagerWidgetRenderer.kt` with WP81 `CreateWi
 
 - Android widget rendering supports toggle, button, date/time/text/number inputs, range/servo sliders, select, progress line, circular progress, fill gauge, and chart1..chart6.
 - Android reads widget definition/config JSON (unit, ranges, colors, thresholds, chart series and display options) and uses those values to draw each control.
-- WP81 `WidgetState` currently contains only DeviceId, Id, Description, WidgetType, Page, Order, Value and UpdatedAt. The current WP81 visual factory renders a generic row, switch, action button, or slider; it cannot reproduce Android's full widget-specific visuals without first carrying over the widget definition/config metadata.
-- The Android dashboard uses mostly flat rows with 16dp horizontal inset and 6–8dp vertical spacing; the WP81 version currently wraps each widget row in its own rounded card. This is a visible mismatch.
+- At the time of discovery, WP81 `WidgetState` retained only basic identity and value data, and the renderer handled only a few generic controls. Phase 2 added the Android-equivalent definition name, original CONFIG JSON, unit and configured topic to the WP81 model.
+- Phase 2/3 flattened the per-widget card wrapper and added WP81 renderers for inputs, selectors, range controls, progress indicators, fill gauge and chart series. These are native XAML/C# equivalents; visual pixel parity and the full Android chart configuration still need device review.
 
-Required next dashboard work:
+Initial requirements (items 1–3 have received an implementation pass in phases 2 and 3; item 4 remains unverified):
 
-1. Extend WP81's parsed widget model to retain the Android-equivalent widget definition and configuration JSON, without changing MQTT command semantics.
-2. Port the Android widget renderer types one by one to WP8.1 XAML/C#.
-3. Match exact row spacing, icons, value chips, controls, charts, gauges, progress and threshold colors.
+1. Preserve the Android-equivalent widget definition and original config JSON through MQTT parsing.
+2. Render all known Android widget families with WP8.1-native controls and drawing.
+3. Match row spacing, icons, value units, configured ranges, threshold colors, charts and gauges.
 4. Verify touch/long-press training behavior and every widget type on the Lumia 830.
 
-Do not simplify the Android widget set to generic labels or static mockups. The renderer port is required for genuine visual parity.
+Do not simplify the remaining differences to generic labels or static mockups. Device verification is still required.
 
 
 ## Visual port implementation — phase 2 (2026-11-26)
@@ -205,3 +205,26 @@ Files changed in this phase:
 - src/ESP32AIControl.WP81/MainPage.xaml.cs
 
 Remaining dashboard parity: text/date/time inputs, select options, threshold color parsing, circular progress, fill gauge, chart1..chart6, and command-state feedback. Remaining application-wide parity: trained commands destination, menu destinations, settings screens, dialogs and full visual verification. No WP8.1 build or Lumia 830 device test was available in this editing session; this phase must not be treated as build-verified.
+
+
+## Visual port implementation — phase 3 (2026-11-26)
+
+Dashboard renderer additions:
+
+- Added Android-style `select` options, text/numeric/date/time inputs, progress-round arc, fill gauge, and chart1–chart6 chart surfaces.
+- Added parsing of chart `status` arrays with up to three value series; chart CONFIG is kept intact and chart STATUS payloads remain available as original JSON for the renderer.
+- Applied per-value threshold colors and configured icon names (`thermometer`, `water`, `walk`, `body`, `speedometer`, `sunny`) to telemetry rows.
+- Rebuild dynamic controls when CONFIG metadata changes, and remove widgets whose definition is `nil`.
+- Corrected inputDgt to render as a numeric text input rather than a range slider. Range/rangeServo continue to use configured bounds and scale factor `k`.
+
+Trained-command/navigation additions:
+
+- The bottom Commands destination now opens a dedicated trained-command page instead of the Voice settings pivot.
+- Commands are stored in WP81 local app settings using the Android-compatible JSON field names: `phrase`, `deviceId`, `widgetId`, `value`, `variants`.
+- Long-pressing supported value/control widgets opens a training surface; a phrase can create a new command or add the selected widget action to an existing phrase.
+- Added open/close training for controls, read-value training for telemetry widgets, recording/typing of phrase variants, deletion of one action and clear-all confirmation.
+- Recognized speech first checks pending training/variant capture, then executes matching trained commands. Read-value commands speak the latest value; action commands use the existing MQTT control or configured widget topic.
+
+Files changed in phases 2–3 include the WP81 widget model, MQTT protocol parser/message, device repository, MQTT publish facade, and MainPage renderer/navigation.
+
+Limitations: this is a functional port pass, not verified full parity. The matcher is a smaller WP81-compatible implementation than Android's full fuzzy matcher; chart rendering is a native approximation and does not yet reproduce every Android series label/time axis/style detail. Permissions audit, cleanup, delete-widget, complete Marfa scenario hub navigation, all settings/dialogs and the Android back-stack still need a full pass. No WP81 build or Lumia 830 device test was available in this session.
