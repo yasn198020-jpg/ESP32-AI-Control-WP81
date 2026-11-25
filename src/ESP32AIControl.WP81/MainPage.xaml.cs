@@ -58,6 +58,9 @@ namespace ESP32AIControl.WP81
         private Grid _permissionsSection;
         private Grid _pendingMarfaSection;
         private Grid _deleteWidgetSection;
+        private Grid _scenarioHubSection;
+        private TextBox _scenarioProbeBox;
+        private TextBlock _scenarioProbeResult;
         private StackPanel _pendingMarfaList;
         private StackPanel _deleteWidgetList;
         private DispatcherTimer _pendingMarfaTimer;
@@ -143,6 +146,13 @@ namespace ESP32AIControl.WP81
             };
             MainSections.Children.Add(_deleteWidgetSection);
             BuildDeleteWidgetSection();
+            _scenarioHubSection = new Grid
+            {
+                Visibility = Visibility.Collapsed,
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 32, 32, 32))
+            };
+            MainSections.Children.Add(_scenarioHubSection);
+            BuildScenarioHubSection();
             _speechPlayback = new MediaElement
             {
                 Width = 1, Height = 1, Opacity = 0,
@@ -702,7 +712,7 @@ namespace ESP32AIControl.WP81
 
         private void ShowSection(int index)
         {
-            _selectedSection = Math.Max(0, Math.Min(8, index));
+            _selectedSection = Math.Max(0, Math.Min(9, index));
             UpdateNavigationState();
             if (_selectedSection == 4)
                 RefreshTrainedCommandsScreen();
@@ -738,6 +748,7 @@ namespace ESP32AIControl.WP81
             AddPopupMenuItem(items, "Отложенные команды Марфы", delegate { ShowSection(7); });
             AddPopupMenuItem(items, "Удалить элемент", delegate { ShowSection(8); });
             AddPopupMenuItem(items, "Планировщик команд ESP32", delegate { ShowSection(2); });
+            AddPopupMenuItem(items, "Центр сценариев Марфы", delegate { ShowSection(9); });
             AddPopupMenuSeparator(items);
             AddPopupMenuHeader(items, "ОБСЛУЖИВАНИЕ");
             AddPopupMenuItem(items, "Очистка приложения", delegate { ShowSection(5); });
@@ -1109,6 +1120,8 @@ namespace ESP32AIControl.WP81
                 _pendingMarfaSection.Visibility = _selectedSection == 7 ? Visibility.Visible : Visibility.Collapsed;
             if (_deleteWidgetSection != null)
                 _deleteWidgetSection.Visibility = _selectedSection == 8 ? Visibility.Visible : Visibility.Collapsed;
+            if (_scenarioHubSection != null)
+                _scenarioHubSection.Visibility = _selectedSection == 9 ? Visibility.Visible : Visibility.Collapsed;
 
             if (_selectedSection == 0)
                 PageSubtitle.Text = "Главная";
@@ -1126,8 +1139,10 @@ namespace ESP32AIControl.WP81
                 PageSubtitle.Text = "Разрешения приложения";
             else if (_selectedSection == 7)
                 PageSubtitle.Text = "Отложенные команды Марфы";
-            else
+            else if (_selectedSection == 8)
                 PageSubtitle.Text = "Удаление элемента";
+            else
+                PageSubtitle.Text = "Центр сценариев Марфы";
 
             SetNavigationButton(NavHomeButton, _selectedSection == 0);
             SetNavigationButton(NavMarfaButton, false);
@@ -3708,6 +3723,197 @@ namespace ESP32AIControl.WP81
             _cleanupSection.Children.Add(root);
         }
 
+
+
+        private void BuildScenarioHubSection()
+        {
+            var root = new Grid();
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+            var header = new StackPanel { Margin = new Thickness(16, 14, 16, 10) };
+            header.Children.Add(new TextBlock
+            {
+                Text = "Сценарии Марфы",
+                FontSize = 24,
+                FontWeight = Windows.UI.Text.FontWeights.SemiBold
+            });
+            header.Children.Add(new TextBlock
+            {
+                Text = "Управление сценариями ESP32 / IoTManager и локальными правилами. Проверка команды ниже только строит план — ничего на устройство не отправляет.",
+                FontSize = 13,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 185, 187, 198))
+            });
+            root.Children.Add(header);
+
+            var content = new StackPanel { Margin = new Thickness(14, 0, 14, 12) };
+            var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = content };
+            Grid.SetRow(scroll, 1);
+            root.Children.Add(scroll);
+
+            content.Children.Add(CreateScenarioHubCard(
+                "Сценарии ESP32 / IoTManager",
+                "Импорт export.json, проверка зависимостей и плана действий.",
+                "Открыть сценарий",
+                delegate
+                {
+                    ShowSection(3);
+                    SettingsPivot.SelectedIndex = 4;
+                }));
+            content.Children.Add(CreateScenarioHubCard(
+                "Мои локальные правила",
+                "Условия AND / OR, действия MQTT, уведомления, включение и отключение правил.",
+                "Открыть правила",
+                delegate
+                {
+                    ShowSection(3);
+                    SettingsPivot.SelectedIndex = 5;
+                }));
+
+            var preview = new StackPanel { Margin = new Thickness(12) };
+            preview.Children.Add(new TextBlock
+            {
+                Text = "Проверка команды",
+                FontSize = 18,
+                FontWeight = Windows.UI.Text.FontWeights.SemiBold
+            });
+            preview.Children.Add(new TextBlock
+            {
+                Text = "Например: «открой теплицу через 10 минут» или esp32/relay=1",
+                FontSize = 12,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 185, 187, 198)),
+                Margin = new Thickness(0, 3, 0, 7)
+            });
+            _scenarioProbeBox = new TextBox
+            {
+                Header = "Команда для проверки",
+                PlaceholderText = "Введите команду Марфе",
+                TextWrapping = TextWrapping.Wrap,
+                AcceptsReturn = false,
+                MinHeight = 48
+            };
+            preview.Children.Add(_scenarioProbeBox);
+            var check = new Button
+            {
+                Content = "Проверить план",
+                MinHeight = 44,
+                Margin = new Thickness(0, 8, 0, 6),
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255)),
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 32, 32, 32)),
+                FontWeight = Windows.UI.Text.FontWeights.SemiBold
+            };
+            check.Click += ScenarioProbeButton_Click;
+            preview.Children.Add(check);
+            _scenarioProbeResult = new TextBlock
+            {
+                Text = "Результат проверки появится здесь.",
+                FontSize = 13,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 190, 192, 201)),
+                Margin = new Thickness(0, 4, 0, 2)
+            };
+            preview.Children.Add(_scenarioProbeResult);
+            content.Children.Add(new Border
+            {
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 43, 44, 52)),
+                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 70, 72, 82)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(12),
+                Margin = new Thickness(2, 3, 2, 8),
+                Child = preview
+            });
+
+            _scenarioHubSection.Children.Add(root);
+        }
+
+        private Border CreateScenarioHubCard(string title, string description, string actionText, Action action)
+        {
+            var panel = new StackPanel { Margin = new Thickness(12) };
+            panel.Children.Add(new TextBlock
+            {
+                Text = title,
+                FontSize = 17,
+                FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                TextWrapping = TextWrapping.Wrap
+            });
+            panel.Children.Add(new TextBlock
+            {
+                Text = description,
+                FontSize = 12,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 185, 187, 198)),
+                Margin = new Thickness(0, 4, 0, 8)
+            });
+            var button = new Button
+            {
+                Content = actionText,
+                MinHeight = 42,
+                HorizontalAlignment = HorizontalAlignment.Left
+            };
+            button.Click += delegate { action(); };
+            panel.Children.Add(button);
+            return new Border
+            {
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 43, 44, 52)),
+                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 70, 72, 82)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(12),
+                Margin = new Thickness(2, 3, 2, 8),
+                Child = panel
+            };
+        }
+
+        private void ScenarioProbeButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var raw = (_scenarioProbeBox == null ? string.Empty : _scenarioProbeBox.Text).Trim();
+                if (raw.Length == 0)
+                    throw new InvalidOperationException("Введите команду для проверки.");
+
+                var parsed = _voiceParser.Parse(raw);
+                if (parsed == null)
+                {
+                    ValidateCommand(raw);
+                    parsed = new ParsedVoiceCommand { Command = raw };
+                }
+
+                if (parsed.ExecuteAt.HasValue)
+                {
+                    _scenarioProbeResult.Text =
+                        "Марфа распознаёт отложенную команду:\n" + parsed.Command +
+                        "\nВремя выполнения: " + parsed.ExecuteAt.Value.ToLocalTime().ToString("dd.MM.yyyy HH:mm", CultureInfo.InvariantCulture) +
+                        "\nКоманда не поставлена в очередь и не отправлена.";
+                    return;
+                }
+
+                var plan = _commandExecutor.BuildPlan(parsed.Command);
+                if (plan == null || plan.Actions == null || plan.Actions.Count == 0)
+                {
+                    _scenarioProbeResult.Text = "Для команды не найдено действий. Проверьте ID устройства, виджета и сценарий IoTManager.";
+                    return;
+                }
+
+                var lines = new List<string>();
+                lines.Add("Команда: " + parsed.Command);
+                lines.Add("План действий:");
+                for (var i = 0; i < plan.Actions.Count; i++)
+                {
+                    var item = plan.Actions[i];
+                    lines.Add((item.IsDependency ? "Зависимость: " : "Действие: ") + item.Command +
+                        (string.IsNullOrWhiteSpace(item.Reason) ? string.Empty : " — " + item.Reason));
+                }
+                lines.Add("Проверка завершена. На ESP32 ничего не отправлено.");
+                _scenarioProbeResult.Text = string.Join(Environment.NewLine, lines);
+            }
+            catch (Exception ex)
+            {
+                _scenarioProbeResult.Text = "Ошибка проверки: " + ex.Message;
+            }
+        }
 
         private void BuildPendingMarfaSection()
         {
