@@ -165,3 +165,22 @@ Files changed:
 This is the first visual shell pass, not completion of the full port. The next implementation passes must cover every Android destination, settings form, history/graph component, dialogs, selection controls, progress UI, and dynamic dashboard widgets. The WP81 Commands bottom item still routes to the existing voice/settings surface because a trained-command repository/screen was not found in the WP81 project; do not claim feature parity until that gap is resolved.
 
 No MQTT, UDP, WebSocket, voice recognition, scheduler, history persistence, or ESP32 command logic was changed in this phase. A device build and Lumia 830 visual check are still required.
+
+
+## Dashboard renderer parity gap discovered during implementation
+
+A direct comparison of Android `IoTManagerWidgetRenderer.kt` with WP81 `CreateWidgetVisual` shows that the current WP81 model is materially less expressive:
+
+- Android widget rendering supports toggle, button, date/time/text/number inputs, range/servo sliders, select, progress line, circular progress, fill gauge, and chart1..chart6.
+- Android reads widget definition/config JSON (unit, ranges, colors, thresholds, chart series and display options) and uses those values to draw each control.
+- WP81 `WidgetState` currently contains only DeviceId, Id, Description, WidgetType, Page, Order, Value and UpdatedAt. The current WP81 visual factory renders a generic row, switch, action button, or slider; it cannot reproduce Android's full widget-specific visuals without first carrying over the widget definition/config metadata.
+- The Android dashboard uses mostly flat rows with 16dp horizontal inset and 6–8dp vertical spacing; the WP81 version currently wraps each widget row in its own rounded card. This is a visible mismatch.
+
+Required next dashboard work:
+
+1. Extend WP81's parsed widget model to retain the Android-equivalent widget definition and configuration JSON, without changing MQTT command semantics.
+2. Port the Android widget renderer types one by one to WP8.1 XAML/C#.
+3. Match exact row spacing, icons, value chips, controls, charts, gauges, progress and threshold colors.
+4. Verify touch/long-press training behavior and every widget type on the Lumia 830.
+
+Do not simplify the Android widget set to generic labels or static mockups. The renderer port is required for genuine visual parity.
