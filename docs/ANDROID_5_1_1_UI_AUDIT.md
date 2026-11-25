@@ -142,3 +142,26 @@ This should be resolved as part of navigation parity, not by changing voice reco
 4. **Reusable controls:** card, field, setting row, toggle, slider, button, list row, dialog and progress indicator.
 5. **Polish and device verification:** typography, icon assets, touch targets, scroll/keyboard behavior and 720x1280 Lumia layout.
 
+
+
+## Visual port implementation — phase 1 (2026-11-26)
+
+Applied to the WP81 branch:
+
+- Main shell background normalized to Android's `#202020`.
+- Bottom navigation surface aligned to Android's `#24252A`.
+- Primary accent updated to Material 3 dark primary `#D0BCFF` in XAML resources and dynamic C# navigation/menu controls.
+- Top app bar height changed from 60 to 84 effective XAML units to match Android's 84dp app header.
+- Bottom navigation height changed from 68 to 80 to better match Android NavigationBar proportions.
+- Bottom navigation glyphs aligned with Android's symbols: `▲`, `🎙`, `🎤`, `📊`, `⏱`.
+- Button and input minimum dimensions increased for touch usability.
+- Navigation popup offset adjusted for the taller app bar.
+
+Files changed:
+
+- `src/ESP32AIControl.WP81/MainPage.xaml`
+- `src/ESP32AIControl.WP81/MainPage.xaml.cs`
+
+This is the first visual shell pass, not completion of the full port. The next implementation passes must cover every Android destination, settings form, history/graph component, dialogs, selection controls, progress UI, and dynamic dashboard widgets. The WP81 Commands bottom item still routes to the existing voice/settings surface because a trained-command repository/screen was not found in the WP81 project; do not claim feature parity until that gap is resolved.
+
+No MQTT, UDP, WebSocket, voice recognition, scheduler, history persistence, or ESP32 command logic was changed in this phase. A device build and Lumia 830 visual check are still required.
