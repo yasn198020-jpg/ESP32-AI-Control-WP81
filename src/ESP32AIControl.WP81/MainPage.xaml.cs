@@ -1159,6 +1159,7 @@ namespace ESP32AIControl.WP81
                 _appSettings.AutoExportPeriod = GetAutoExportTag();
                 _appSettings.VoiceOpenCommand = VoiceOpenCommandBox.Text.Trim();
                 _appSettings.VoiceCloseCommand = VoiceCloseCommandBox.Text.Trim();
+                _appSettings.TtsVoiceId = SelectedSpeechVoiceId();
                 _appSettings.IoTManagerScenario = ScenarioTextBox.Text ?? string.Empty;
 
                 // FileSavePicker is not supported reliably on Windows Phone 8.1.
@@ -1479,6 +1480,7 @@ namespace ESP32AIControl.WP81
             RetentionDaysBox.Text = _appSettings.RetentionDays.ToString(CultureInfo.InvariantCulture);
             VoiceOpenCommandBox.Text = _appSettings.VoiceOpenCommand;
             VoiceCloseCommandBox.Text = _appSettings.VoiceCloseCommand;
+            LoadAvailableSpeechVoices();
             ScenarioTextBox.Text = _appSettings.IoTManagerScenario;
             RefreshSavedMqttProfiles();
 
@@ -4251,23 +4253,115 @@ namespace ESP32AIControl.WP81
             return normalized;
         }
 
+        private void LoadAvailableSpeechVoices()
+        {
+            if (TtsVoiceBox == null) return;
+            TtsVoiceBox.Items.Clear();
+
+            try
+            {
+                var voices = SpeechSynthesizer.AllVoices.ToList();
+                foreach (var voice in voices)
+                {
+                    var label = voice.DisplayName + "  (" + voice.Language + ")";
+                    TtsVoiceBox.Items.Add(new ComboBoxItem
+                    {
+                        Content = label,
+                        Tag = voice.Id
+                    });
+                }
+
+                ComboBoxItem selected = null;
+                foreach (var item in TtsVoiceBox.Items)
+                {
+                    var candidate = item as ComboBoxItem;
+                    if (candidate != null &&
+                        string.Equals(candidate.Tag as string, _appSettings == null ? string.Empty : _appSettings.TtsVoiceId,
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        selected = candidate;
+                        break;
+                    }
+                }
+
+                if (selected == null)
+                {
+                    selected = TtsVoiceBox.Items
+                        .OfType<ComboBoxItem>()
+                        .FirstOrDefault(item =>
+                        {
+                            var voice = voices.FirstOrDefault(v => string.Equals(v.Id, item.Tag as string, StringComparison.OrdinalIgnoreCase));
+                            return voice != null && (voice.Language ?? string.Empty).StartsWith("ru", StringComparison.OrdinalIgnoreCase);
+                        });
+                }
+
+                if (selected == null)
+                    selected = TtsVoiceBox.Items.OfType<ComboBoxItem>().FirstOrDefault();
+
+                TtsVoiceBox.SelectedItem = selected;
+                TtsVoiceStatus.Text = selected == null
+                    ? "В системе не найден установленный голос синтеза речи."
+                    : "Доступно голосов: " + voices.Count.ToString(CultureInfo.InvariantCulture) +
+                      ". Для ответа Марфы будет использован выбранный голос.";
+            }
+            catch (Exception ex)
+            {
+                TtsVoiceStatus.Text = "Не удалось получить список голосов: " + ex.Message;
+            }
+        }
+
+        private string SelectedSpeechVoiceId()
+        {
+            var item = TtsVoiceBox == null ? null : TtsVoiceBox.SelectedItem as ComboBoxItem;
+            return item == null ? string.Empty : (item.Tag as string ?? string.Empty);
+        }
+
+        private async void TtsTestButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (string.IsNullOrEmpty(SelectedSpeechVoiceId()))
+            {
+                TtsVoiceStatus.Text = "Нет выбранного системного голоса.";
+                return;
+            }
+
+            TtsVoiceStatus.Text = "Проверка голоса…";
+            await SpeakTextAsync("Марфа слушает. Проверка синтеза речи.");
+            TtsVoiceStatus.Text = "Тестовая фраза отправлена выбранному голосу.";
+        }
+
         private async Task SpeakTextAsync(string text)
         {
             try
             {
                 if (_speechSynthesizer == null)
-                {
                     _speechSynthesizer = new SpeechSynthesizer();
-                    var russianVoice = SpeechSynthesizer.AllVoices.FirstOrDefault(v =>
+
+                var selectedId = SelectedSpeechVoiceId();
+                var selectedVoice = SpeechSynthesizer.AllVoices.FirstOrDefault(v =>
+                    !string.IsNullOrWhiteSpace(selectedId) &&
+                    string.Equals(v.Id, selectedId, StringComparison.OrdinalIgnoreCase));
+                if (selectedVoice == null && !string.IsNullOrWhiteSpace(_appSettings == null ? string.Empty : _appSettings.TtsVoiceId))
+                    selectedVoice = SpeechSynthesizer.AllVoices.FirstOrDefault(v =>
+                        string.Equals(v.Id, _appSettings.TtsVoiceId, StringComparison.OrdinalIgnoreCase));
+                if (selectedVoice == null)
+                    selectedVoice = SpeechSynthesizer.AllVoices.FirstOrDefault(v =>
                         (v.Language ?? string.Empty).StartsWith("ru", StringComparison.OrdinalIgnoreCase));
-                    if (russianVoice != null)
-                        _speechSynthesizer.Voice = russianVoice;
-                }
+                if (selectedVoice == null)
+                    selectedVoice = SpeechSynthesizer.DefaultVoice;
+
+                if (selectedVoice != null)
+                    _speechSynthesizer.Voice = selectedVoice;
+
                 var stream = await _speechSynthesizer.SynthesizeTextToStreamAsync(text);
                 _speechPlayback.SetSource(stream, stream.ContentType);
                 _speechPlayback.Play();
             }
-            catch (Exception ex) { Log("TTS ERROR: " + ex.Message); }
+            catch (Exception ex)
+            {
+                if (TtsVoiceStatus != null)
+                    TtsVoiceStatus.Text = "Ошибка синтеза речи: " + ex.Message;
+                Log("TTS ERROR: " + ex.Message);
+            }
         }
 
         private void Log(string text)
