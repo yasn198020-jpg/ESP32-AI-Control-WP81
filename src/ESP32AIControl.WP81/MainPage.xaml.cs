@@ -568,6 +568,8 @@ namespace ESP32AIControl.WP81
 
         private void MainPage_Unloaded(object sender, RoutedEventArgs e)
         {
+            if (_pendingMarfaTimer != null)
+                _pendingMarfaTimer.Stop();
             if (_autoExportTimer != null)
                 _autoExportTimer.Stop();
             UnsubscribeNetworkStatusChanged();
