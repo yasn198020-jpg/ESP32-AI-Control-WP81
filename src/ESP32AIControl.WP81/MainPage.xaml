@@ -346,30 +346,62 @@
                 <PivotItem Header="Хранение">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel Margin="10,4,10,12">
+                            <StackPanel Margin="4,6,4,8">
+                                <TextBlock Text="Хранение данных" FontSize="19" FontWeight="SemiBold"
+                                           Foreground="#FFEAF1F7" Margin="0,0,0,3"/>
+                                <TextBlock Text="Управление записью показаний и автоматическим созданием отчётов."
+                                           FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap"/>
+                            </StackPanel>
                             <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1"
-                                    CornerRadius="14" Padding="12" Margin="0,8,0,8">
+                                    CornerRadius="14" Padding="14" Margin="0,0,0,8">
                                 <StackPanel>
                                     <TextBlock Text="ХРАНЕНИЕ ИЗМЕРЕНИЙ" FontSize="14" FontWeight="SemiBold"
-                                               Foreground="#FFD0BCFF" Margin="0,0,0,4"/>
-                                    <TextBlock Text="Настройте частоту записи показаний и срок их хранения." FontSize="12"
-                                               Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,0,0,4"/>
-                                    <TextBox x:Name="MeasurementIntervalBox" Header="Интервал записи, секунд" Text="60"/>
-                                    <TextBox x:Name="RetentionDaysBox" Header="Период хранения, дней" Text="30"/>
+                                               Foreground="#FFD0BCFF" Margin="0,0,0,5"/>
+                                    <TextBlock Text="Задайте, как часто приложение записывает показания датчиков и сколько дней сохраняет историю."
+                                               FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap"
+                                               Margin="0,0,0,8"/>
+                                    <TextBlock Text="Интервал записи" FontSize="13" FontWeight="SemiBold"
+                                               Foreground="#FFEAF1F7" Margin="0,2,0,0"/>
+                                    <TextBox x:Name="MeasurementIntervalBox" Header="Секунды между записями"
+                                             Text="60" PlaceholderText="Например, 60"/>
+                                    <TextBlock Text="Меньшее значение даёт более подробную историю и увеличивает количество записей."
+                                               FontSize="11" Foreground="#FFACADB8" TextWrapping="Wrap"
+                                               Margin="2,0,2,8"/>
+                                    <TextBlock Text="Срок хранения истории" FontSize="13" FontWeight="SemiBold"
+                                               Foreground="#FFEAF1F7" Margin="0,2,0,0"/>
+                                    <TextBox x:Name="RetentionDaysBox" Header="Количество дней"
+                                             Text="30" PlaceholderText="Например, 30"/>
+                                    <TextBlock Text="Укажите число дней, за которые нужно сохранять измерения."
+                                               FontSize="11" Foreground="#FFACADB8" TextWrapping="Wrap"
+                                               Margin="2,0,2,0"/>
                                 </StackPanel>
                             </Border>
                             <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1"
-                                    CornerRadius="14" Padding="12" Margin="0,4,0,8">
+                                    CornerRadius="14" Padding="14" Margin="0,0,0,8">
                                 <StackPanel>
-                                    <TextBlock Text="АВТОЭКСПОРТ" FontSize="14" FontWeight="SemiBold"
-                                               Foreground="#FFD0BCFF" Margin="0,0,0,4"/>
-                                    <TextBlock Text="Периодичность автоматического формирования отчёта Word." FontSize="12"
-                                               Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,0,0,4"/>
-                                    <ComboBox x:Name="AutoExportBox" Header="Автоэкспорт Word">
-                                        <ComboBoxItem Content="Никогда" Tag="Never"/>
-                                        <ComboBoxItem Content="1 день" Tag="Day"/>
-                                        <ComboBoxItem Content="Неделя" Tag="Week"/>
-                                        <ComboBoxItem Content="Месяц" Tag="Month"/>
+                                    <TextBlock Text="АВТОМАТИЧЕСКИЙ ЭКСПОРТ" FontSize="14" FontWeight="SemiBold"
+                                               Foreground="#FFD0BCFF" Margin="0,0,0,5"/>
+                                    <TextBlock Text="Приложение может периодически формировать отчёт Word с историей измерений."
+                                               FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap"
+                                               Margin="0,0,0,8"/>
+                                    <ComboBox x:Name="AutoExportBox" Header="Период создания отчёта">
+                                        <ComboBoxItem Content="Отключён" Tag="Never"/>
+                                        <ComboBoxItem Content="Каждый день" Tag="Day"/>
+                                        <ComboBoxItem Content="Раз в неделю" Tag="Week"/>
+                                        <ComboBoxItem Content="Раз в месяц" Tag="Month"/>
                                     </ComboBox>
+                                    <TextBlock Text="При выборе периода автоматический экспорт будет выполняться по расписанию. Для отключения выберите «Отключён»."
+                                               FontSize="11" Foreground="#FFACADB8" TextWrapping="Wrap"
+                                               Margin="2,8,2,0"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="#FF25262D" BorderBrush="#FF41434D" BorderThickness="1"
+                                    CornerRadius="12" Padding="12" Margin="0,0,0,8">
+                                <StackPanel>
+                                    <TextBlock Text="ПРИМЕНЕНИЕ НАСТРОЕК" FontSize="12" FontWeight="SemiBold"
+                                               Foreground="#FFD0BCFF" Margin="0,0,0,4"/>
+                                    <TextBlock Text="После изменения параметров нажмите общую кнопку «Сохранить настройки» внизу экрана. Настройки хранения и автоэкспорта сохраняются вместе с остальными параметрами приложения."
+                                               FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap"/>
                                 </StackPanel>
                             </Border>
                         </StackPanel>
