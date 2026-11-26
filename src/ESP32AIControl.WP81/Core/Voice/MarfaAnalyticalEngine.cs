@@ -286,7 +286,18 @@ namespace ESP32AIControl.WP81.Core.Voice
             return (widgets ?? new List<WidgetState>()).Any(w =>
                 !string.IsNullOrWhiteSpace(w.Page) &&
                 RussianSemanticNormalizer.Normalize(w.Page).Length == 0 &&
-                w.Page.Any(ch => !char.IsLetterOrDigit(ch) && !char.IsWhiteSpace(ch)));
+                HasNonLetterDigitOrWhitespace(w.Page));
+        }
+
+        private static bool HasNonLetterDigitOrWhitespace(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return false;
+            for (var i = 0; i < value.Length; i++)
+            {
+                if (!char.IsLetterOrDigit(value[i]) && !char.IsWhiteSpace(value[i]))
+                    return true;
+            }
+            return false;
         }
 
         private static List<string> UnknownContextWords(string text, IList<WidgetState> widgets)
