@@ -6322,8 +6322,11 @@ namespace ESP32AIControl.WP81
                 var pitchText = (pitchPercent >= 0 ? "+" : string.Empty) + pitchPercent.ToString(CultureInfo.InvariantCulture) + "%";
                 var safeText = (text ?? string.Empty).Replace("&", "&amp;").Replace("<", "&lt;")
                     .Replace(">", "&gt;").Replace("\"", "&quot;").Replace("'", "&apos;");
-                var ssml = "<speak version=\"1.0\" xmlns=\"http://www.w3.org/2001/10/synthesis\" xml:lang=\"ru-RU\"><prosody rate=\"" +
-                    rateText + "\" pitch=\"" + pitchText + "\">" + safeText + "</prosody></speak>";
+                var language = selectedVoice == null || string.IsNullOrWhiteSpace(selectedVoice.Language)
+                    ? "ru-RU" : selectedVoice.Language.Replace("&", "&amp;").Replace("\"", "&quot;");
+                var ssml = "<speak version=\"1.0\" xmlns=\"http://www.w3.org/2001/10/synthesis\" xml:lang=\"" +
+                    language + "\"><prosody rate=\"" + rateText + "\" pitch=\"" + pitchText + "\">" +
+                    safeText + "</prosody></speak>";
 
                 var stream = await _speechSynthesizer.SynthesizeSsmlToStreamAsync(ssml);
                 _speechPlayback.SetSource(stream, stream.ContentType);
@@ -6373,6 +6376,12 @@ namespace ESP32AIControl.WP81
             else if (filter == "WS")
                 visible = visible.Where(line => line.IndexOf("WS", StringComparison.OrdinalIgnoreCase) >= 0 ||
                     line.IndexOf("WebSocket", StringComparison.OrdinalIgnoreCase) >= 0);
+            else if (filter == "ACTION")
+                visible = visible.Where(line => line.IndexOf("ACTION", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    line.IndexOf("ДЕЙСТВ", StringComparison.OrdinalIgnoreCase) >= 0);
+            else if (filter == "VERIFY")
+                visible = visible.Where(line => line.IndexOf("VERIFY", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    line.IndexOf("ПРОВЕР", StringComparison.OrdinalIgnoreCase) >= 0);
             else if (filter == "ERROR")
                 visible = visible.Where(line => line.IndexOf("ERROR", StringComparison.OrdinalIgnoreCase) >= 0 ||
                     line.IndexOf("ошибка", StringComparison.OrdinalIgnoreCase) >= 0);
