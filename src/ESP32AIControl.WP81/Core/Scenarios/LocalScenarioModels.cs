@@ -8,6 +8,7 @@ namespace ESP32AIControl.WP81.Core.Scenarios
         public string WidgetId { get; set; }
         public string Operator { get; set; }
         public double Threshold { get; set; }
+        public long DurationMs { get; set; }
         public string Connector { get; set; }
 
         public LocalScenarioCondition()
@@ -59,10 +60,12 @@ namespace ESP32AIControl.WP81.Core.Scenarios
         public bool Fired { get; set; }
         public bool AwaitingTrueUpdate { get; set; }
         public IDictionary<int, bool> ConditionValues { get; private set; }
+        public IDictionary<int, DateTimeOffset> ConditionStartedAt { get; private set; }
 
         public LocalScenarioRuntimeState()
         {
             ConditionValues = new Dictionary<int, bool>();
+            ConditionStartedAt = new Dictionary<int, DateTimeOffset>();
         }
     }
 }
