@@ -939,22 +939,43 @@ namespace ESP32AIControl.WP81.Core.Scenarios
 
                     var resolved = new List<string>();
                     bool complete = true;
+                    bool hasActiveDefinition = false;
                     var context = new IoTScenarioEvaluationContext(
                         new Dictionary<string, string>(variables, StringComparer.OrdinalIgnoreCase));
-                    foreach (var definition in definitions)
+                    foreach (var rule in model.Rules)
                     {
-                        var value = IoTScenarioEvaluator.Evaluate(definition.Expression, context);
-                        string formatted;
-                        if (!TryFormatScenarioValue(value, out formatted))
+                        foreach (var definition in rule.Actions.Where(a =>
+                            string.Equals(a.TargetId, id, StringComparison.OrdinalIgnoreCase)))
                         {
-                            complete = false;
-                            break;
+                            // An assignment inside IF/ELSE is usable only when
+                            // its branch condition is known to be active. Do not
+                            // treat an inactive branch as a competing definition.
+                            var condition = rule.Condition == null
+                                ? null
+                                : IoTScenarioEvaluator.Evaluate(rule.Condition.Expression, context);
+                            if (condition != null && condition is IoTValue.Unknown)
+                            {
+                                complete = false;
+                                break;
+                            }
+                            if (condition != null && !IoTScenarioEvaluator.IsTruthy(condition))
+                                continue;
+
+                            hasActiveDefinition = true;
+                            var value = IoTScenarioEvaluator.Evaluate(definition.Expression, context);
+                            string formatted;
+                            if (!TryFormatScenarioValue(value, out formatted))
+                            {
+                                complete = false;
+                                break;
+                            }
+                            resolved.Add(formatted);
                         }
-                        resolved.Add(formatted);
+                        if (!complete) break;
                     }
 
                     var unique = resolved.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-                    if (complete && unique.Count == 1)
+                    if (complete && hasActiveDefinition && unique.Count == 1)
                     {
                         variables[id] = unique[0];
                         internalIdentifiers.Remove(id);
