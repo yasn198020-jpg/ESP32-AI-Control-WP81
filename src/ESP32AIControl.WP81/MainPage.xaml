@@ -807,7 +807,10 @@
                                     </ComboBox>
                                     <Button Content="Копировать отображаемые записи"
                                             Click="CopyLogButton_Click"
-                                            HorizontalAlignment="Stretch" Margin="0,2,0,8"/>
+                                            HorizontalAlignment="Stretch" Margin="0,2,0,4"/>
+                                    <TextBlock x:Name="LogActionStatus" Text=""
+                                               FontSize="11" Foreground="#FFACADB8"
+                                               TextWrapping="Wrap" Margin="2,0,2,8"/>
                                     <Border Background="#FF1E1F25" BorderBrush="#FF41434D"
                                             BorderThickness="1" CornerRadius="10" Padding="8">
                                         <ScrollViewer Height="230" VerticalScrollBarVisibility="Auto"
