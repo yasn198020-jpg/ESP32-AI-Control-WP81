@@ -2149,9 +2149,9 @@ namespace ESP32AIControl.WP81
                 Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 43, 44, 52)),
                 BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 65, 67, 77)),
                 CornerRadius = new CornerRadius(14),
-                Padding = new Thickness(14, 10, 14, 10),
+                Padding = new Thickness(12, 10, 12, 10),
                 BorderThickness = new Thickness(1),
-                Margin = new Thickness(0, 0, 0, 6)
+                Margin = new Thickness(0, 0, 0, 8)
             };
             var shellContent = new StackPanel();
 
@@ -2180,7 +2180,7 @@ namespace ESP32AIControl.WP81
             visual.Title = new TextBlock
             {
                 Text = visibleTitle,
-                FontSize = iconElement == null ? 16 : 17,
+                FontSize = iconElement == null ? 15 : 16,
                 Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 243, 244, 246)),
                 TextWrapping = TextWrapping.Wrap,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -2192,9 +2192,9 @@ namespace ESP32AIControl.WP81
             visual.ValueText = new TextBlock
             {
                 Text = (string.IsNullOrEmpty(state.Value) ? "—" : state.Value) + (string.IsNullOrWhiteSpace(state.Unit) ? string.Empty : " " + state.Unit),
-                FontSize = 18,
+                FontSize = 17,
                 FontWeight = Windows.UI.Text.FontWeights.SemiBold,
-                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 98, 168, 255)),
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255)),
                 TextAlignment = TextAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
@@ -2228,7 +2228,7 @@ namespace ESP32AIControl.WP81
                     MinWidth = 76,
                     MaxWidth = 128,
                     Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255)),
-                    Foreground = new SolidColorBrush(Windows.UI.Colors.White),
+                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 32, 32, 32)),
                     BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255)),
                     Padding = new Thickness(12, 7, 12, 7),
                     HorizontalAlignment = HorizontalAlignment.Right,
@@ -2386,7 +2386,7 @@ namespace ESP32AIControl.WP81
                     Margin = new Thickness(6, 0, 0, 0),
                     VerticalAlignment = VerticalAlignment.Center,
                     Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255)),
-                    Foreground = new SolidColorBrush(Windows.UI.Colors.White)
+                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 32, 32, 32))
                 };
                 sendButton.Click += async delegate
                 {
@@ -2447,7 +2447,7 @@ namespace ESP32AIControl.WP81
             {
                 FontSize = 11,
                 Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 172, 173, 184)),
-                Margin = new Thickness(50, 0, 8, 2),
+                Margin = new Thickness(46, 2, 8, 0),
                 TextWrapping = TextWrapping.NoWrap,
                 Visibility = Visibility.Collapsed
             };
