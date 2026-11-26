@@ -452,7 +452,7 @@
                             </StackPanel>
                             <TextBlock Text="СОХРАНЁННЫЕ СЦЕНАРИИ" FontWeight="SemiBold"
                                        Foreground="#FFD0BCFF" Margin="0,6,0,4"/>
-                            <ListView x:Name="LocalScenariosList" Height="125"
+                            <ListView x:Name="LocalScenariosList" Height="220"
                                       SelectionMode="Single"
                                       SelectionChanged="LocalScenariosList_SelectionChanged"/>
                             <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
