@@ -229,6 +229,7 @@ namespace ESP32AIControl.WP81
             try
             {
                 _appSettings = await _settingsStore.LoadAsync();
+                RefreshGraphSetPicker();
                 LogText.Text = string.Join(Environment.NewLine, _connectionJournal.Load());
                 if (_appSettings.SavedMqttProfiles == null)
                     _appSettings.SavedMqttProfiles = new List<SavedMqttProfile>();
