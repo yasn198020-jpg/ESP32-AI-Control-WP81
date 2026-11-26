@@ -3397,6 +3397,42 @@ namespace ESP32AIControl.WP81
             }
         }
 
+        private void HistoryWidgetList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            var selected = HistoryWidgetList == null ? null : HistoryWidgetList.SelectedItem as ListViewItem;
+            var key = selected == null ? null : selected.Tag as string;
+            if (string.IsNullOrWhiteSpace(key) || !ContainsComboValue(GraphWidgetBox, key)) return;
+            GraphWidgetBox.SelectedItem = key;
+            BuildGraphButton_Click(this, null);
+        }
+
+        private void AddHistoryWidgetItem(WidgetState state)
+        {
+            if (HistoryWidgetList == null || state == null) return;
+            for (var i = 0; i < HistoryWidgetList.Items.Count; i++)
+            {
+                var existing = HistoryWidgetList.Items[i] as ListViewItem;
+                if (existing != null && string.Equals(existing.Tag as string, state.Key, StringComparison.Ordinal))
+                    return;
+            }
+
+            var body = new StackPanel { Margin = new Thickness(2, 3, 2, 3) };
+            body.Children.Add(new TextBlock
+            {
+                Text = string.IsNullOrWhiteSpace(state.Description) ? state.Id : state.Description,
+                FontSize = 15,
+                FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(Windows.UI.Colors.White)
+            });
+            body.Children.Add(new TextBlock
+            {
+                Text = (state.Value ?? "—") + (state.Unit ?? string.Empty) + "   •   " + (state.Page ?? state.DeviceId),
+                FontSize = 12,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 172, 173, 184))
+            });
+            HistoryWidgetList.Items.Add(new ListViewItem { Content = body, Tag = state.Key });
+        }
+
         private void ToggleGraphSettingsButton_Click(object sender, RoutedEventArgs e)
         {
             if (GraphSettingsCard == null) return;
@@ -3426,18 +3462,23 @@ namespace ESP32AIControl.WP81
                 if (GraphWidgetBox.SelectedIndex < 0)
                     GraphWidgetBox.SelectedIndex = 0;
             }
+            AddHistoryWidgetItem(state);
         }
 
         private void RefreshGraphWidgets()
         {
             var selected = GraphWidgetBox.SelectedItem as string;
             GraphWidgetBox.Items.Clear();
+            if (HistoryWidgetList != null) HistoryWidgetList.Items.Clear();
 
             foreach (var state in _devices.Widgets.OrderBy(delegate(WidgetState s) { return s.Page; }).ThenBy(delegate(WidgetState s) { return s.Order; }))
             {
                 _widgetIndex[state.Key] = state;
                 if (IsNumericHistoryWidget(state))
+                {
                     GraphWidgetBox.Items.Add(state.Key);
+                    AddHistoryWidgetItem(state);
+                }
             }
 
             if (!string.IsNullOrEmpty(selected) && ContainsComboValue(GraphWidgetBox, selected))
