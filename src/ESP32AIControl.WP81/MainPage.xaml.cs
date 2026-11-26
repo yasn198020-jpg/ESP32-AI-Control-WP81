@@ -1930,7 +1930,7 @@ namespace ESP32AIControl.WP81
             for (var i = 0; i < diagnostics.Count; i++)
             {
                 var item = diagnostics[i];
-                if (item.Status != null && item.Status.StartsWith("Неоднозначный", StringComparison.OrdinalIgnoreCase))
+                if (item.Status != null && item.Status.StartsWith("Неоднознач", StringComparison.OrdinalIgnoreCase))
                     ambiguous++;
                 else if (item.Status != null && item.Status.StartsWith("Не найден", StringComparison.OrdinalIgnoreCase))
                     unresolved++;
@@ -1941,6 +1941,8 @@ namespace ESP32AIControl.WP81
                     item.Variable + " · " + item.Usage + Environment.NewLine +
                     item.Status + device + Environment.NewLine +
                     (item.Description ?? string.Empty) +
+                    (item.AssignedValues.Count == 0 ? string.Empty :
+                        Environment.NewLine + "Значения в правилах: " + string.Join(", ", item.AssignedValues)) +
                     " · встречается: " + item.Occurrences.ToString(CultureInfo.InvariantCulture));
             }
 
