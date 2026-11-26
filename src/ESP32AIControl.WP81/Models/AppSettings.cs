@@ -18,6 +18,7 @@ namespace ESP32AIControl.WP81.Models
         [DataMember] public string DefaultMqttProfileName { get; set; }
         [DataMember] public float UiFontScale { get; set; }
         [DataMember] public int MeasurementIntervalSeconds { get; set; }
+        [DataMember] public Dictionary<string, int> WidgetMeasurementIntervals { get; set; }
         [DataMember] public int RetentionDays { get; set; }
         [DataMember] public string AutoExportPeriod { get; set; }
         [DataMember] public string VoiceOpenCommand { get; set; }
@@ -38,6 +39,7 @@ namespace ESP32AIControl.WP81.Models
             DefaultMqttProfileName = string.Empty;
             UiFontScale = 0.85f;
             MeasurementIntervalSeconds = 60;
+            WidgetMeasurementIntervals = new Dictionary<string, int>();
             RetentionDays = 30;
             AutoExportPeriod = "Never";
             VoiceOpenCommand = string.Empty;
