@@ -208,8 +208,10 @@ namespace ESP32AIControl.WP81.Core.Voice
             _lastTarget = best.Widget;
             var name = string.IsNullOrWhiteSpace(best.Widget.Description) ? best.Widget.Id : best.Widget.Description;
             var value = string.IsNullOrWhiteSpace(best.Widget.Value) ? "значение пока неизвестно" : best.Widget.Value;
-            var unit = string.IsNullOrWhiteSpace(best.Widget.Unit) ? string.Empty : " " + best.Widget.Unit;
-            var result = Result(MarfaCommandKind.ReadValue, name + ": " + value + unit + ".");
+            var spokenValue = string.IsNullOrWhiteSpace(best.Widget.Value)
+                ? value
+                : MarfaSpeechTextFormatter.FormatValue(best.Widget.Value, best.Widget.Unit, best.Widget.Description);
+            var result = Result(MarfaCommandKind.ReadValue, name + ": " + spokenValue + ".");
             result.Value = value;
             return result;
         }
@@ -316,15 +318,12 @@ namespace ESP32AIControl.WP81.Core.Voice
 
         private static List<string> Tokens(string text)
         {
-            return Regex.Split(Normalize(text), @"[^а-яa-z0-9]+")
-                .Where(t => t.Length > 0).ToList();
+            return RussianSemanticNormalizer.Tokens(text).ToList();
         }
 
         private static string Normalize(string text)
         {
-            var value = (text ?? string.Empty).ToLowerInvariant().Replace('ё', 'е');
-            value = Regex.Replace(value, @"[^а-яa-z0-9/=_\s-]", " ");
-            return Regex.Replace(value, @"\s+", " ").Trim();
+            return RussianSemanticNormalizer.Normalize(text);
         }
 
         private static bool HasAny(string text, params string[] values)
