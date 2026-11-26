@@ -290,12 +290,12 @@ namespace ESP32AIControl.WP81.Core.Voice
 
         private static bool HasNegation(string text)
         {
-            return Regex.IsMatch(text, @"\bне\s+(включ|выключ|открой|закрой|запускай|останавливай)");
+            return Regex.IsMatch(text, @"\bне\s+(включ|выключ|открой|открыть|закрой|закрыть|запускай|запустить|останавливай|остановить)");
         }
 
         private static long ParseDelay(string text)
         {
-            var m = Regex.Match(text, @"(?:через|спустя)\s+(\d+)\s*(секунд|сек|минут|мин|час|часа|часов|дней|день)");
+            var m = Regex.Match(text, @"(?:через|спустя)\s+(\d+)\s*(секунда|секунд|сек|минута|минут|мин|час|день|дней)");
             if (!m.Success) return 0;
             long amount;
             if (!long.TryParse(m.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out amount)) return 0;
