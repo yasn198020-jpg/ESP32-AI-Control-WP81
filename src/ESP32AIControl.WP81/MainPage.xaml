@@ -244,7 +244,7 @@
                                     <ScrollViewer x:Name="GraphHorizontalScroll" Height="320"
                                                   HorizontalScrollBarVisibility="Auto"
                                                   VerticalScrollBarVisibility="Disabled">
-                                        <Canvas x:Name="GraphCanvas" Height="300" HorizontalAlignment="Left"/>
+                                        <Canvas x:Name="GraphCanvas" Height="300" HorizontalAlignment="Left" ManipulationMode="Scale,Translate" ManipulationDelta="GraphCanvas_ManipulationDelta" />
                                     </ScrollViewer>
                                 </Border>
                             </StackPanel>
