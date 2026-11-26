@@ -374,15 +374,59 @@ namespace ESP32AIControl.WP81
             var scenarios = _localScenarioStore.Load();
             foreach (var scenario in scenarios)
             {
-                var conditionText = string.Join(" · ", scenario.Conditions.Select((condition, index) =>
-                    (index == 0 ? string.Empty : condition.Connector + " ") +
+                var conditionText = string.Join("  ·  ", scenario.Conditions.Select((condition, index) =>
+                    (index == 0 ? string.Empty : (condition.Connector == "OR" ? "ИЛИ " : "И ")) +
                     condition.WidgetId + " " + condition.Operator + " " +
                     condition.Threshold.ToString(CultureInfo.InvariantCulture)));
+                var actionText = scenario.Actions == null || scenario.Actions.Count == 0
+                    ? "Действия не заданы"
+                    : string.Join("  ·  ", scenario.Actions.Select(action =>
+                        action.DeviceId + "/" + action.WidgetId + " = " + action.Value));
+                var details = new StackPanel { Margin = new Thickness(12, 9, 12, 9) };
+                details.Children.Add(new TextBlock
+                {
+                    Text = (scenario.Enabled ? "●  " : "○  ") + scenario.Title,
+                    FontSize = 16,
+                    FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                    Foreground = new SolidColorBrush(scenario.Enabled
+                        ? Windows.UI.Color.FromArgb(255, 208, 188, 255)
+                        : Windows.UI.Color.FromArgb(255, 172, 173, 184))
+                });
+                details.Children.Add(new TextBlock
+                {
+                    Text = "ЕСЛИ: " + (string.IsNullOrWhiteSpace(conditionText) ? "условия не заданы" : conditionText),
+                    FontSize = 12,
+                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 220, 221, 228)),
+                    Margin = new Thickness(0, 4, 0, 2)
+                });
+                details.Children.Add(new TextBlock
+                {
+                    Text = "ТО: " + actionText,
+                    FontSize = 12,
+                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 172, 173, 184))
+                });
+                details.Children.Add(new TextBlock
+                {
+                    Text = (scenario.NotificationEnabled ? "Уведомление включено" : "Без уведомления") +
+                        (scenario.Enabled ? "  ·  Активно" : "  ·  Выключено"),
+                    FontSize = 11,
+                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 172, 173, 184)),
+                    Margin = new Thickness(0, 4, 0, 0)
+                });
+                var card = new Border
+                {
+                    Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 48, 49, 58)),
+                    BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 65, 67, 77)),
+                    BorderThickness = new Thickness(1),
+                    CornerRadius = new CornerRadius(12),
+                    Child = details
+                };
                 var item = new ListViewItem
                 {
-                    Content = (scenario.Enabled ? "● " : "○ ") + scenario.Title +
-                        Environment.NewLine + conditionText,
-                    Tag = scenario.Id
+                    Content = card,
+                    Tag = scenario.Id,
+                    Padding = new Thickness(0),
+                    Margin = new Thickness(0, 3, 0, 3)
                 };
                 LocalScenariosList.Items.Add(item);
             }
