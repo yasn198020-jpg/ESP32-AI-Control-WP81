@@ -391,12 +391,52 @@
                                        TextWrapping="Wrap" Foreground="#FFACADB8" Margin="0,0,0,8"/>
                             <TextBox x:Name="LocalScenarioTitleBox" Header="Название сценария"
                                      PlaceholderText="Например, высокая температура"/>
-                            <TextBox x:Name="LocalScenarioConditionsBox" Header="Условия (по одному на строку)"
+                            <Border Background="#FF30313A" BorderBrush="#FF41434D" BorderThickness="1"
+                                    CornerRadius="12" Padding="10" Margin="0,4,0,8">
+                                <StackPanel>
+                                    <TextBlock Text="КОНСТРУКТОР УСЛОВИЯ" FontWeight="SemiBold"
+                                               Foreground="#FFD0BCFF" Margin="0,0,0,6"/>
+                                    <ComboBox x:Name="LocalScenarioConditionWidgetBox" Header="Датчик или виджет" Margin="0,2,0,6"/>
+                                    <Grid Margin="0,0,0,6">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                        <ComboBox x:Name="LocalScenarioConnectorBox" Header="Связь" SelectedIndex="0" Margin="0,0,4,0">
+                                            <ComboBoxItem Content="И (AND)" Tag="AND"/>
+                                            <ComboBoxItem Content="ИЛИ (OR)" Tag="OR"/>
+                                        </ComboBox>
+                                        <ComboBox x:Name="LocalScenarioOperatorBox" Grid.Column="1" Header="Условие" SelectedIndex="0" Margin="4,0,0,0">
+                                            <ComboBoxItem Content="Больше >" Tag=">"/>
+                                            <ComboBoxItem Content="Не меньше ≥" Tag=">="/>
+                                            <ComboBoxItem Content="Меньше &lt;" Tag="&lt;"/>
+                                            <ComboBoxItem Content="Не больше ≤" Tag="&lt;="/>
+                                            <ComboBoxItem Content="Равно =" Tag="="/>
+                                            <ComboBoxItem Content="Не равно ≠" Tag="!="/>
+                                        </ComboBox>
+                                    </Grid>
+                                    <TextBox x:Name="LocalScenarioThresholdBox" Header="Порог / значение"
+                                             PlaceholderText="Например, 25" Margin="0,0,0,6"/>
+                                    <Button Content="＋ Добавить условие" Click="LocalScenarioAddConditionButton_Click"
+                                            HorizontalAlignment="Stretch"/>
+                                </StackPanel>
+                            </Border>
+                            <TextBox x:Name="LocalScenarioConditionsBox" Header="Условия правила"
                                      AcceptsReturn="True" TextWrapping="Wrap" Height="100"
                                      PlaceholderText="sensor1 > 25&#10;AND sensor2 = 1&#10;OR sensor3 &lt; 10"/>
                             <TextBlock Text="Формат: widgetId оператор значение. Для следующих строк укажите AND или OR в начале."
                                        TextWrapping="Wrap" FontSize="12" Foreground="#FFACADB8" Margin="0,2,0,6"/>
-                            <TextBox x:Name="LocalScenarioActionsBox" Header="Действия MQTT (deviceId/widgetId=value)"
+                            <Border Background="#FF30313A" BorderBrush="#FF41434D" BorderThickness="1"
+                                    CornerRadius="12" Padding="10" Margin="0,4,0,8">
+                                <StackPanel>
+                                    <TextBlock Text="КОНСТРУКТОР ДЕЙСТВИЯ" FontWeight="SemiBold"
+                                               Foreground="#FFD0BCFF" Margin="0,0,0,6"/>
+                                    <ComboBox x:Name="LocalScenarioActionWidgetBox" Header="Устройство и исполнительный виджет"
+                                              Margin="0,2,0,6"/>
+                                    <TextBox x:Name="LocalScenarioActionValueBox" Header="Отправляемое значение"
+                                             Text="1" PlaceholderText="1 или 0" Margin="0,0,0,6"/>
+                                    <Button Content="＋ Добавить действие" Click="LocalScenarioAddActionButton_Click"
+                                            HorizontalAlignment="Stretch"/>
+                                </StackPanel>
+                            </Border>
+                            <TextBox x:Name="LocalScenarioActionsBox" Header="Действия правила"
                                      AcceptsReturn="True" TextWrapping="Wrap" Height="72"
                                      PlaceholderText="esp32/relay1=1"/>
                             <TextBox x:Name="LocalScenarioMessageBox" Header="Текст уведомления"
