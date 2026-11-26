@@ -66,7 +66,12 @@ namespace ESP32AIControl.WP81.Core.Voice
                 {
                     continue;
                 }
-                else if (char.IsLetterOrDigit(ch) || char.IsWhiteSpace(ch) || ",.!?;:-()".IndexOf(ch) >= 0)
+                else if (ch == '\u200D' || ch == '\uFE0E' || ch == '\uFE0F')
+                {
+                    // Emoji joiners and presentation selectors are formatting only.
+                }
+                else if (char.IsLetterOrDigit(ch) || char.IsWhiteSpace(ch) ||
+                    char.IsPunctuation(ch) || "+=<>%°/".IndexOf(ch) >= 0)
                 {
                     output.Append(ch);
                 }
