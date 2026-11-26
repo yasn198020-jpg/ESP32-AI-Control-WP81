@@ -130,6 +130,34 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                     AddReferenceDiagnostic(result, index, rule.Assignments[a].Variable, "действие / исполнитель", rule.Assignments[a].Value, devices);
             }
 
+            if (LanguageModel != null)
+            {
+                for (var r = 0; r < LanguageModel.Rules.Count; r++)
+                {
+                    var languageRule = LanguageModel.Rules[r];
+                    foreach (var identifier in languageRule.Condition.Identifiers)
+                        AddReferenceDiagnostic(result, index, identifier, "условие языка сценариев", null, devices);
+
+                    for (var a = 0; a < languageRule.Actions.Count; a++)
+                    {
+                        var action = languageRule.Actions[a];
+                        AddReferenceDiagnostic(result, index, action.TargetId, "действие языка сценариев",
+                            action.Expression.Render(), devices);
+                    }
+                }
+
+                if (LanguageModel.ParserErrors.Count > 0)
+                {
+                    result.Add(new ScenarioVariableDiagnostic
+                    {
+                        Variable = "Синтаксис сценария",
+                        Usage = "проверка языка сценариев",
+                        Status = "Ошибка разбора",
+                        Description = string.Join("; ", LanguageModel.ParserErrors.ToArray())
+                    });
+                }
+            }
+
             for (var i = 0; i < result.Count; i++)
             {
                 var item = result[i];
