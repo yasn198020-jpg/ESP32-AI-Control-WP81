@@ -6203,7 +6203,7 @@ namespace ESP32AIControl.WP81
                     if (state == null || string.IsNullOrWhiteSpace(state.Value))
                         replies.Add("Нет актуального значения " + command.WidgetId);
                     else
-                        replies.Add(GetTitle(state) + ": " + state.Value + (string.IsNullOrWhiteSpace(state.Unit) ? string.Empty : " " + state.Unit));
+                        replies.Add(GetTitle(state) + ": " + MarfaSpeechTextFormatter.FormatValue(state.Value, state.Unit, state.Description));
                     continue;
                 }
 
@@ -6241,6 +6241,8 @@ namespace ESP32AIControl.WP81
             var text = NormalizeTrainedPhrase(spokenText);
             if (text.Length == 0) return new List<TrainedVoiceCommand>();
 
+            // Exact phrases and variants have priority. If two different
+            // learned phrases match the same utterance, do not guess.
             var exactPhrases = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var command in _trainedCommands)
             {
@@ -6248,75 +6250,86 @@ namespace ESP32AIControl.WP81
                 if (phrases.Any(p => NormalizeTrainedPhrase(p) == text))
                     exactPhrases.Add(NormalizeTrainedPhrase(command.Phrase));
             }
-            if (exactPhrases.Count > 0)
-                return _trainedCommands.Where(c => exactPhrases.Contains(NormalizeTrainedPhrase(c.Phrase))).ToList();
-
-            var containedPhrases = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var command in _trainedCommands)
+            if (exactPhrases.Count == 1)
             {
-                var phrases = (command.Variants ?? new List<string>()).Concat(new[] { command.Phrase });
-                if (phrases.Any(p =>
-                {
-                    var candidate = NormalizeTrainedPhrase(p);
-                    return candidate.Length > 0 && (" " + text + " ").Contains(" " + candidate + " ");
-                }))
-                    containedPhrases.Add(NormalizeTrainedPhrase(command.Phrase));
+                var exact = exactPhrases.First();
+                return _trainedCommands.Where(c =>
+                    string.Equals(NormalizeTrainedPhrase(c.Phrase), exact, StringComparison.OrdinalIgnoreCase)).ToList();
             }
-            if (containedPhrases.Count > 0)
-                return _trainedCommands.Where(c => containedPhrases.Contains(NormalizeTrainedPhrase(c.Phrase))).ToList();
+            if (exactPhrases.Count > 1) return new List<TrainedVoiceCommand>();
 
+            // A longer matching variant is more specific than a short phrase
+            // contained in the same utterance. Equal winners are ambiguous.
+            var containedScores = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (var group in _trainedCommands.GroupBy(c => NormalizeTrainedPhrase(c.Phrase)))
+            {
+                var specificity = group.SelectMany(command =>
+                        (command.Variants ?? new List<string>()).Concat(new[] { command.Phrase }))
+                    .Select(NormalizeTrainedPhrase)
+                    .Where(candidate => candidate.Length > 0 &&
+                        (" " + text + " ").Contains(" " + candidate + " "))
+                    .Select(candidate => candidate.Length)
+                    .DefaultIfEmpty(0).Max();
+                if (specificity > 0) containedScores[group.Key] = specificity;
+            }
+            if (containedScores.Count > 0)
+            {
+                var best = containedScores.Values.Max();
+                var winners = containedScores.Where(pair => pair.Value == best)
+                    .Select(pair => pair.Key).ToList();
+                if (winners.Count != 1) return new List<TrainedVoiceCommand>();
+                return _trainedCommands.Where(c =>
+                    string.Equals(NormalizeTrainedPhrase(c.Phrase), winners[0], StringComparison.OrdinalIgnoreCase)).ToList();
+            }
+
+            // Partial phrase matching is useful when the spoken request omits
+            // a context word, but tied phrase groups must never trigger actions.
             var spokenWords = text.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
             if (spokenWords.Length > 0 && spokenWords.All(w => w.Length >= 3))
             {
                 var partialScores = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
                 foreach (var group in _trainedCommands.GroupBy(c => NormalizeTrainedPhrase(c.Phrase)))
                 {
-                    var hasPartial = group.Any(command =>
-                        (command.Variants ?? new List<string>()).Concat(new[] { command.Phrase })
-                            .Any(phrase => PhraseWordsContainedInText(text, NormalizeTrainedPhrase(phrase))));
-                    if (!hasPartial) continue;
-
                     var score = group.SelectMany(command =>
                             (command.Variants ?? new List<string>()).Concat(new[] { command.Phrase }))
-                        .Select(phrase => SimilarityAgainstTrainedText(text, NormalizeTrainedPhrase(phrase)))
-                        .DefaultIfEmpty(0.0)
-                        .Max();
-                    partialScores[group.Key] = score;
+                        .Select(NormalizeTrainedPhrase)
+                        .Where(phrase => phrase.Length > 0 && PhraseWordsContainedInText(text, phrase))
+                        .Select(phrase => SimilarityAgainstTrainedText(text, phrase))
+                        .DefaultIfEmpty(0.0).Max();
+                    if (score > 0) partialScores[group.Key] = score;
                 }
-
                 if (partialScores.Count > 0)
                 {
-                    var bestPartial = partialScores.OrderByDescending(pair => pair.Value).First().Key;
+                    var best = partialScores.Values.Max();
+                    var winners = partialScores.Where(pair => pair.Value >= best - 0.04)
+                        .Select(pair => pair.Key).ToList();
+                    if (winners.Count != 1) return new List<TrainedVoiceCommand>();
                     return _trainedCommands.Where(c =>
-                        string.Equals(NormalizeTrainedPhrase(c.Phrase), bestPartial, StringComparison.OrdinalIgnoreCase)).ToList();
+                        string.Equals(NormalizeTrainedPhrase(c.Phrase), winners[0], StringComparison.OrdinalIgnoreCase)).ToList();
                 }
             }
 
+            // Last resort: fuzzy matching with a conservative threshold.
             var candidates = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
             foreach (var group in _trainedCommands.GroupBy(c => NormalizeTrainedPhrase(c.Phrase)))
             {
                 if (string.IsNullOrWhiteSpace(group.Key)) continue;
-                var best = 0.0;
-                foreach (var command in group)
-                {
-                    var phrases = (command.Variants ?? new List<string>()).Concat(new[] { command.Phrase });
-                    foreach (var phrase in phrases)
-                    {
-                        var candidate = NormalizeTrainedPhrase(phrase);
-                        if (candidate.Length == 0) continue;
-                        best = Math.Max(best, SimilarityAgainstTrainedText(text, candidate));
-                    }
-                }
-                if (best >= 0.78)
-                    candidates[group.Key] = best;
+                var best = group.SelectMany(command =>
+                        (command.Variants ?? new List<string>()).Concat(new[] { command.Phrase }))
+                    .Select(NormalizeTrainedPhrase)
+                    .Where(candidate => candidate.Length > 0)
+                    .Select(candidate => SimilarityAgainstTrainedText(text, candidate))
+                    .DefaultIfEmpty(0.0).Max();
+                if (best >= 0.78) candidates[group.Key] = best;
             }
 
             if (candidates.Count == 0) return new List<TrainedVoiceCommand>();
             var bestScore = candidates.Values.Max();
-            var bestGroups = new HashSet<string>(
-                candidates.Where(pair => pair.Value >= bestScore - 0.04).Select(pair => pair.Key),
-                StringComparer.OrdinalIgnoreCase);
-            return _trainedCommands.Where(c => bestGroups.Contains(NormalizeTrainedPhrase(c.Phrase))).ToList();
+            var bestGroups = candidates.Where(pair => pair.Value >= bestScore - 0.04)
+                .Select(pair => pair.Key).ToList();
+            if (bestGroups.Count != 1) return new List<TrainedVoiceCommand>();
+            return _trainedCommands.Where(c =>
+                string.Equals(NormalizeTrainedPhrase(c.Phrase), bestGroups[0], StringComparison.OrdinalIgnoreCase)).ToList();
         }
 
         private static bool PhraseWordsContainedInText(string text, string phrase)
@@ -6417,27 +6430,11 @@ namespace ESP32AIControl.WP81
 
         private static string NormalizeTrainedPhrase(string phrase)
         {
-            var result = new System.Text.StringBuilder();
-            var previousSpace = true;
-            foreach (var ch in (phrase ?? string.Empty).ToLowerInvariant().Replace('ё', 'е'))
-            {
-                if (char.IsLetterOrDigit(ch))
-                {
-                    result.Append(ch);
-                    previousSpace = false;
-                }
-                else if (!previousSpace)
-                {
-                    result.Append(' ');
-                    previousSpace = true;
-                }
-            }
-            var normalized = result.ToString().Trim();
+            var normalized = RussianSemanticNormalizer.Normalize(phrase);
             var prefixes = new[] { "марфой", "марфа", "марфу", "марфе" };
             foreach (var prefix in prefixes)
             {
-                if (normalized == prefix)
-                    return string.Empty;
+                if (normalized == prefix) return string.Empty;
                 if (normalized.StartsWith(prefix + " ", StringComparison.Ordinal))
                 {
                     normalized = normalized.Substring(prefix.Length).Trim();
