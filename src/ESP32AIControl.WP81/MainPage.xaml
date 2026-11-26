@@ -11,8 +11,8 @@
         <SolidColorBrush x:Key="FieldBrush" Color="#FF25262D"/>
         <SolidColorBrush x:Key="LineBrush" Color="#FF41434D"/>
         <DataTemplate x:Key="WidgetPageHeaderTemplate">
-            <Border Background="#FF30313A" CornerRadius="12" Padding="16,10" Margin="0,0,8,0">
-                <TextBlock Text="{Binding}" FontSize="14" FontWeight="SemiBold"
+            <Border Background="#FF30313A" CornerRadius="8" Padding="7,4" Margin="0,0,4,0">
+                <TextBlock Text="{Binding}" FontSize="12" FontWeight="SemiBold"
                            FontFamily="Segoe UI Symbol"
                            Foreground="#FFEAF1F7" TextWrapping="NoWrap"/>
             </Border>
