@@ -189,7 +189,7 @@ namespace ESP32AIControl.WP81.Core.Voice
 
             var originalText = (command ?? string.Empty).ToLowerInvariant().Replace('ё', 'е');
             if (DetectAction(text) != null &&
-                Regex.IsMatch(originalText, @"\b(если|когда|при условии|как только)\b"))
+                Regex.IsMatch(originalText, @"\b(если|когда|при условии|как только|при температуре)\b"))
                 return Result(MarfaCommandKind.Clarify,
                     "Я распознала условную команду, но не смогла безопасно построить правило. Уточните датчик, порог и действие.");
 
