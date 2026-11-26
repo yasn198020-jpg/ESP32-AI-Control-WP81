@@ -151,6 +151,7 @@ namespace ESP32AIControl.WP81.Core.Voice
         private MarfaCommandResult ParseCore(string command, IList<WidgetState> widgets)
         {
             var text = Normalize(command);
+            MarfaCoreDiagnostics.Log("command=" + text);
             if (text.Length == 0) return Result(MarfaCommandKind.NotFound, "Я не услышала команду.");
 
             if (IsStop(text))
