@@ -564,9 +564,19 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                         definitions = new List<IList<string>>();
                         graph.Definitions[action.TargetId] = definitions;
                     }
+                    // A variable assignment depends both on its right-hand
+                    // expression and on the branch condition that makes the
+                    // assignment active. Include both in the same definition
+                    // edge set so aliases assigned constants inside IF blocks
+                    // still retain their upstream control dependencies.
                     var identifiers = new List<string>();
                     CollectExpressionIdentifiers(action.Expression, identifiers);
-                    definitions.Add(identifiers.Distinct(StringComparer.OrdinalIgnoreCase).ToList());
+                    if (rule.Condition != null)
+                        CollectExpressionIdentifiers(rule.Condition.Expression, identifiers);
+                    definitions.Add(identifiers
+                        .Where(id => !string.IsNullOrWhiteSpace(id))
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList());
                 }
             }
             return graph;
