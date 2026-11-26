@@ -34,7 +34,8 @@ namespace ESP32AIControl.WP81.Core.Voice
             var actionText = tail.Length == 0 ? normalized : tail;
             var value = DetectActionValue(actionText);
             if (value == null) return null;
-            var target = engine.ResolveControl(actionText, widgets, value);
+            var targetQuery = normalized.Substring(0, thresholdMatch.Index) + " " + actionText;
+            var target = engine.ResolveControl(targetQuery, widgets, value);
             if (target == null || target.Candidate == null) return null;
 
             var sensorWidget = sensor.Candidate.Widget;
