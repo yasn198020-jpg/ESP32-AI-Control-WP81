@@ -1260,15 +1260,82 @@ namespace ESP32AIControl.WP81
             });
         }
 
-        private async void ShowUdpDevicesDialog()
+        private void ShowUdpDevicesDialog()
         {
             var devices = _udpDiscovery.GetSnapshot();
-            var message = devices.Count == 0
-                ? "Пока не найдено ни одного UDP-устройства."
-                : string.Join(Environment.NewLine, devices.Select(device =>
-                    (string.IsNullOrWhiteSpace(device.Name) ? device.Id : device.Name) +
-                    " — " + device.Ip + " (обновлено " + device.LastSeenAt.ToString("HH:mm:ss") + ")"));
-            await new Windows.UI.Popups.MessageDialog(message, "UDP устройства").ShowAsync();
+            var body = new StackPanel();
+
+            body.Children.Add(new TextBlock
+            {
+                Text = "UDP УСТРОЙСТВА",
+                FontSize = 14,
+                FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255)),
+                Margin = new Thickness(8, 6, 8, 10)
+            });
+
+            if (devices.Count == 0)
+            {
+                body.Children.Add(new TextBlock
+                {
+                    Text = "Пока не найдено ни одного UDP-устройства.",
+                    FontSize = 13,
+                    TextWrapping = TextWrapping.Wrap,
+                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 220, 220, 225)),
+                    Margin = new Thickness(8, 8, 8, 16)
+                });
+            }
+            else
+            {
+                foreach (var device in devices)
+                {
+                    var card = new Border
+                    {
+                        Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 36, 37, 43)),
+                        BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 65, 67, 77)),
+                        BorderThickness = new Thickness(1),
+                        CornerRadius = new CornerRadius(12),
+                        Padding = new Thickness(10),
+                        Margin = new Thickness(2, 3, 2, 5)
+                    };
+                    var details = new StackPanel();
+                    details.Children.Add(new TextBlock
+                    {
+                        Text = string.IsNullOrWhiteSpace(device.Name) ? device.Id : device.Name,
+                        FontSize = 14,
+                        FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                        TextWrapping = TextWrapping.Wrap,
+                        Foreground = new SolidColorBrush(Windows.UI.Colors.White)
+                    });
+                    details.Children.Add(new TextBlock
+                    {
+                        Text = device.Ip,
+                        FontSize = 12,
+                        Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255)),
+                        Margin = new Thickness(0, 3, 0, 0)
+                    });
+                    details.Children.Add(new TextBlock
+                    {
+                        Text = "Последний сигнал: " + device.LastSeenAt.ToString("HH:mm:ss"),
+                        FontSize = 11,
+                        Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 172, 173, 184)),
+                        Margin = new Thickness(0, 2, 0, 0)
+                    });
+                    card.Child = details;
+                    body.Children.Add(card);
+                }
+            }
+
+            var close = new Button
+            {
+                Content = "Закрыть",
+                MinHeight = 42,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(8, 10, 8, 4)
+            };
+            body.Children.Add(close);
+            var popup = CreateAppPopup(body, 330, 480);
+            close.Click += delegate { popup.IsOpen = false; };
         }
 
         private void TopInfoButton_Click(object sender, RoutedEventArgs e)
