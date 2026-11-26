@@ -1341,28 +1341,37 @@ namespace ESP32AIControl.WP81
         {
             if (button == null) return;
 
-            // Keep the bottom bar visually quiet like Android navigation:
-            // the selected destination gets a soft surface and an accent icon,
-            // rather than turning the entire navigation tile bright purple.
-            button.Background = new SolidColorBrush(isSelected
-                ? Windows.UI.Color.FromArgb(255, 74, 68, 88)
-                : Windows.UI.Color.FromArgb(255, 36, 37, 45));
+            // Android-style navigation: only the icon receives the selected pill.
+            button.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0));
             button.Foreground = new SolidColorBrush(isSelected
-                ? Windows.UI.Color.FromArgb(255, 244, 244, 244)
-                : Windows.UI.Color.FromArgb(255, 176, 176, 176));
+                ? Windows.UI.Color.FromArgb(255, 243, 244, 246)
+                : Windows.UI.Color.FromArgb(255, 156, 163, 175));
             button.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0));
 
             var content = button.Content as StackPanel;
             if (content == null) return;
+
             for (var i = 0; i < content.Children.Count; i++)
             {
+                var indicator = content.Children[i] as Border;
+                if (indicator != null)
+                {
+                    indicator.Background = new SolidColorBrush(isSelected
+                        ? Windows.UI.Color.FromArgb(255, 74, 68, 88)
+                        : Windows.UI.Color.FromArgb(0, 0, 0, 0));
+                    var icon = indicator.Child as TextBlock;
+                    if (icon != null)
+                        icon.Foreground = new SolidColorBrush(isSelected
+                            ? Windows.UI.Color.FromArgb(255, 208, 188, 255)
+                            : Windows.UI.Color.FromArgb(255, 156, 163, 175));
+                    continue;
+                }
+
                 var label = content.Children[i] as TextBlock;
-                if (label == null) continue;
-                label.Foreground = new SolidColorBrush(isSelected && i == 0
-                    ? Windows.UI.Color.FromArgb(255, 208, 188, 255)
-                    : (isSelected
+                if (label != null)
+                    label.Foreground = new SolidColorBrush(isSelected
                         ? Windows.UI.Color.FromArgb(255, 243, 244, 246)
-                        : Windows.UI.Color.FromArgb(255, 156, 163, 175)));
+                        : Windows.UI.Color.FromArgb(255, 156, 163, 175));
             }
         }
 
