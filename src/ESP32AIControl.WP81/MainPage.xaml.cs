@@ -1857,6 +1857,7 @@ namespace ESP32AIControl.WP81
                 _appSettings.IoTManagerScenario = scenario;
                 await _settingsStore.SaveAsync(_appSettings);
                 ScenarioPlanList.Items.Clear();
+                RefreshScenarioDiagnostics();
                 ScenarioPlanStatus.Text = "Сценарий распознан: " +
                     parsedRules.ToString(CultureInfo.InvariantCulture) +
                     " правил. Для просмотра зависимостей заполните команды открытия/закрытия и нажмите «Проверить план».";
@@ -1898,6 +1899,7 @@ namespace ESP32AIControl.WP81
         {
             _commandExecutor.SetScenarioScript(ScenarioTextBox.Text ?? string.Empty);
             var ruleCount = _commandExecutor.GetScenarioRuleCount();
+            RefreshScenarioDiagnostics();
             ScenarioPlanList.Items.Clear();
 
             if (ruleCount <= 0)
@@ -1916,6 +1918,43 @@ namespace ESP32AIControl.WP81
             ScenarioPlanStatus.Text = "Распознано правил: " +
                 ruleCount.ToString(CultureInfo.InvariantCulture) +
                 ". Ниже показан порядок действий; отправки на ESP32 не было.";
+        }
+
+        private void RefreshScenarioDiagnostics()
+        {
+            ScenarioDiagnosticsList.Items.Clear();
+            var diagnostics = _commandExecutor.GetScenarioDiagnostics();
+            var unresolved = 0;
+            var ambiguous = 0;
+
+            for (var i = 0; i < diagnostics.Count; i++)
+            {
+                var item = diagnostics[i];
+                if (item.Status != null && item.Status.StartsWith("Неоднозначный", StringComparison.OrdinalIgnoreCase))
+                    ambiguous++;
+                else if (item.Status != null && item.Status.StartsWith("Не найден", StringComparison.OrdinalIgnoreCase))
+                    unresolved++;
+
+                var device = string.IsNullOrWhiteSpace(item.DeviceId)
+                    ? string.Empty : Environment.NewLine + "ESP32: " + item.DeviceId;
+                ScenarioDiagnosticsList.Items.Add(
+                    item.Variable + " · " + item.Usage + Environment.NewLine +
+                    item.Status + device + Environment.NewLine +
+                    (item.Description ?? string.Empty) +
+                    " · встречается: " + item.Occurrences.ToString(CultureInfo.InvariantCulture));
+            }
+
+            if (diagnostics.Count == 0)
+            {
+                ScenarioDiagnosticsStatus.Text = "В разобранных правилах переменные не обнаружены.";
+                return;
+            }
+
+            ScenarioDiagnosticsStatus.Text =
+                "Переменных: " + diagnostics.Count.ToString(CultureInfo.InvariantCulture) +
+                " · не найдено: " + unresolved.ToString(CultureInfo.InvariantCulture) +
+                " · неоднозначных: " + ambiguous.ToString(CultureInfo.InvariantCulture) +
+                ". Неизвестные имена могут быть служебными переменными IoTManager.";
         }
 
         private void AddScenarioPlanPreview(string title, string command)
