@@ -4960,7 +4960,6 @@ namespace ESP32AIControl.WP81
 
         private void ClearScenarioProbeResult_Click(object sender, RoutedEventArgs e)
         {
-            if (_scenarioProbeBox != null) _scenarioProbeBox.Text = string.Empty;
             if (_scenarioProbeResult != null) _scenarioProbeResult.Text = "Результат очищен.";
         }
 
