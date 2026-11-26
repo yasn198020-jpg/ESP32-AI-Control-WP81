@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using ESP32AIControl.WP81.Models;
 using ESP32AIControl.WP81.Core.State;
 
@@ -97,7 +98,7 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                 if (action == null)
                     throw new ArgumentException("Формат команды: device/widget=value", "command");
 
-                if (!TryAddReverseScenarioPlan(plan, action))
+                if (!TryAddReverseScenarioPlan(plan, action) && !TryAddExpressionDependencyPlan(plan, action))
                 {
                     AddAutomationDependency(plan, action);
                     AddInterlockDependency(plan, action);
@@ -127,6 +128,165 @@ namespace ESP32AIControl.WP81.Core.Scenarios
 
             plan.Actions.Add(target);
             return true;
+        }
+
+        private bool TryAddExpressionDependencyPlan(ScenarioPlan plan, ScenarioAction target)
+        {
+            if (_scenarioAnalyzer == null || _scenarioAnalyzer.LanguageModel == null ||
+                !_scenarioAnalyzer.LanguageModel.Valid || target == null)
+                return false;
+
+            var targetMatches = _devices.GetWidgetsById(target.WidgetId);
+            if (targetMatches.Count != 1 ||
+                !string.Equals(targetMatches[0].DeviceId, target.DeviceId, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            var model = _scenarioAnalyzer.LanguageModel;
+            var variables = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var id in model.Identifiers)
+            {
+                var matches = _devices.GetWidgetsById(id);
+                if (matches.Count == 1)
+                    variables[id] = matches[0].Value ?? string.Empty;
+            }
+
+            var candidates = new List<IList<ScenarioAction>>();
+            foreach (var rule in model.Rules)
+            {
+                var matchingAction = rule.Actions.FirstOrDefault(a =>
+                    string.Equals(a.TargetId, target.WidgetId, StringComparison.OrdinalIgnoreCase));
+                if (matchingAction == null)
+                    continue;
+
+                var context = new IoTScenarioEvaluationContext(variables);
+                var actionValue = IoTScenarioEvaluator.Evaluate(matchingAction.Expression, context);
+                if (!ScenarioValueMatches(actionValue, target.Value))
+                    continue;
+
+                if (IoTScenarioEvaluator.IsTruthy(IoTScenarioEvaluator.Evaluate(rule.Condition.Expression, context)))
+                {
+                    candidates.Add(new List<ScenarioAction>());
+                    continue;
+                }
+
+                var controllable = new List<WidgetState>();
+                foreach (var id in rule.Condition.Identifiers)
+                {
+                    var matches = _devices.GetWidgetsById(id);
+                    if (matches.Count != 1 || !IsUserControl(matches[0]))
+                        continue;
+                    if (!variables.ContainsKey(id))
+                        continue;
+                    controllable.Add(matches[0]);
+                }
+
+                // Bound the search: scenario expressions with many controls are
+                // not guessed or exhaustively enumerated on the Lumia.
+                if (controllable.Count == 0 || controllable.Count > 8)
+                    continue;
+
+                var bestCount = int.MaxValue;
+                var bestPlans = new List<IList<ScenarioAction>>();
+                var combinations = 1 << controllable.Count;
+                for (var mask = 0; mask < combinations; mask++)
+                {
+                    var simulated = new Dictionary<string, string>(variables, StringComparer.OrdinalIgnoreCase);
+                    var proposed = new List<ScenarioAction>();
+                    for (var bit = 0; bit < controllable.Count; bit++)
+                    {
+                        var widget = controllable[bit];
+                        var desired = (mask & (1 << bit)) != 0 ? "1" : "0";
+                        simulated[widget.Id] = desired;
+                        if (!ScenarioValuesEquivalent(widget.Value, desired))
+                        {
+                            proposed.Add(new ScenarioAction
+                            {
+                                Command = widget.DeviceId + "/" + widget.Id + "=" + desired,
+                                DeviceId = widget.DeviceId,
+                                WidgetId = widget.Id,
+                                Value = desired,
+                                Reason = "Предварительное условие сценария: " +
+                                    (string.IsNullOrWhiteSpace(widget.Description) ? widget.Id : widget.Description),
+                                IsDependency = true
+                            });
+                        }
+                    }
+
+                    var simulatedContext = new IoTScenarioEvaluationContext(simulated);
+                    if (!IoTScenarioEvaluator.IsTruthy(IoTScenarioEvaluator.Evaluate(rule.Condition.Expression, simulatedContext)))
+                        continue;
+
+                    if (proposed.Count < bestCount)
+                    {
+                        bestCount = proposed.Count;
+                        bestPlans.Clear();
+                    }
+                    if (proposed.Count == bestCount)
+                        bestPlans.Add(proposed);
+                }
+
+                if (bestPlans.Count == 1)
+                    candidates.Add(bestPlans[0]);
+                else if (bestPlans.Count > 1)
+                    continue;
+            }
+
+            if (candidates.Count == 0)
+                return false;
+
+            var minimum = candidates.Min(x => x.Count);
+            var best = candidates.Where(x => x.Count == minimum)
+                .GroupBy(x => string.Join("|", x.OrderBy(a => a.DeviceId).ThenBy(a => a.WidgetId)
+                    .Select(a => a.DeviceId + "/" + a.WidgetId + "=" + a.Value).ToArray()))
+                .Select(x => x.First()).ToList();
+
+            if (best.Count != 1)
+                return false;
+
+            foreach (var dependency in best[0])
+            {
+                if (!ContainsAction(plan, dependency.DeviceId, dependency.WidgetId, dependency.Value))
+                    plan.Actions.Add(dependency);
+            }
+            if (!ContainsAction(plan, target.DeviceId, target.WidgetId, target.Value))
+                plan.Actions.Add(target);
+            return true;
+        }
+
+        private static bool ScenarioValueMatches(IoTValue value, string expected)
+        {
+            if (value == null || value is IoTValue.Unknown)
+                return false;
+            var number = value as IoTValue.Number;
+            if (number != null)
+            {
+                double wanted;
+                return double.TryParse((expected ?? string.Empty).Replace(',', '.'),
+                    System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out wanted) &&
+                    Math.Abs(number.Value - wanted) < 0.000001;
+            }
+            var text = value as IoTValue.Text;
+            if (text != null)
+                return string.Equals(text.Value, expected, StringComparison.OrdinalIgnoreCase);
+            var boolean = value as IoTValue.BooleanValue;
+            if (boolean != null)
+                return boolean.Value == (expected == "1" || string.Equals(expected, "true", StringComparison.OrdinalIgnoreCase));
+            return false;
+        }
+
+        private static bool ScenarioValuesEquivalent(string first, string second)
+        {
+            double a, b;
+            if (double.TryParse((first ?? string.Empty).Replace(',', '.'),
+                    System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out a) &&
+                double.TryParse((second ?? string.Empty).Replace(',', '.'),
+                    System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out b))
+                return Math.Abs(a - b) < 0.000001;
+            return string.Equals((first ?? string.Empty).Trim(), (second ?? string.Empty).Trim(),
+                StringComparison.OrdinalIgnoreCase);
         }
 
         private void AddScenarioDependency(ScenarioPlan plan, string deviceId, ScenarioDependency dependency)
