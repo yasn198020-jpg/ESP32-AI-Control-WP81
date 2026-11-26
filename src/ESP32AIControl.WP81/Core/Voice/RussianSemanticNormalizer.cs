@@ -76,8 +76,17 @@ namespace ESP32AIControl.WP81.Core.Voice
             if (word.Length == 0) return string.Empty;
             string canonical;
             if (Irregular.TryGetValue(word, out canonical)) return canonical;
-            if (word.Any(char.IsDigit) || word.Any(c => c >= 'a' && c <= 'z') ||
-                word.Contains("/") || word.Contains("_") || word.Contains("=")) return word;
+            var hasDigitOrLatin = false;
+            for (var i = 0; i < word.Length; i++)
+            {
+                var ch = word[i];
+                if (char.IsDigit(ch) || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z'))
+                {
+                    hasDigitOrLatin = true;
+                    break;
+                }
+            }
+            if (hasDigitOrLatin || word.Contains("/") || word.Contains("_") || word.Contains("=")) return word;
             if (word.EndsWith("ся", StringComparison.Ordinal) || word.EndsWith("сь", StringComparison.Ordinal))
                 return word;
             foreach (var ending in Endings)
