@@ -270,6 +270,9 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             modeAction = null;
             if (rule == null || logicalTarget == null) return false;
 
+            var model = _scenarioAnalyzer == null ? null : _scenarioAnalyzer.LanguageModel;
+            if (model == null) return false;
+
             var modeCandidates = new List<WidgetState>();
             foreach (var id in rule.Condition.Identifiers)
             {
@@ -280,9 +283,34 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                     continue;
 
                 string gateValue;
-                if (!TryGetEqualityValue(rule.Condition.Expression, id, out gateValue))
-                    continue;
-                if (gateValue == "0") modeCandidates.Add(matches[0]);
+                if (TryGetEqualityValue(rule.Condition.Expression, id, out gateValue) && gateValue == "0")
+                    modeCandidates.Add(matches[0]);
+            }
+
+            // IoTManager can split the manual branch into another rule. Link
+            // it only through an explicit shared action/condition identifier,
+            // never through a similar-looking widget title.
+            foreach (var manualRule in model.Rules)
+            {
+                foreach (var id in manualRule.Condition.Identifiers)
+                {
+                    string manualValue;
+                    if (!TryGetEqualityValue(manualRule.Condition.Expression, id, out manualValue) ||
+                        manualValue != "1")
+                        continue;
+
+                    var linked = manualRule.Actions.Any(a =>
+                        string.Equals(a.TargetId, physicalAction.WidgetId, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(a.TargetId, logicalTarget.WidgetId, StringComparison.OrdinalIgnoreCase) ||
+                        rule.Condition.Identifiers.Contains(a.TargetId));
+                    if (!linked) continue;
+
+                    var matches = _devices.GetWidgetsById(id);
+                    if (matches.Count == 1 &&
+                        string.Equals(matches[0].DeviceId, physicalAction.DeviceId, StringComparison.OrdinalIgnoreCase) &&
+                        IsUserControl(matches[0]) && IsModeWidget(matches[0]))
+                        modeCandidates.Add(matches[0]);
+                }
             }
 
             var distinct = modeCandidates.GroupBy(x => x.Id, StringComparer.OrdinalIgnoreCase)
