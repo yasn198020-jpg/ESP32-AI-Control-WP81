@@ -550,16 +550,29 @@
                                         Click="LocalScenarioSaveButton_Click" Margin="0,0,6,0"/>
                                 <Button Content="Очистить" Click="LocalScenarioClearButton_Click"/>
                             </StackPanel>
-                            <TextBlock Text="СОХРАНЁННЫЕ СЦЕНАРИИ" FontWeight="SemiBold"
-                                       Foreground="#FFD0BCFF" Margin="0,6,0,4"/>
-                            <ListView x:Name="LocalScenariosList" Height="220"
-                                      SelectionMode="Single"
-                                      SelectionChanged="LocalScenariosList_SelectionChanged"/>
-                            <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                                <Button Content="Вкл. / Выкл." Click="LocalScenarioToggleButton_Click"
-                                        Margin="0,0,6,0"/>
-                                <Button Content="Удалить" Click="LocalScenarioDeleteButton_Click"/>
-                            </StackPanel>
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D"
+                                    BorderThickness="1" CornerRadius="14" Padding="12"
+                                    Margin="0,10,0,8">
+                                <StackPanel>
+                                    <TextBlock Text="СОХРАНЁННЫЕ СЦЕНАРИИ" FontWeight="SemiBold"
+                                               FontSize="14" Foreground="#FFD0BCFF" Margin="0,0,0,4"/>
+                                    <TextBlock Text="Выберите правило, чтобы изменить его состояние или удалить."
+                                               FontSize="12" Foreground="#FFACADB8"
+                                               TextWrapping="Wrap" Margin="0,0,0,8"/>
+                                    <ListView x:Name="LocalScenariosList" Height="220"
+                                              SelectionMode="Single"
+                                              SelectionChanged="LocalScenariosList_SelectionChanged"/>
+                                    <Button Content="Включить / выключить выбранный"
+                                            Click="LocalScenarioToggleButton_Click"
+                                            Margin="0,8,0,4"/>
+                                    <Button Content="Удалить выбранный сценарий"
+                                            Click="LocalScenarioDeleteButton_Click"
+                                            Margin="0,4,0,0"/>
+                                    <TextBlock x:Name="LocalScenariosStatus" Text="" TextWrapping="Wrap"
+                                               FontSize="12" Foreground="#FFACADB8" Margin="0,8,0,0"/>
+                                </StackPanel>
+                            </Border>
+                         </StackPanel>
                             <TextBlock x:Name="LocalScenariosStatus" Text="" TextWrapping="Wrap"
                                        FontSize="12" Foreground="#FFACADB8" Margin="0,6,0,8"/>
                         </StackPanel>
