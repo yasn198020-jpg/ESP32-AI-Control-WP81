@@ -483,44 +483,85 @@
                 <PivotItem Header="Сценарии">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel Margin="10,4,10,12">
-                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1" CornerRadius="14" Padding="12" Margin="0,4,0,8"><StackPanel><TextBlock Text="СЦЕНАРИЙ IOTMANAGER" FontSize="14" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,18,0,6"/>
-                        <TextBlock Text="Вставьте сюда блок scenario=> из export.json. Марфа ищет зависимости от реле вверх по условиям сценария."
-                                   TextWrapping="Wrap" Foreground="#FFACADB8"/>
-                        <TextBox x:Name="ScenarioTextBox"
-                                 Header="Сценарий"
-                                 AcceptsReturn="True"
-                                 TextWrapping="Wrap"
-                                 Height="220"
-                                 />
-                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                            <Button Content="Импорт export.json" Click="ImportScenarioButton_Click" Margin="0,0,8,0"/>
-                            <Button Content="Проверить план" Click="TestScenarioButton_Click"/>
-                        </StackPanel></StackPanel></Border>
-                        <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1"
-                                CornerRadius="14" Padding="12" Margin="0,10,0,4">
-                            <StackPanel>
-                                <TextBlock Text="СВЯЗИ ПЕРЕМЕННЫХ С ВИДЖЕТАМИ" FontSize="14" FontWeight="SemiBold"
-                                           Foreground="#FFD0BCFF" Margin="0,0,0,6"/>
-                                <TextBlock x:Name="ScenarioDiagnosticsStatus"
-                                           Text="После импорта здесь появятся результаты сопоставления ID."
-                                           TextWrapping="Wrap" FontSize="12" Foreground="#FFACADB8" Margin="0,0,0,6"/>
-                                <ListView x:Name="ScenarioDiagnosticsList" Height="190"
-                                          SelectionMode="None" IsItemClickEnabled="False"/>
+                            <StackPanel Margin="4,4,4,10">
+                                <TextBlock Text="Сценарии IoTManager" FontSize="22"
+                                           FontWeight="SemiBold" Foreground="#FFEAF1F7"/>
+                                <TextBlock Text="Импортируйте export.json, проверьте связи переменных с виджетами и просмотрите план голосовых действий."
+                                           FontSize="13" Foreground="#FFACADB8"
+                                           TextWrapping="Wrap" Margin="0,5,0,0"/>
                             </StackPanel>
-                        </Border>
-                        <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1"
-                                CornerRadius="14" Padding="12" Margin="0,10,0,4">
-                            <StackPanel>
-                                <TextBlock Text="ПРЕДПРОСМОТР ПЛАНА" FontSize="14" FontWeight="SemiBold"
-                                           Foreground="#FFD0BCFF" Margin="0,0,0,6"/>
-                                <TextBlock x:Name="ScenarioPlanStatus" Text="Импортируйте сценарий и нажмите «Проверить план»."
-                                           TextWrapping="Wrap" FontSize="12" Foreground="#FFACADB8" Margin="0,0,0,6"/>
-                                <ListView x:Name="ScenarioPlanList" Height="220"
-                                          SelectionMode="None" IsItemClickEnabled="False"/>
-                            </StackPanel>
-                        </Border>
 
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D"
+                                    BorderThickness="1" CornerRadius="14" Padding="12"
+                                    Margin="0,0,0,10">
+                                <StackPanel>
+                                    <TextBlock Text="1. ИМПОРТ СЦЕНАРИЯ" FontSize="14"
+                                               FontWeight="SemiBold" Foreground="#FFD0BCFF"
+                                               Margin="0,0,0,5"/>
+                                    <TextBlock Text="Выберите JSON-файл экспорта IoTManager. Приложение распознаёт правила scenario=&gt; и сохраняет импортированный текст в настройках."
+                                               FontSize="12" Foreground="#FFACADB8"
+                                               TextWrapping="Wrap" Margin="0,0,0,8"/>
+                                    <TextBlock Text="Содержимое сценария" FontSize="13"
+                                               FontWeight="SemiBold" Margin="0,0,0,2"/>
+                                    <TextBox x:Name="ScenarioTextBox"
+                                             Header="Сценарий IoTManager"
+                                             PlaceholderText="Здесь появится содержимое export.json"
+                                             AcceptsReturn="True"
+                                             TextWrapping="Wrap"
+                                             Height="230"/>
+                                    <Button Content="Импортировать export.json"
+                                            Click="ImportScenarioButton_Click"
+                                            HorizontalAlignment="Stretch"
+                                            Margin="0,6,0,0"/>
+                                    <TextBlock Text="Подсказка: для анализа зависимостей также используются команды открытия и закрытия из настроек голоса."
+                                               FontSize="12" Foreground="#FFACADB8"
+                                               TextWrapping="Wrap" Margin="0,8,0,0"/>
+                                </StackPanel>
+                            </Border>
 
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D"
+                                    BorderThickness="1" CornerRadius="14" Padding="12"
+                                    Margin="0,0,0,10">
+                                <StackPanel>
+                                    <TextBlock Text="2. СВЯЗИ ПЕРЕМЕННЫХ С ВИДЖЕТАМИ"
+                                               FontSize="14" FontWeight="SemiBold"
+                                               Foreground="#FFD0BCFF" Margin="0,0,0,5"/>
+                                    <TextBlock Text="Здесь отображаются найденные соответствия ID, а также неоднозначные и отсутствующие связи."
+                                               FontSize="12" Foreground="#FFACADB8"
+                                               TextWrapping="Wrap" Margin="0,0,0,8"/>
+                                    <TextBlock x:Name="ScenarioDiagnosticsStatus"
+                                               Text="После импорта здесь появятся результаты сопоставления ID."
+                                               TextWrapping="Wrap" FontSize="12"
+                                               Foreground="#FFACADB8" Margin="0,0,0,6"/>
+                                    <ListView x:Name="ScenarioDiagnosticsList" Height="190"
+                                              SelectionMode="None" IsItemClickEnabled="False"/>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D"
+                                    BorderThickness="1" CornerRadius="14" Padding="12"
+                                    Margin="0,0,0,10">
+                                <StackPanel>
+                                    <TextBlock Text="3. ПРОВЕРКА ПЛАНА ДЕЙСТВИЙ"
+                                               FontSize="14" FontWeight="SemiBold"
+                                               Foreground="#FFD0BCFF" Margin="0,0,0,5"/>
+                                    <TextBlock Text="Сформируйте предварительный план по командам открытия и закрытия. Проверка не отправляет команды на ESP32."
+                                               FontSize="12" Foreground="#FFACADB8"
+                                               TextWrapping="Wrap" Margin="0,0,0,8"/>
+                                    <Button Content="Проверить план"
+                                            Click="TestScenarioButton_Click"
+                                            HorizontalAlignment="Stretch"
+                                            Background="#FFD0BCFF" BorderBrush="#FFD0BCFF"
+                                            Foreground="#FF202020" FontWeight="SemiBold"
+                                            Margin="0,0,0,8"/>
+                                    <TextBlock x:Name="ScenarioPlanStatus"
+                                               Text="Импортируйте сценарий и нажмите «Проверить план»."
+                                               TextWrapping="Wrap" FontSize="12"
+                                               Foreground="#FFACADB8" Margin="0,0,0,6"/>
+                                    <ListView x:Name="ScenarioPlanList" Height="220"
+                                              SelectionMode="None" IsItemClickEnabled="False"/>
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
                     </ScrollViewer>
                 </PivotItem>
