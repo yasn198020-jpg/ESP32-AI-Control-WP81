@@ -3483,6 +3483,7 @@ namespace ESP32AIControl.WP81
             var selected = GraphWidgetBox.SelectedItem as string;
             GraphWidgetBox.Items.Clear();
             if (HistoryWidgetList != null) HistoryWidgetList.Items.Clear();
+            if (HistoryEmptyText != null) HistoryEmptyText.Visibility = Visibility.Collapsed;
 
             foreach (var state in _devices.Widgets.OrderBy(delegate(WidgetState s) { return s.Page; }).ThenBy(delegate(WidgetState s) { return s.Order; }))
             {
@@ -3498,6 +3499,8 @@ namespace ESP32AIControl.WP81
                 GraphWidgetBox.SelectedItem = selected;
             else if (GraphWidgetBox.Items.Count > 0)
                 GraphWidgetBox.SelectedIndex = 0;
+            if (HistoryEmptyText != null)
+                HistoryEmptyText.Visibility = GraphWidgetBox.Items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         }
 
         private static bool ContainsComboValue(ComboBox box, string value)
