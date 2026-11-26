@@ -3397,9 +3397,29 @@ namespace ESP32AIControl.WP81
             }
         }
 
+        private void ToggleGraphSettingsButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (GraphSettingsCard == null) return;
+            GraphSettingsCard.Visibility = GraphSettingsCard.Visibility == Visibility.Visible
+                ? Visibility.Collapsed : Visibility.Visible;
+        }
+
+        private static bool IsNumericHistoryWidget(WidgetState state)
+        {
+            if (state == null) return false;
+            var type = NormalizeType(state.WidgetType);
+            var definition = NormalizeType(state.DefinitionName);
+            if (type == "value" || type == "status" || type == "number" || type == "numeric")
+                return true;
+            return definition.StartsWith("chart", StringComparison.Ordinal) ||
+                   definition.StartsWith("anydata", StringComparison.Ordinal) ||
+                   definition == "value" || definition == "fillgauge" ||
+                   definition == "progressline" || definition == "progressround";
+        }
+
         private void UpdateGraphWidget(WidgetState state)
         {
-            if (state == null || !_widgetIndex.ContainsKey(state.Key)) return;
+            if (state == null || !_widgetIndex.ContainsKey(state.Key) || !IsNumericHistoryWidget(state)) return;
             if (!ContainsComboValue(GraphWidgetBox, state.Key))
             {
                 GraphWidgetBox.Items.Add(state.Key);
@@ -3416,7 +3436,8 @@ namespace ESP32AIControl.WP81
             foreach (var state in _devices.Widgets.OrderBy(delegate(WidgetState s) { return s.Page; }).ThenBy(delegate(WidgetState s) { return s.Order; }))
             {
                 _widgetIndex[state.Key] = state;
-                GraphWidgetBox.Items.Add(state.Key);
+                if (IsNumericHistoryWidget(state))
+                    GraphWidgetBox.Items.Add(state.Key);
             }
 
             if (!string.IsNullOrEmpty(selected) && ContainsComboValue(GraphWidgetBox, selected))
@@ -3472,9 +3493,11 @@ namespace ESP32AIControl.WP81
                 foreach (var p in points) _lastGraphPoints.Add(p);
 
                 DrawGraph(_lastGraphPoints);
-                GraphSummary.Text = state.Description + " • " + points.Count.ToString(CultureInfo.InvariantCulture) +
-                    " точек, " + from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) +
-                    " — " + to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                GraphSummary.Text = points.Count < 2
+                    ? "Для построения графика нужно минимум два сохранённых числовых измерения. Сейчас: " + points.Count.ToString(CultureInfo.InvariantCulture) + ". Проверьте интервал записи и выберите более широкий период."
+                    : (state.Description ?? key) + " • " + points.Count.ToString(CultureInfo.InvariantCulture) +
+                      " точек, " + from.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture) +
+                      " — " + to.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture);
             }
             catch (Exception ex)
             {
