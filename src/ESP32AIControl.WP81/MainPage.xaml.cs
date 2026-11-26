@@ -985,12 +985,47 @@ namespace ESP32AIControl.WP81
             };
         }
 
-        private async void ShowAboutDialog()
+        private void ShowAboutDialog()
         {
-            var dialog = new Windows.UI.Popups.MessageDialog(
-                "ESP32 AI Control для Windows Phone 8.1\n\nУправление ESP32 через MQTT, UDP и WebSocket. Голосовое управление, сценарии, история измерений и планирование команд.",
-                "О приложении");
-            await dialog.ShowAsync();
+            var body = new StackPanel();
+            body.Children.Add(new TextBlock
+            {
+                Text = "О приложении",
+                FontSize = 14,
+                FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255)),
+                Margin = new Thickness(12, 12, 12, 6)
+            });
+            body.Children.Add(new TextBlock
+            {
+                Text = "ESP32 AI Control для Windows Phone 8.1",
+                FontSize = 16,
+                FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(Windows.UI.Colors.White),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(12, 2, 12, 8)
+            });
+            body.Children.Add(new TextBlock
+            {
+                Text = "Управление ESP32 через MQTT, UDP и WebSocket. Голосовое управление, сценарии, история измерений и планирование команд.",
+                FontSize = 12,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 172, 173, 184)),
+                Margin = new Thickness(12, 0, 12, 12)
+            });
+            var close = new Button
+            {
+                Content = "Закрыть",
+                MinHeight = 42,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(8, 4, 8, 8),
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255)),
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 32, 32, 32)),
+                FontWeight = Windows.UI.Text.FontWeights.SemiBold
+            };
+            body.Children.Add(close);
+            var popup = CreateAppPopup(body, 330, 300);
+            close.Click += delegate { popup.IsOpen = false; };
         }
 
         private void ShowTextSizeDialog()
@@ -1004,13 +1039,13 @@ namespace ESP32AIControl.WP81
                 Maximum = 1.1,
                 StepFrequency = 0.05,
                 Value = initial,
-                Margin = new Thickness(16, 8, 16, 8)
+                Margin = new Thickness(12, 6, 12, 6)
             };
             var valueLabel = new TextBlock
             {
                 Text = "Масштаб: " + initial.ToString("0.00", CultureInfo.InvariantCulture),
-                FontSize = 15,
-                Margin = new Thickness(16, 2, 16, 8),
+                FontSize = 12,
+                Margin = new Thickness(12, 2, 12, 8),
                 Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255))
             };
             slider.ValueChanged += delegate
@@ -1023,17 +1058,18 @@ namespace ESP32AIControl.WP81
             body.Children.Add(new TextBlock
             {
                 Text = "Размер текста",
-                FontSize = 20,
+                FontSize = 14,
                 FontWeight = Windows.UI.Text.FontWeights.SemiBold,
-                Margin = new Thickness(16, 16, 16, 4)
+                Margin = new Thickness(12, 12, 12, 4),
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255))
             });
             body.Children.Add(new TextBlock
             {
                 Text = "Переместите ползунок, чтобы подобрать удобный размер. Изменение сразу применяется к вкладкам дашборда и настроек.",
-                FontSize = 13,
+                FontSize = 12,
                 TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(16, 0, 16, 4),
-                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 190, 192, 201))
+                Margin = new Thickness(12, 0, 12, 4),
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 172, 173, 184))
             });
             body.Children.Add(slider);
             body.Children.Add(valueLabel);
@@ -5331,10 +5367,11 @@ namespace ESP32AIControl.WP81
             {
                 Width = Math.Min(width, Math.Max(270, ActualWidth - 24)),
                 MaxHeight = Math.Min(maxHeight, Math.Max(280, ActualHeight - 110)),
-                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 36, 37, 42)),
-                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 84, 80, 99)),
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 43, 44, 52)),
+                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 65, 67, 77)),
                 BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(18),
+                CornerRadius = new CornerRadius(14),
+                Padding = new Thickness(12),
                 Child = scroll
             };
             // Keep custom dialogs centered on both 720x1280 and smaller WP8.1 layouts.
