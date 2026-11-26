@@ -421,7 +421,7 @@
                 <PivotItem Header="Сценарии">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel Margin="10,4,10,12">
-                            <TextBlock Text="СЦЕНАРИЙ IOTMANAGER" FontSize="17" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,18,0,6"/>
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1" CornerRadius="14" Padding="12" Margin="0,4,0,8"><StackPanel><TextBlock Text="СЦЕНАРИЙ IOTMANAGER" FontSize="14" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,18,0,6"/>
                         <TextBlock Text="Вставьте сюда блок scenario=> из export.json. Марфа ищет зависимости от реле вверх по условиям сценария."
                                    TextWrapping="Wrap" Foreground="#FFACADB8"/>
                         <TextBox x:Name="ScenarioTextBox"
@@ -433,9 +433,9 @@
                         <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
                             <Button Content="Импорт export.json" Click="ImportScenarioButton_Click" Margin="0,0,8,0"/>
                             <Button Content="Проверить план" Click="TestScenarioButton_Click"/>
-                        </StackPanel>
-                        <Border Background="#FF30313A" BorderBrush="#FF41434D" BorderThickness="1"
-                                CornerRadius="12" Padding="10" Margin="0,10,0,4">
+                        </StackPanel></StackPanel></Border>
+                        <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1"
+                                CornerRadius="14" Padding="12" Margin="0,10,0,4">
                             <StackPanel>
                                 <TextBlock Text="СВЯЗИ ПЕРЕМЕННЫХ С ВИДЖЕТАМИ" FontSize="14" FontWeight="SemiBold"
                                            Foreground="#FFD0BCFF" Margin="0,0,0,6"/>
@@ -446,8 +446,8 @@
                                           SelectionMode="None" IsItemClickEnabled="False"/>
                             </StackPanel>
                         </Border>
-                        <Border Background="#FF30313A" BorderBrush="#FF41434D" BorderThickness="1"
-                                CornerRadius="12" Padding="10" Margin="0,10,0,4">
+                        <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1"
+                                CornerRadius="14" Padding="12" Margin="0,10,0,4">
                             <StackPanel>
                                 <TextBlock Text="ПРЕДПРОСМОТР ПЛАНА" FontSize="14" FontWeight="SemiBold"
                                            Foreground="#FFD0BCFF" Margin="0,0,0,6"/>
@@ -465,14 +465,14 @@
                 <PivotItem Header="Автосценарии">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel Margin="10,4,10,12">
-                            <TextBlock Text="ЛОКАЛЬНЫЕ АВТОСЦЕНАРИИ" FontSize="18" FontWeight="SemiBold"
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1" CornerRadius="14" Padding="12" Margin="0,4,0,8"><StackPanel><TextBlock Text="ЛОКАЛЬНЫЕ АВТОСЦЕНАРИИ" FontSize="14" FontWeight="SemiBold"
                                        Foreground="#FFD0BCFF" Margin="0,12,0,4"/>
                             <TextBlock Text="Условия проверяются по данным MQTT и WebSocket. Сценарий срабатывает один раз, повторно — после перехода хотя бы одного условия в FALSE."
                                        TextWrapping="Wrap" Foreground="#FFACADB8" Margin="0,0,0,8"/>
                             <TextBox x:Name="LocalScenarioTitleBox" Header="Название сценария"
                                      PlaceholderText="Например, высокая температура"/>
-                            <Border Background="#FF30313A" BorderBrush="#FF41434D" BorderThickness="1"
-                                    CornerRadius="12" Padding="10" Margin="0,4,0,8">
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1"
+                                    CornerRadius="14" Padding="12" Margin="0,4,0,8">
                                 <StackPanel>
                                     <TextBlock Text="КОНСТРУКТОР УСЛОВИЯ" FontWeight="SemiBold"
                                                Foreground="#FFD0BCFF" Margin="0,0,0,6"/>
@@ -496,15 +496,15 @@
                                              PlaceholderText="Например, 25" Margin="0,0,0,6"/>
                                     <Button Content="＋ Добавить условие" Click="LocalScenarioAddConditionButton_Click"
                                             HorizontalAlignment="Stretch"/>
-                                </StackPanel>
+                                </StackPanel></StackPanel></Border>
                             </Border>
                             <TextBox x:Name="LocalScenarioConditionsBox" Header="Условия правила"
                                      AcceptsReturn="True" TextWrapping="Wrap" Height="100"
                                      PlaceholderText="sensor1 > 25&#10;AND sensor2 = 1&#10;OR sensor3 &lt; 10"/>
                             <TextBlock Text="Формат: widgetId оператор значение. Для следующих строк укажите AND или OR в начале."
                                        TextWrapping="Wrap" FontSize="12" Foreground="#FFACADB8" Margin="0,2,0,6"/>
-                            <Border Background="#FF30313A" BorderBrush="#FF41434D" BorderThickness="1"
-                                    CornerRadius="12" Padding="10" Margin="0,4,0,8">
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1"
+                                    CornerRadius="14" Padding="12" Margin="0,4,0,8">
                                 <StackPanel>
                                     <TextBlock Text="КОНСТРУКТОР ДЕЙСТВИЯ" FontWeight="SemiBold"
                                                Foreground="#FFD0BCFF" Margin="0,0,0,6"/>
@@ -548,15 +548,15 @@
                 <PivotItem Header="Журнал">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel Margin="10,4,10,12">
-                            <TextBlock Text="ЖУРНАЛ СОЕДИНЕНИЯ" FontSize="18" FontWeight="SemiBold"
+                            <TextBlock Text="ЖУРНАЛ СОЕДИНЕНИЯ" FontSize="14" FontWeight="SemiBold"
                                    Foreground="#FFD0BCFF" Margin="0,20,0,4"/>
                         <Border Background="#FF25262D" BorderBrush="#FF41434D"
-                                BorderThickness="1" CornerRadius="12" Padding="10" MinHeight="100">
+                                BorderThickness="1" CornerRadius="14" Padding="12" MinHeight="100">
                             <ScrollViewer Height="150" VerticalScrollBarVisibility="Auto">
                                 <TextBlock x:Name="LogText" TextWrapping="Wrap" FontSize="13"/>
                             </ScrollViewer>
                         </Border>
-<TextBlock Text="ЭКСПОРТ ДАННЫХ" FontSize="17" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,18,0,6"/>
+<TextBlock Text="ЭКСПОРТ ДАННЫХ" FontSize="14" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,18,0,6"/>
                         <Button Content="Экспорт всей истории за сегодня" Click="ExportTodayButton_Click"/>
                         <TextBlock Text="Документы сохраняются в локальной папке приложения. Формат .doc совместим с Word."
                                    Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,6,0,0"/>
