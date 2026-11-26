@@ -3924,7 +3924,15 @@ namespace ESP32AIControl.WP81
                 maxValue = Math.Max(maxValue, value);
             }
 
-            if (numeric.Count < 2) return;
+            if (numeric.Count < 2)
+            {
+                GraphCanvas.Width = Math.Max(280.0, ActualWidth - 40.0);
+                GraphCanvas.Height = 120;
+                var empty = new TextBlock { Text = "Нужно минимум два числовых измерения для графика.", Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 172, 173, 184)), FontSize = 13, TextWrapping = TextWrapping.Wrap, Width = 260 };
+                Canvas.SetLeft(empty, 10); Canvas.SetTop(empty, 42); GraphCanvas.Children.Add(empty);
+                if (GraphSelectedPoint != null) GraphSelectedPoint.Text = "Нет достаточного количества точек";
+                return;
+            }
             if (Math.Abs(maxValue - minValue) < 0.000001) maxValue = minValue + 1;
 
             var timeSpan = Math.Max(1.0, (maxTime - minTime).TotalSeconds);
@@ -3956,6 +3964,16 @@ namespace ESP32AIControl.WP81
                 });
             }
 
+            for (var tick = 0; tick <= 4; tick++)
+            {
+                var fraction = tick / 4.0;
+                var stamp = minTime.AddSeconds(timeSpan * fraction).ToLocalTime();
+                var label = new TextBlock { Text = stamp.ToString(timeSpan >= 86400 ? "dd.MM HH:mm" : "HH:mm", CultureInfo.InvariantCulture), Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 172, 173, 184)), FontSize = 10 };
+                Canvas.SetLeft(label, Math.Max(padding, Math.Min(width - padding - 58, padding + fraction * (width - padding * 2) - 24)));
+                Canvas.SetTop(label, height - 18);
+                GraphCanvas.Children.Add(label);
+            }
+
             GraphCanvas.Children.Add(new Line
             {
                 X1 = padding, Y1 = height - padding,
@@ -3977,9 +3995,13 @@ namespace ESP32AIControl.WP81
                 var y2 = padding + (1 - (current.Item2 - minValue) / (maxValue - minValue)) * (height - padding * 2);
                 GraphCanvas.Children.Add(new Line
                 {
-                    X1 = x1, Y1 = y1, X2 = x, Y2 = y2,
-                    Stroke = new SolidColorBrush(Windows.UI.Colors.DodgerBlue),
-                    StrokeThickness = 2
+                    X1 = x1, Y1 = y1, X2 = x, Y2 = y1,
+                    Stroke = new SolidColorBrush(Windows.UI.Colors.DodgerBlue), StrokeThickness = 2
+                });
+                GraphCanvas.Children.Add(new Line
+                {
+                    X1 = x, Y1 = y1, X2 = x, Y2 = y2,
+                    Stroke = new SolidColorBrush(Windows.UI.Colors.DodgerBlue), StrokeThickness = 2
                 });
             }
 
@@ -4015,7 +4037,18 @@ namespace ESP32AIControl.WP81
             };
             Canvas.SetLeft(marker, x - 6);
             Canvas.SetTop(marker, y - 6);
+            GraphCanvas.Children.Add(new Line
+            {
+                X1 = x, Y1 = padding, X2 = x, Y2 = height - padding,
+                Stroke = new SolidColorBrush(Windows.UI.Colors.Red), StrokeThickness = 2
+            });
             GraphCanvas.Children.Add(marker);
+            if (GraphSelectedPoint != null && _graphSelectedIndex < _graphNumericPoints.Count)
+            {
+                var selected = _graphNumericPoints[_graphSelectedIndex];
+                GraphSelectedPoint.Text = selected.Timestamp.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss", CultureInfo.InvariantCulture) +
+                    "   •   " + selected.Value + " " + (_widgetIndex.ContainsKey(selected.DeviceId + "/" + selected.WidgetId) ? (_widgetIndex[selected.DeviceId + "/" + selected.WidgetId].Unit ?? string.Empty) : string.Empty);
+            }
         }
 
         private void GraphCanvas_ManipulationDelta(object sender, ManipulationDeltaRoutedEventArgs e)
