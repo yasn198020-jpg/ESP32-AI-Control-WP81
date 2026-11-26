@@ -574,7 +574,6 @@
                                                FontSize="12" Foreground="#FFACADB8" Margin="0,8,0,0"/>
                                 </StackPanel>
                             </Border>
-                         </StackPanel>
                         </StackPanel>
                     </ScrollViewer>
                 </PivotItem>
