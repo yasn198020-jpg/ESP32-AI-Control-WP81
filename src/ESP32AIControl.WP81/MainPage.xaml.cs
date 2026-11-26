@@ -89,7 +89,8 @@ namespace ESP32AIControl.WP81
             new Dictionary<string, WidgetState>();
         private readonly List<ScheduledCommand> _scheduleRows =
             new List<ScheduledCommand>();
-        private readonly List<string> _graphCompareKeys = new List<string>();\n        private readonly List<MeasurementPoint> _lastGraphPoints =
+        private readonly List<string> _graphCompareKeys = new List<string>();
+        private readonly List<MeasurementPoint> _lastGraphPoints =
             new List<MeasurementPoint>();
         private readonly List<MeasurementPoint> _graphNumericPoints =
             new List<MeasurementPoint>();
@@ -175,7 +176,8 @@ namespace ESP32AIControl.WP81
             _settingsStore = new AppSettingsStore();
             _appSettings = new AppSettings();
 
-            RefreshGraphSetPicker();\n            _settings = new MqttSettings();
+            RefreshGraphSetPicker();
+            _settings = new MqttSettings();
             _devices = new DeviceRepository();
             _mqtt = new Esp32MqttService(_settings, _devices);
             _localScenarioStore = new LocalScenarioStore();
@@ -193,7 +195,14 @@ namespace ESP32AIControl.WP81
             _measurementStore = new LocalMeasurementStore();
             _recorder = new MeasurementRecorder(
                 _measurementStore,
-                delegate(WidgetState state)\n                {\n                    int configured;\n                    if (_appSettings.WidgetMeasurementIntervals != null &&\n                        _appSettings.WidgetMeasurementIntervals.TryGetValue(state.Key, out configured))\n                        return Math.Max(1, configured);\n                    return Math.Max(1, _appSettings.MeasurementIntervalSeconds);\n                });
+                delegate(WidgetState state)
+                {
+                    int configured;
+                    if (_appSettings.WidgetMeasurementIntervals != null &&
+                        _appSettings.WidgetMeasurementIntervals.TryGetValue(state.Key, out configured))
+                        return Math.Max(1, configured);
+                    return Math.Max(1, _appSettings.MeasurementIntervalSeconds);
+                });
 
             _exporter = new RtfHistoryExporter();
             _commandExecutor = new Esp32CommandExecutor(_mqtt, _devices);
@@ -3081,45 +3090,161 @@ namespace ESP32AIControl.WP81
             }
         }
 
+        // Each sensor receives its own compact chart panel and its own Y scale.
+        // This avoids misleading comparisons between different units (for example °C and %).
         private void DrawCompareGraph(IList<Tuple<string, IList<MeasurementPoint>>> traces)
         {
             GraphCanvas.Children.Clear();
             _graphNumericPoints.Clear();
             _graphPointXPositions.Clear();
+
             var palette = new Windows.UI.Color[] {
                 Windows.UI.Colors.DodgerBlue, Windows.UI.Colors.Orange,
                 Windows.UI.Colors.LimeGreen, Windows.UI.Colors.Magenta,
                 Windows.UI.Colors.Cyan, Windows.UI.Colors.Yellow
             };
-            var allTimes = traces.SelectMany(t => t.Item2).Select(p => p.Timestamp).ToList();
-            if (allTimes.Count < 2) { GraphSummary.Text = "Недостаточно данных для графика."; return; }
-            var minTime = allTimes.Min(); var maxTime = allTimes.Max();
-            var span = Math.Max(1.0, (maxTime-minTime).TotalSeconds);
-            var width = Math.Max(280.0, ActualWidth > 0 ? ActualWidth-40.0 : 680.0) * Math.Max(1.0, Math.Min(20.0,_graphZoom));
-            const double height=300.0, pad=24.0;
-            GraphCanvas.Width=width; GraphCanvas.Height=height;
-            for(int gi=0;gi<=4;gi++){double y=pad+(height-pad*2)*gi/4.0;GraphCanvas.Children.Add(new Line{X1=pad,Y1=y,X2=width-pad,Y2=y,Stroke=new SolidColorBrush(Windows.UI.Color.FromArgb(255,58,60,70)),StrokeThickness=1});}
-            int colorIndex=0;
-            foreach(var trace in traces)
+            var prepared = new List<Tuple<string, List<Tuple<DateTimeOffset, double>>>>();
+            foreach (var trace in traces)
             {
-                var vals=trace.Item2.Select(p=>{double v;return double.TryParse((p.Value??"").Replace(',','.'),NumberStyles.Float,CultureInfo.InvariantCulture,out v)?Tuple.Create(p.Timestamp,v):null;}).Where(v=>v!=null).OrderBy(v=>v.Item1).ToList();
-                if(vals.Count<2)continue;
-                var lo=vals.Min(v=>v.Item2);var hi=vals.Max(v=>v.Item2);if(Math.Abs(hi-lo)<1e-6)hi=lo+1;
-                var brush=new SolidColorBrush(palette[colorIndex%palette.Length]);
-                for(int i=1;i<vals.Count;i++)
-                {
-                    double x1=pad+((vals[i-1].Item1-minTime).TotalSeconds/span)*(width-pad*2);
-                    double x2=pad+((vals[i].Item1-minTime).TotalSeconds/span)*(width-pad*2);
-                    double y1=pad+(1-(vals[i-1].Item2-lo)/(hi-lo))*(height-pad*2);
-                    double y2=pad+(1-(vals[i].Item2-lo)/(hi-lo))*(height-pad*2);
-                    GraphCanvas.Children.Add(new Line{X1=x1,Y1=y1,X2=x2,Y2=y2,Stroke=brush,StrokeThickness=2});
-                }
-                var label=new TextBlock{Text=trace.Item1+" ("+lo.ToString("0.##",CultureInfo.InvariantCulture)+"–"+hi.ToString("0.##",CultureInfo.InvariantCulture)+")",Foreground=brush,FontSize=12};
-                Canvas.SetLeft(label,pad+colorIndex*130);Canvas.SetTop(label,2);GraphCanvas.Children.Add(label);
-                colorIndex++;
+                var values = trace.Item2
+                    .Select(p =>
+                    {
+                        double value;
+                        return double.TryParse((p.Value ?? string.Empty).Replace(',', '.'),
+                            NumberStyles.Float, CultureInfo.InvariantCulture, out value)
+                            ? Tuple.Create(p.Timestamp, value) : null;
+                    })
+                    .Where(p => p != null)
+                    .OrderBy(p => p.Item1)
+                    .ToList();
+                if (values.Count >= 2)
+                    prepared.Add(Tuple.Create(trace.Item1, values));
             }
-            GraphSummary.Text += " • линии показаны в индивидуальных шкалах (диапазоны подписаны).";
-            if(GraphZoomLabel!=null)GraphZoomLabel.Text="×"+_graphZoom.ToString("0.0",CultureInfo.GetCultureInfo("ru-RU"));
+
+            if (prepared.Count == 0)
+            {
+                GraphSummary.Text = "Недостаточно числовых данных для сравнения.";
+                GraphCanvas.Width = 280;
+                GraphCanvas.Height = 120;
+                return;
+            }
+
+            var allTimes = prepared.SelectMany(t => t.Item2).Select(p => p.Item1).ToList();
+            var minTime = allTimes.Min();
+            var maxTime = allTimes.Max();
+            var timeSpan = Math.Max(1.0, (maxTime - minTime).TotalSeconds);
+            var zoom = Math.Max(1.0, Math.Min(20.0, _graphZoom));
+            var width = Math.Max(300.0, ActualWidth > 0 ? ActualWidth - 48.0 : 680.0) * zoom;
+            const double panelHeight = 190.0;
+            const double left = 54.0;
+            const double right = 16.0;
+            const double top = 28.0;
+            const double bottom = 28.0;
+            var height = panelHeight * prepared.Count + 8.0;
+            GraphCanvas.Width = width;
+            GraphCanvas.Height = height;
+
+            for (var panel = 0; panel < prepared.Count; panel++)
+            {
+                var trace = prepared[panel];
+                var values = trace.Item2;
+                var panelTop = panel * panelHeight;
+                var plotTop = panelTop + top;
+                var plotBottom = panelTop + panelHeight - bottom;
+                var plotHeight = plotBottom - plotTop;
+                var low = values.Min(p => p.Item2);
+                var high = values.Max(p => p.Item2);
+                if (Math.Abs(high - low) < 0.000001) high = low + 1.0;
+                var brush = new SolidColorBrush(palette[panel % palette.Length]);
+
+                var title = new TextBlock
+                {
+                    Text = trace.Item1 + "   " + low.ToString("0.##", CultureInfo.InvariantCulture) +
+                           " … " + high.ToString("0.##", CultureInfo.InvariantCulture),
+                    Foreground = brush,
+                    FontSize = 13,
+                    FontWeight = Windows.UI.Text.FontWeights.SemiBold
+                };
+                Canvas.SetLeft(title, left);
+                Canvas.SetTop(title, panelTop + 3);
+                GraphCanvas.Children.Add(title);
+
+                for (var grid = 0; grid <= 2; grid++)
+                {
+                    var y = plotTop + plotHeight * grid / 2.0;
+                    GraphCanvas.Children.Add(new Line
+                    {
+                        X1 = left, Y1 = y, X2 = width - right, Y2 = y,
+                        Stroke = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 58, 60, 70)),
+                        StrokeThickness = 1
+                    });
+                }
+
+                var maxX = width - right;
+                for (var i = 1; i < values.Count; i++)
+                {
+                    var x1 = left + ((values[i - 1].Item1 - minTime).TotalSeconds / timeSpan) * (maxX - left);
+                    var x2 = left + ((values[i].Item1 - minTime).TotalSeconds / timeSpan) * (maxX - left);
+                    var y1 = plotTop + (1.0 - (values[i - 1].Item2 - low) / (high - low)) * plotHeight;
+                    var y2 = plotTop + (1.0 - (values[i].Item2 - low) / (high - low)) * plotHeight;
+                    GraphCanvas.Children.Add(new Line
+                    {
+                        X1 = x1, Y1 = y1, X2 = x2, Y2 = y2,
+                        Stroke = brush, StrokeThickness = 2.5
+                    });
+                }
+
+                var highLabel = new TextBlock
+                {
+                    Text = high.ToString("0.##", CultureInfo.InvariantCulture),
+                    Foreground = new SolidColorBrush(Windows.UI.Colors.White),
+                    FontSize = 10
+                };
+                var lowLabel = new TextBlock
+                {
+                    Text = low.ToString("0.##", CultureInfo.InvariantCulture),
+                    Foreground = new SolidColorBrush(Windows.UI.Colors.White),
+                    FontSize = 10
+                };
+                Canvas.SetLeft(highLabel, 3);
+                Canvas.SetTop(highLabel, plotTop - 5);
+                Canvas.SetLeft(lowLabel, 3);
+                Canvas.SetTop(lowLabel, plotBottom - 7);
+                GraphCanvas.Children.Add(highLabel);
+                GraphCanvas.Children.Add(lowLabel);
+
+                // Four readable time labels are shared by all panels.
+                for (var tick = 0; tick <= 3; tick++)
+                {
+                    var fraction = tick / 3.0;
+                    var x = left + fraction * (maxX - left);
+                    var stamp = minTime.AddSeconds(timeSpan * fraction);
+                    var format = timeSpan >= 86400.0 ? "dd.MM HH:mm" : "HH:mm";
+                    var timeLabel = new TextBlock
+                    {
+                        Text = stamp.ToLocalTime().ToString(format, CultureInfo.InvariantCulture),
+                        Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 172, 173, 184)),
+                        FontSize = 10
+                    };
+                    Canvas.SetLeft(timeLabel, Math.Max(left, Math.Min(maxX - 65, x - 24)));
+                    Canvas.SetTop(timeLabel, plotBottom + 4);
+                    GraphCanvas.Children.Add(timeLabel);
+                }
+
+                if (panel < prepared.Count - 1)
+                {
+                    GraphCanvas.Children.Add(new Line
+                    {
+                        X1 = 0, Y1 = panelTop + panelHeight - 1,
+                        X2 = width, Y2 = panelTop + panelHeight - 1,
+                        Stroke = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 75, 77, 88)),
+                        StrokeThickness = 1
+                    });
+                }
+            }
+
+            if (GraphZoomLabel != null)
+                GraphZoomLabel.Text = "×" + _graphZoom.ToString("0.0", CultureInfo.GetCultureInfo("ru-RU"));
         }
 
         private void DrawGraph(IList<MeasurementPoint> points)
