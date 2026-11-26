@@ -572,7 +572,7 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                     var identifiers = new List<string>();
                     CollectExpressionIdentifiers(action.Expression, identifiers);
                     if (rule.Condition != null)
-                        CollectExpressionIdentifiers(rule.Condition.Expression, identifiers);
+                        CollectRequiredConditionIdentifiers(rule.Condition.Expression, identifiers);
                     definitions.Add(identifiers
                         .Where(id => !string.IsNullOrWhiteSpace(id))
                         .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -600,6 +600,50 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             if (call != null)
                 foreach (var argument in call.Arguments)
                     CollectExpressionIdentifiers(argument, identifiers);
+        }
+
+        // Return only identifiers that are structurally required by a
+        // condition. In an OR expression neither side is individually
+        // required, so retain only identifiers required by both branches.
+        // This prevents a conditional constant assignment from being linked
+        // to an unrelated control mentioned in an alternative OR branch.
+        private static void CollectRequiredConditionIdentifiers(
+            IoTExpr expression,
+            IList<string> identifiers)
+        {
+            if (expression == null) return;
+
+            var variable = expression as IoTExpr.Variable;
+            if (variable != null)
+            {
+                identifiers.Add(variable.Name);
+                return;
+            }
+
+            var unary = expression as IoTExpr.Unary;
+            if (unary != null)
+            {
+                CollectRequiredConditionIdentifiers(unary.Expression, identifiers);
+                return;
+            }
+
+            var binary = expression as IoTExpr.Binary;
+            if (binary == null) return;
+
+            if (binary.Operator == "|" || binary.Operator == "||")
+            {
+                var left = new List<string>();
+                var right = new List<string>();
+                CollectRequiredConditionIdentifiers(binary.Left, left);
+                CollectRequiredConditionIdentifiers(binary.Right, right);
+                foreach (var id in left.Distinct(StringComparer.OrdinalIgnoreCase))
+                    if (right.Any(x => string.Equals(x, id, StringComparison.OrdinalIgnoreCase)))
+                        identifiers.Add(id);
+                return;
+            }
+
+            CollectRequiredConditionIdentifiers(binary.Left, identifiers);
+            CollectRequiredConditionIdentifiers(binary.Right, identifiers);
         }
 
         private static bool GraphVariableDependsOnIdentifier(
