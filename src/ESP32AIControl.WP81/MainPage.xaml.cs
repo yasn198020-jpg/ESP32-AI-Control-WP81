@@ -188,6 +188,7 @@ namespace ESP32AIControl.WP81
             _settings = new MqttSettings();
             _devices = new DeviceRepository();
             _marfaEngine = new MarfaCommandEngine(_devices);
+            MarfaCoreDiagnostics.Sink = delegate(string message) { Log("MARFA CORE: " + message); };
             _mqtt = new Esp32MqttService(_settings, _devices);
             _localScenarioStore = new LocalScenarioStore();
             _localScenarioEngine = new LocalScenarioEngine(_localScenarioStore, LocalScenario_Triggered);
