@@ -79,7 +79,55 @@ namespace ESP32AIControl.WP81.Core.Voice
             return Parse(command, _devices == null ? new List<WidgetState>() : _devices.GetWidgetsSnapshot());
         }
 
+        public DialogTargetContext DialogSnapshot()
+        {
+            return _dialogContext.Snapshot();
+        }
+
+        public void ClearDialogContext()
+        {
+            _dialogContext.Clear();
+            ClearPending();
+            _lastTarget = null;
+        }
+
         public MarfaCommandResult Parse(string command, IList<WidgetState> widgets)
+        {
+            _dialogContext.BeginTurn(command);
+            var result = ParseCore(command, widgets);
+            RememberDialogResult(command, result);
+            return result;
+        }
+
+        private void RememberDialogResult(string command, MarfaCommandResult result)
+        {
+            if (result == null) return;
+            var core = new LocalCommandResult
+            {
+                Action = result.Kind == MarfaCommandKind.Control ? LocalCommandAction.Control :
+                    result.Kind == MarfaCommandKind.ReadValue ? LocalCommandAction.ReadValue :
+                    result.Kind == MarfaCommandKind.Clarify ? LocalCommandAction.Clarify :
+                    result.Kind == MarfaCommandKind.Stop ? LocalCommandAction.Stop : LocalCommandAction.NotFound,
+                Reply = result.Reply ?? string.Empty,
+                DelayMs = result.DelayMs,
+                Value = result.Value ?? string.Empty
+            };
+            if (result.Actions != null)
+                foreach (var action in result.Actions)
+                    core.ActionItems.Add(new LocalCommandActionItem
+                    {
+                        DeviceId = action.DeviceId, WidgetId = action.WidgetId, Value = action.Value
+                    });
+            if (result.Actions != null && result.Actions.Count > 0)
+            {
+                core.DeviceId = result.Actions[0].DeviceId;
+                core.WidgetId = result.Actions[0].WidgetId;
+                core.Value = result.Actions[0].Value;
+            }
+            _dialogContext.Remember(command, core);
+        }
+
+        private MarfaCommandResult ParseCore(string command, IList<WidgetState> widgets)
         {
             var text = Normalize(command);
             if (text.Length == 0) return Result(MarfaCommandKind.NotFound, "Я не услышала команду.");
