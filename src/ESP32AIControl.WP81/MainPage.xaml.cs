@@ -4758,7 +4758,9 @@ namespace ESP32AIControl.WP81
                 if (!confirmed) return;
 
                 _connectionJournal.Clear();
-                if (LogText != null) LogText.Text = string.Empty;
+                _logLines.Clear();
+                RefreshLogView();
+                if (LogActionStatus != null) LogActionStatus.Text = "Журнал очищен.";
                 _cleanupResultText.Text = "Диагностический журнал очищен.";
             };
             logBody.Children.Add(logButton);
@@ -6320,7 +6322,7 @@ namespace ESP32AIControl.WP81
                 var pitchText = (pitchPercent >= 0 ? "+" : string.Empty) + pitchPercent.ToString(CultureInfo.InvariantCulture) + "%";
                 var safeText = (text ?? string.Empty).Replace("&", "&amp;").Replace("<", "&lt;")
                     .Replace(">", "&gt;").Replace("\"", "&quot;").Replace("'", "&apos;");
-                var ssml = "<speak version=\"1.0\" xml:lang=\"ru-RU\"><prosody rate=\"" +
+                var ssml = "<speak version=\"1.0\" xmlns=\"http://www.w3.org/2001/10/synthesis\" xml:lang=\"ru-RU\"><prosody rate=\"" +
                     rateText + "\" pitch=\"" + pitchText + "\">" + safeText + "</prosody></speak>";
 
                 var stream = await _speechSynthesizer.SynthesizeSsmlToStreamAsync(ssml);
@@ -6347,7 +6349,7 @@ namespace ESP32AIControl.WP81
             var text = LogText == null ? string.Empty : LogText.Text;
             if (string.IsNullOrWhiteSpace(text))
             {
-                if (SettingsStatus != null) SettingsStatus.Text = "Нет записей для копирования.";
+                if (LogActionStatus != null) LogActionStatus.Text = "Нет записей для копирования.";
                 return;
             }
 
@@ -6355,7 +6357,7 @@ namespace ESP32AIControl.WP81
             package.SetText(text);
             Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(package);
             Windows.ApplicationModel.DataTransfer.Clipboard.Flush();
-            if (SettingsStatus != null) SettingsStatus.Text = "Отображаемые записи журнала скопированы.";
+            if (LogActionStatus != null) LogActionStatus.Text = "Отображаемые записи журнала скопированы.";
         }
 
         private void RefreshLogView()
