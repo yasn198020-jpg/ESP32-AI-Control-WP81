@@ -327,9 +327,11 @@ namespace ESP32AIControl.WP81.Core.Voice
             {
                 DeviceId = chosen.DeviceId, WidgetId = chosen.Id, Value = previous.ActionValue
             };
+            var verb = previous.ActionValue == "1" ? "Включаю " :
+                previous.ActionValue == "0" ? "Выключаю " :
+                "Устанавливаю значение " + previous.ActionValue + " для ";
             return ControlResult(new[] { action }, 0,
-                (previous.ActionValue == "1" ? "Включаю " : "Выключаю ") +
-                (string.IsNullOrWhiteSpace(chosen.Description) ? chosen.Id : chosen.Description) + ".");
+                verb + (string.IsNullOrWhiteSpace(chosen.Description) ? chosen.Id : chosen.Description) + ".");
         }
 
         private MarfaCommandResult TryResolveTrainedCommand(string text, IList<WidgetState> widgets)
@@ -536,9 +538,11 @@ namespace ESP32AIControl.WP81.Core.Voice
             _lastValue = _pendingValue;
             _pendingResolvedActions.Clear();
             ClearPending();
+            var pendingVerb = _lastValue == "1" ? "Включаю " :
+                _lastValue == "0" ? "Выключаю " :
+                "Устанавливаю значение " + _lastValue + " для ";
             return ControlResult(actions, delay, "Поняла. " +
-                (_lastValue == "1" ? "Включаю " : "Выключаю ") +
-                (selected[0].Description ?? selected[0].Id) + ".");
+                pendingVerb + (selected[0].Description ?? selected[0].Id) + ".");
         }
 
         private MarfaCommandResult ResolveValueQuestion(string text, IList<WidgetState> widgets)
