@@ -108,6 +108,7 @@ namespace ESP32AIControl.WP81.Core.Voice
             {
                 Action = result.Kind == MarfaCommandKind.Control ? LocalCommandAction.Control :
                     result.Kind == MarfaCommandKind.ReadValue ? LocalCommandAction.ReadValue :
+                    result.Kind == MarfaCommandKind.SmartRule ? LocalCommandAction.SmartRule :
                     result.Kind == MarfaCommandKind.Clarify ? LocalCommandAction.Clarify :
                     result.Kind == MarfaCommandKind.Stop ? LocalCommandAction.Stop : LocalCommandAction.NotFound,
                 Reply = result.Reply ?? string.Empty,
@@ -151,6 +152,9 @@ namespace ESP32AIControl.WP81.Core.Voice
             if (_pending.Count > 0 || !string.IsNullOrWhiteSpace(_pendingOriginalText))
                 return ResolvePending(text, widgets);
 
+            var followUp = TryParseFollowUp(text, widgets);
+            if (followUp != null) return followUp;
+
             var smartScenario = MarfaSmartRuleParser.TryParse(text, _analyticalEngine, widgets);
             if (smartScenario != null)
                 return new MarfaCommandResult
@@ -182,6 +186,51 @@ namespace ESP32AIControl.WP81.Core.Voice
             }
 
             return ParseSingle(text, widgets);
+        }
+
+        private MarfaCommandResult TryParseFollowUp(string text, IList<WidgetState> widgets)
+        {
+            var action = DetectAction(text);
+            var question = IsValueQuestion(text);
+
+            // A time-only follow-up repeats the last resolved control command.
+            if (action == null && !question && _lastTarget != null && !string.IsNullOrWhiteSpace(_lastValue))
+            {
+                var delay = ParseDelay(text);
+                if (delay > 0)
+                {
+                    var item = new MarfaActionItem
+                    {
+                        DeviceId = _lastTarget.DeviceId,
+                        WidgetId = _lastTarget.Id,
+                        Value = _lastValue
+                    };
+                    return ControlResult(new[] { item }, delay,
+                        "Запланировала повтор: " +
+                        (string.IsNullOrWhiteSpace(_lastTarget.Description) ? _lastTarget.Id : _lastTarget.Description) +
+                        " через " + FormatDelay(delay) + ".");
+                }
+            }
+
+            // "А какая там температура?" refers to the last sensor when the
+            // current phrase contains no new explicit sensor target.
+            if (action == null && question && _lastTarget != null && IsSensor(_lastTarget) &&
+                (text.Contains("там") || text.Contains("здесь") || text.Contains("это")))
+            {
+                var current = (widgets ?? new List<WidgetState>()).FirstOrDefault(w =>
+                    string.Equals(w.DeviceId, _lastTarget.DeviceId, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(w.Id, _lastTarget.Id, StringComparison.OrdinalIgnoreCase));
+                if (current != null)
+                {
+                    var raw = string.IsNullOrWhiteSpace(current.Value) ? "значение пока неизвестно" :
+                        MarfaSpeechTextFormatter.FormatValue(current.Value, current.Unit, current.Description);
+                    var title = string.IsNullOrWhiteSpace(current.Description) ? current.Id : current.Description;
+                    var result = Result(MarfaCommandKind.ReadValue, title + ": " + raw + ".");
+                    result.Value = current.Value;
+                    return result;
+                }
+            }
+            return null;
         }
 
         private MarfaCommandResult TryResolveTrainedCommand(string text, IList<WidgetState> widgets)
