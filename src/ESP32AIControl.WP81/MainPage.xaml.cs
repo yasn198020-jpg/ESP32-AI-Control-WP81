@@ -962,7 +962,7 @@ namespace ESP32AIControl.WP81
 
             AddPopupMenuSeparator(items);
             AddPopupMenuHeader(items, "О ПРИЛОЖЕНИИ");
-            AddPopupMenuItem(items, "Проверка Марфы", delegate { VoiceButton_Click(NavMarfaButton, null); });
+            AddPopupMenuItem(items, "Проверка Марфы", delegate { ShowSection(9); });
             AddPopupMenuItem(items, "О приложении", ShowAboutDialog);
 
             var availableHeight = Math.Max(260, ActualHeight - 76);
