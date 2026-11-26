@@ -516,7 +516,9 @@
                                              PlaceholderText="Например, 25" Margin="0,0,0,6"/>
                                     <Button Content="＋ Добавить условие" Click="LocalScenarioAddConditionButton_Click"
                                             HorizontalAlignment="Stretch"/>
-                                </StackPanel></StackPanel></Border>
+                                </StackPanel>
+                            </Border>
+                            </StackPanel>
                             </Border>
                             <TextBox x:Name="LocalScenarioConditionsBox" Header="Условия правила"
                                      AcceptsReturn="True" TextWrapping="Wrap" Height="100"
