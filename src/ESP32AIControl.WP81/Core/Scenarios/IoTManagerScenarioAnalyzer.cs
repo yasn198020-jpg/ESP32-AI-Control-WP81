@@ -72,6 +72,13 @@ namespace ESP32AIControl.WP81.Core.Scenarios
         public string DeviceId { get; set; }
         public string Description { get; set; }
         public int Occurrences { get; set; }
+        public int AssignmentCount { get; set; }
+        public IList<string> AssignedValues { get; private set; }
+
+        public ScenarioVariableDiagnostic()
+        {
+            AssignedValues = new List<string>();
+        }
     }
 
     public sealed class IoTManagerScenarioAnalyzer
@@ -113,10 +120,23 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             {
                 var rule = _rules[r];
                 for (var c = 0; c < rule.Conditions.Count; c++)
-                    AddReferenceDiagnostic(result, index, rule.Conditions[c].Variable, "условие / датчик", devices);
+                    AddReferenceDiagnostic(result, index, rule.Conditions[c].Variable, "условие / датчик", null, devices);
 
                 for (var a = 0; a < rule.Assignments.Count; a++)
-                    AddReferenceDiagnostic(result, index, rule.Assignments[a].Variable, "действие / исполнитель", devices);
+                    AddReferenceDiagnostic(result, index, rule.Assignments[a].Variable, "действие / исполнитель", rule.Assignments[a].Value, devices);
+            }
+
+            for (var i = 0; i < result.Count; i++)
+            {
+                var item = result[i];
+                if (item.AssignmentCount <= 1)
+                    continue;
+
+                var ambiguity = item.AssignedValues.Count > 1
+                    ? "Неоднозначная зависимость: переменная назначается разными значениями"
+                    : "Несколько правил назначают одно значение — проверьте условия";
+                item.Status = string.IsNullOrEmpty(item.Status)
+                    ? ambiguity : item.Status + " · " + ambiguity;
             }
 
             return result;
@@ -127,6 +147,7 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             IDictionary<string, ScenarioVariableDiagnostic> index,
             string variable,
             string usage,
+            string assignedValue,
             DeviceRepository devices)
         {
             if (string.IsNullOrWhiteSpace(variable))
@@ -138,6 +159,7 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                 item.Occurrences++;
                 if (item.Usage.IndexOf(usage, StringComparison.OrdinalIgnoreCase) < 0)
                     item.Usage += ", " + usage;
+                AddAssignedValue(item, assignedValue);
                 return;
             }
 
@@ -148,6 +170,7 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                 Usage = usage,
                 Occurrences = 1
             };
+            AddAssignedValue(item, assignedValue);
 
             if (matches.Count == 0)
             {
@@ -170,6 +193,21 @@ namespace ESP32AIControl.WP81.Core.Scenarios
 
             index[variable] = item;
             result.Add(item);
+        }
+
+        private static void AddAssignedValue(ScenarioVariableDiagnostic item, string value)
+        {
+            if (item == null || string.IsNullOrWhiteSpace(value))
+                return;
+
+            item.AssignmentCount++;
+            for (var i = 0; i < item.AssignedValues.Count; i++)
+            {
+                if (string.Equals(item.AssignedValues[i], value, StringComparison.OrdinalIgnoreCase))
+                    return;
+            }
+
+            item.AssignedValues.Add(value);
         }
 
         public void Load(string script)
