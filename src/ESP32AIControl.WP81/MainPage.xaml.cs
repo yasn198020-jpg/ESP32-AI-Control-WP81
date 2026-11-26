@@ -9,6 +9,7 @@ using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Controls.Primitives;
 using Windows.UI.Xaml.Media;
+using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Shapes;
 using Windows.Foundation;
 using Windows.Media.SpeechRecognition;
@@ -4015,6 +4016,36 @@ namespace ESP32AIControl.WP81
             Canvas.SetLeft(marker, x - 6);
             Canvas.SetTop(marker, y - 6);
             GraphCanvas.Children.Add(marker);
+        }
+
+        private void GraphCanvas_ManipulationDelta(object sender, ManipulationDeltaRoutedEventArgs e)
+        {
+            var scale = e.Delta.Scale.X;
+            if (scale > 0.01 && Math.Abs(scale - 1.0) > 0.005)
+            {
+                var oldZoom = _graphZoom;
+                var newZoom = Math.Max(1.0, Math.Min(20.0, oldZoom * scale));
+                if (Math.Abs(newZoom - oldZoom) > 0.001)
+                {
+                    var centerX = e.Position.X;
+                    var oldOffset = GraphHorizontalScroll.HorizontalOffset;
+                    var ratio = newZoom / oldZoom;
+                    _graphZoom = newZoom;
+                    DrawGraph(_lastGraphPoints);
+                    var newOffset = (centerX + oldOffset) * ratio - centerX;
+                    var maxOffset = Math.Max(0.0, GraphCanvas.Width - GraphHorizontalScroll.ViewportWidth);
+                    GraphHorizontalScroll.ScrollToHorizontalOffset(Math.Max(0.0, Math.Min(maxOffset, newOffset)));
+                }
+            }
+
+            if (Math.Abs(e.Delta.Translation.X) > 0.5 && _graphZoom > 1.0)
+            {
+                var maxOffset = Math.Max(0.0, GraphCanvas.Width - GraphHorizontalScroll.ViewportWidth);
+                var offset = GraphHorizontalScroll.HorizontalOffset - e.Delta.Translation.X;
+                GraphHorizontalScroll.ScrollToHorizontalOffset(Math.Max(0.0, Math.Min(maxOffset, offset)));
+            }
+
+            e.Handled = true;
         }
 
         private void GraphCanvas_Tapped(object sender, Windows.UI.Xaml.Input.TappedRoutedEventArgs e)
