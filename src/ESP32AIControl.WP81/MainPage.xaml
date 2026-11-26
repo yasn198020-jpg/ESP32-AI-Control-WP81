@@ -175,10 +175,19 @@
                     </Grid>
 
                     <!-- The bottom-nav microphone reports recognition here without taking dashboard space. -->
-                    <TextBlock x:Name="VoiceResultText" Grid.Row="1"
-                               Text="Голосовое управление: нажмите «Марфа»"
-                               Foreground="#FFB0B0B0" FontSize="12"
-                               Margin="8,2,8,6" TextTrimming="CharacterEllipsis"/>
+                    <Border Grid.Row="1" Background="#FF2B2C34"
+                            BorderBrush="#FF41434D" BorderThickness="1"
+                            CornerRadius="14" Padding="10" Margin="6,2,6,6">
+                        <StackPanel>
+                            <TextBlock Text="МАРФА · ГОЛОСОВОЕ УПРАВЛЕНИЕ"
+                                       FontSize="10" FontWeight="SemiBold"
+                                       Foreground="#FFD0BCFF" Margin="0,0,0,3"/>
+                            <TextBlock x:Name="VoiceResultText"
+                                       Text="Нажмите «Марфа», чтобы произнести команду"
+                                       Foreground="#FFACADB8" FontSize="12"
+                                       TextWrapping="Wrap" MaxHeight="42"/>
+                        </StackPanel>
+                    </Border>
                 </Grid>
             </Grid>
 
