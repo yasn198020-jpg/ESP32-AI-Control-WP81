@@ -622,18 +622,52 @@
                 <PivotItem Header="Журнал">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel Margin="10,4,10,12">
-                            <TextBlock Text="ЖУРНАЛ СОЕДИНЕНИЯ" FontSize="14" FontWeight="SemiBold"
-                                   Foreground="#FFD0BCFF" Margin="0,20,0,4"/>
-                        <Border Background="#FF25262D" BorderBrush="#FF41434D"
-                                BorderThickness="1" CornerRadius="14" Padding="12" MinHeight="100">
-                            <ScrollViewer Height="150" VerticalScrollBarVisibility="Auto">
-                                <TextBlock x:Name="LogText" TextWrapping="Wrap" FontSize="13"/>
-                            </ScrollViewer>
-                        </Border>
-<TextBlock Text="ЭКСПОРТ ДАННЫХ" FontSize="14" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,18,0,6"/>
-                        <Button Content="Экспорт всей истории за сегодня" Click="ExportTodayButton_Click"/>
-                        <TextBlock Text="Документы сохраняются в локальной папке приложения. Формат .doc совместим с Word."
-                                   Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                            <StackPanel Margin="2,8,2,10">
+                                <TextBlock Text="Журнал и экспорт" FontSize="21" FontWeight="SemiBold"
+                                           Foreground="#FFEAF1F7" Margin="0,0,0,3"/>
+                                <TextBlock Text="Здесь отображаются события сетевого обмена, подключения и ошибки. Новые записи появляются сверху."
+                                           FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1"
+                                    CornerRadius="14" Padding="12" Margin="0,0,0,10">
+                                <StackPanel>
+                                    <TextBlock Text="ЖУРНАЛ СОЕДИНЕНИЯ" FontSize="14" FontWeight="SemiBold"
+                                               Foreground="#FFD0BCFF" Margin="0,0,0,4"/>
+                                    <TextBlock Text="События MQTT, UDP, WebSocket и сетевые ошибки. Время каждой записи указано в начале строки."
+                                               FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap"
+                                               Margin="0,0,0,8"/>
+                                    <Border Background="#FF1E1F25" BorderBrush="#FF41434D"
+                                            BorderThickness="1" CornerRadius="10" Padding="8">
+                                        <ScrollViewer Height="230" VerticalScrollBarVisibility="Auto"
+                                                      HorizontalScrollBarVisibility="Disabled">
+                                            <TextBlock x:Name="LogText" TextWrapping="Wrap"
+                                                       FontSize="13" Foreground="#FFE1E3E8"
+                                                       IsTextSelectionEnabled="True"/>
+                                        </ScrollViewer>
+                                    </Border>
+                                    <TextBlock Text="Журнал хранит ограниченное количество последних событий; старые записи удаляются автоматически."
+                                               FontSize="11" Foreground="#FFACADB8"
+                                               TextWrapping="Wrap" Margin="2,8,2,0"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1"
+                                    CornerRadius="14" Padding="12" Margin="0,0,0,8">
+                                <StackPanel>
+                                    <TextBlock Text="ЭКСПОРТ ИСТОРИИ" FontSize="14" FontWeight="SemiBold"
+                                               Foreground="#FFD0BCFF" Margin="0,0,0,4"/>
+                                    <TextBlock Text="Создайте документ с измерениями за текущий день. Файл сохраняется в локальной папке приложения и открывается в Microsoft Word или совместимом редакторе."
+                                               FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap"
+                                               Margin="0,0,0,8"/>
+                                    <Button Content="Экспортировать историю за сегодня"
+                                            Click="ExportTodayButton_Click"
+                                            HorizontalAlignment="Stretch"
+                                            Background="#FFD0BCFF" BorderBrush="#FFD0BCFF"
+                                            Foreground="#FF202020" FontWeight="SemiBold"/>
+                                    <TextBlock Text="Результат экспорта и возможные ошибки отображаются в статусе настроек."
+                                               FontSize="11" Foreground="#FFACADB8"
+                                               TextWrapping="Wrap" Margin="2,8,2,0"/>
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
                     </ScrollViewer>
                 </PivotItem>
