@@ -45,6 +45,8 @@ namespace ESP32AIControl.WP81.Core.Voice
         private List<WidgetState> _pending = new List<WidgetState>();
         private string _pendingValue = "1";
         private long _pendingDelay;
+        private string _pendingOriginalText = string.Empty;
+        private bool _pendingReadValue;
         private WidgetState _lastTarget;
         private string _lastValue = "1";
 
@@ -77,8 +79,8 @@ namespace ESP32AIControl.WP81.Core.Voice
                     "В команде есть отрицание. Я ничего не буду выполнять. Скажите прямо, что нужно сделать.");
             }
 
-            if (_pending.Count > 0)
-                return ResolvePending(text);
+            if (_pending.Count > 0 || !string.IsNullOrWhiteSpace(_pendingOriginalText))
+                return ResolvePending(text, widgets);
 
             var split = SplitCommands(text, widgets);
             if (split.Count > 1)
@@ -120,6 +122,8 @@ namespace ESP32AIControl.WP81.Core.Voice
             {
                 _pending = analytical.Candidates.Select(c => c.Widget).ToList();
                 _pendingValue = action;
+                _pendingOriginalText = text;
+                _pendingReadValue = false;
                 _pendingDelay = delay;
                 return Result(MarfaCommandKind.Clarify, analytical.Clarification ?? BuildClarification(_pending));
             }
@@ -128,6 +132,8 @@ namespace ESP32AIControl.WP81.Core.Voice
                 _pending = new List<WidgetState>();
                 _pendingValue = action;
                 _pendingDelay = delay;
+                _pendingOriginalText = text;
+                _pendingReadValue = false;
                 return Result(MarfaCommandKind.Clarify, analytical.Clarification);
             }
             else
@@ -141,6 +147,8 @@ namespace ESP32AIControl.WP81.Core.Voice
                 _pending = new List<WidgetState>();
                 _pendingValue = action;
                 _pendingDelay = delay;
+                _pendingOriginalText = text;
+                _pendingReadValue = false;
                 return Result(MarfaCommandKind.Clarify, "Что именно нужно " +
                     (action == "1" ? "включить или открыть" : "выключить или закрыть") + "? Назовите устройство или комнату.");
             }
@@ -169,7 +177,7 @@ namespace ESP32AIControl.WP81.Core.Voice
                 verb + " " + title + (delay > 0 ? " через " + FormatDelay(delay) : string.Empty) + ".");
         }
 
-        private MarfaCommandResult ResolvePending(string text)
+        private MarfaCommandResult ResolvePending(string text, IList<WidgetState> widgets)
         {
             if (text.Contains("отмена") || text.Contains("не надо") || text.Contains("забудь"))
             {
@@ -196,8 +204,30 @@ namespace ESP32AIControl.WP81.Core.Voice
             }
 
             if (selected.Count == 0)
+            {
+                if (!string.IsNullOrWhiteSpace(_pendingOriginalText))
+                {
+                    var combined = _pendingOriginalText + " " + text;
+                    ClearPending();
+                    return ParseSingle(combined, widgets);
+                }
                 return Result(MarfaCommandKind.Clarify, BuildClarification(_pending) +
                     " Скажите номер варианта или его название.");
+            }
+
+            if (_pendingReadValue)
+            {
+                var sensor = selected[0];
+                _lastTarget = sensor;
+                var sensorName = string.IsNullOrWhiteSpace(sensor.Description) ? sensor.Id : sensor.Description;
+                var raw = string.IsNullOrWhiteSpace(sensor.Value) ? "значение пока неизвестно" : sensor.Value;
+                var spoken = string.IsNullOrWhiteSpace(sensor.Value) ? raw :
+                    MarfaSpeechTextFormatter.FormatValue(sensor.Value, sensor.Unit, sensor.Description);
+                ClearPending();
+                var read = Result(MarfaCommandKind.ReadValue, sensorName + ": " + spoken + ".");
+                read.Value = raw;
+                return read;
+            }
 
             var actions = selected.Select(w => new MarfaActionItem
             {
@@ -222,10 +252,17 @@ namespace ESP32AIControl.WP81.Core.Voice
             else if (analytical.Candidates != null && analytical.Candidates.Count > 0)
             {
                 _pending = analytical.Candidates.Select(c => c.Widget).ToList();
+                _pendingOriginalText = text;
+                _pendingReadValue = true;
                 return Result(MarfaCommandKind.Clarify, analytical.Clarification ?? BuildClarification(_pending));
             }
             else if (!string.IsNullOrWhiteSpace(analytical.Clarification))
+            {
+                _pending = new List<WidgetState>();
+                _pendingOriginalText = text;
+                _pendingReadValue = true;
                 return Result(MarfaCommandKind.Clarify, analytical.Clarification);
+            }
             else
                 candidates = RankCandidates(text, sensors, false);
 
@@ -463,6 +500,8 @@ namespace ESP32AIControl.WP81.Core.Voice
             _pending.Clear();
             _pendingValue = "1";
             _pendingDelay = 0;
+            _pendingOriginalText = string.Empty;
+            _pendingReadValue = false;
         }
     }
 }
