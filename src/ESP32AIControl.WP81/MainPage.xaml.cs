@@ -4109,7 +4109,7 @@ namespace ESP32AIControl.WP81
 
         private void GraphCanvas_ManipulationDelta(object sender, ManipulationDeltaRoutedEventArgs e)
         {
-            var scale = e.Delta.Scale.X;
+            var scale = e.Delta.Scale;
             if (scale > 0.01 && Math.Abs(scale - 1.0) > 0.005)
             {
                 var oldZoom = _graphZoom;
