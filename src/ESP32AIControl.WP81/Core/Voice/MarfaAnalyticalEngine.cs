@@ -68,8 +68,11 @@ namespace ESP32AIControl.WP81.Core.Voice
                 };
             }
 
+            var contextPages = page == null ? MatchingContextPages(normalized, widgets) : new List<string>();
             if (page != null)
                 all = all.Where(c => RussianSemanticNormalizer.Normalize(c.Widget.Page).Trim() == page).ToList();
+            else if (contextPages.Count == 1)
+                all = all.Where(c => RussianSemanticNormalizer.Normalize(c.Widget.Page).Trim() == contextPages[0]).ToList();
 
             var entity = DetectEntity(normalized);
             if (entity != EntityKind.Generic)
@@ -103,7 +106,7 @@ namespace ESP32AIControl.WP81.Core.Voice
 
             var best = all[0];
             var second = all.Count > 1 ? all[1] : null;
-            var contextResolved = page != null;
+            var contextResolved = page != null || contextPages.Count == 1;
             if (all.Count == 1 && contextResolved)
                 return new MarfaAnalyticalResolution { Candidate = best, Candidates = all };
 
@@ -169,6 +172,41 @@ namespace ESP32AIControl.WP81.Core.Voice
                     Clarification = BuildSensorClarification(all)
                 };
             return new MarfaAnalyticalResolution { Candidate = best, Candidates = all };
+        }
+
+        private static List<string> MatchingContextPages(string text, IList<WidgetState> widgets)
+        {
+            var ignored = new HashSet<string>(new[]
+            {
+                "включить", "выключить", "открыть", "закрыть", "запустить", "остановить",
+                "показать", "сказать", "марфа", "пожалуйста", "через", "спустя",
+                "на", "в", "во", "по", "для", "из", "с", "со", "к", "у", "и", "а",
+                "дверь", "форточка", "окно", "ворота", "насос", "вентилятор",
+                "обогрев", "кран", "клапан", "свет", "лампа", "полив", "реле",
+                "кнопка", "канал", "выход", "gpio", "автомат", "управление"
+            }, StringComparer.OrdinalIgnoreCase);
+            var spoken = RussianSemanticNormalizer.Tokens(text)
+                .Where(t => t.Length >= 2 && !ignored.Contains(t) && !Regex.IsMatch(t, @"^\d+$"))
+                .ToList();
+            if (spoken.Count == 0) return new List<string>();
+
+            var pages = (widgets ?? new List<WidgetState>())
+                .Select(w => RussianSemanticNormalizer.Normalize(w.Page).Trim())
+                .Where(p => p.Length > 0).Distinct().ToList();
+            var ranked = new List<Tuple<string, int>>();
+            foreach (var candidatePage in pages)
+            {
+                var pageTokens = RussianSemanticNormalizer.Tokens(candidatePage);
+                var score = spoken.Count(token => pageTokens.Any(pageToken =>
+                    token == pageToken ||
+                    (token.Length >= 5 && pageToken.Length >= 5 &&
+                     (token.StartsWith(pageToken, StringComparison.Ordinal) ||
+                      pageToken.StartsWith(token, StringComparison.Ordinal)))));
+                if (score > 0) ranked.Add(Tuple.Create(candidatePage, score));
+            }
+            if (ranked.Count == 0) return new List<string>();
+            var best = ranked.Max(p => p.Item2);
+            return ranked.Where(p => p.Item2 == best).Select(p => p.Item1).ToList();
         }
 
         private static int ControlScore(string text, string page, WidgetState widget, string desiredValue)
