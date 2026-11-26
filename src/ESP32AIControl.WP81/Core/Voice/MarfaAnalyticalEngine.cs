@@ -247,12 +247,12 @@ namespace ESP32AIControl.WP81.Core.Voice
             return score;
         }
 
-        private static int DetectSensorKind(string text)
+        private static SensorKind DetectSensorKind(string text)
         {
-            if (HasAny(text, "температур", "темп", "градус", "жарко", "холодно")) return (int)SensorKind.Temperature;
-            if (HasAny(text, "влажност", "влажн")) return (int)SensorKind.Humidity;
-            if (HasAny(text, "давлен")) return (int)SensorKind.Pressure;
-            return (int)SensorKind.Value;
+            if (HasAny(text, "температур", "темп", "градус", "жарко", "холодно")) return SensorKind.Temperature;
+            if (HasAny(text, "влажност", "влажн")) return SensorKind.Humidity;
+            if (HasAny(text, "давлен")) return SensorKind.Pressure;
+            return SensorKind.Value;
         }
 
         private static bool IsControllable(WidgetState widget)
