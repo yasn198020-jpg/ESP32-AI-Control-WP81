@@ -665,7 +665,7 @@ namespace ESP32AIControl.WP81
 
         private async System.Threading.Tasks.Task ShowLocalScenarioErrorAsync(string message)
         {
-            await new Windows.UI.Popups.MessageDialog(message, "Автосценарий").ShowAsync();
+            await ShowAppMessageAsync("Автосценарий", message);
         }
 
         private void LocalScenariosList_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -5254,14 +5254,12 @@ namespace ESP32AIControl.WP81
                 var widgetId = state.Id;
                 remove.Click += async delegate
                 {
-                    var dialog = new Windows.UI.Popups.MessageDialog(
+                    var confirmed = await ShowAppConfirmationAsync(
+                        "Удалить элемент?",
                         "Будет удалена только локальная запись " + deviceId + "/" + widgetId +
                         ". Команда на ESP32 не отправляется. При следующем сообщении элемент появится снова.",
-                        "Удалить элемент?");
-                    dialog.Commands.Add(new Windows.UI.Popups.UICommand("Удалить"));
-                    dialog.Commands.Add(new Windows.UI.Popups.UICommand("Отмена"));
-                    var choice = await dialog.ShowAsync();
-                    if (choice == null || choice.Label != "Удалить") return;
+                        "Удалить");
+                    if (!confirmed) return;
 
                     var key = deviceId + "/" + widgetId;
                     if (_devices.RemoveLocal(deviceId, widgetId))
@@ -5347,11 +5345,11 @@ namespace ESP32AIControl.WP81
             };
             clear.Click += async delegate
             {
-                var dialog = new Windows.UI.Popups.MessageDialog("Будут удалены все сохранённые фразы и их варианты. Настройки MQTT и другие данные не изменятся.", "Очистить обученные команды?");
-                dialog.Commands.Add(new Windows.UI.Popups.UICommand("Удалить всё"));
-                dialog.Commands.Add(new Windows.UI.Popups.UICommand("Отмена"));
-                var result = await dialog.ShowAsync();
-                if (result != null && result.Label == "Удалить всё")
+                var confirmed = await ShowAppConfirmationAsync(
+                    "Очистить обученные команды?",
+                    "Будут удалены все сохранённые фразы и их варианты. Настройки MQTT и другие данные не изменятся.",
+                    "Удалить всё");
+                if (confirmed)
                 {
                     _trainedCommands.Clear();
                     SaveTrainedCommands();
@@ -5603,6 +5601,47 @@ namespace ESP32AIControl.WP81
             body.Children.Add(actions);
 
             _trainingPopup = CreateAppPopup(body, 330, 520);
+        }
+
+        private Task ShowAppMessageAsync(string title, string message)
+        {
+            var body = new StackPanel();
+            body.Children.Add(new TextBlock
+            {
+                Text = title,
+                FontSize = 18,
+                FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255)),
+                Margin = new Thickness(12, 12, 12, 6)
+            });
+            body.Children.Add(new TextBlock
+            {
+                Text = message,
+                FontSize = 13,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 190, 192, 201)),
+                Margin = new Thickness(12, 0, 12, 12)
+            });
+            var close = new Button
+            {
+                Content = "Понятно",
+                MinHeight = 44,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(8, 4, 8, 8),
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255)),
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 32, 32, 32)),
+                FontWeight = Windows.UI.Text.FontWeights.SemiBold
+            };
+            Popup popup = null;
+            var completion = new TaskCompletionSource<bool>();
+            close.Click += delegate
+            {
+                if (popup != null) popup.IsOpen = false;
+                completion.TrySetResult(true);
+            };
+            body.Children.Add(close);
+            popup = CreateAppPopup(body, 330, 280);
+            return completion.Task;
         }
 
         private async Task<bool> ShowAppConfirmationAsync(string title, string message, string confirmText)
