@@ -207,8 +207,13 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             foreach (var rule in model.Rules)
             {
                 var drivesRequestedOutput = rule.Actions.Any(a =>
-                    string.Equals(a.TargetId, physicalAction.WidgetId, StringComparison.OrdinalIgnoreCase) &&
-                    LiteralMatches(a.Expression, physicalAction.Value));
+                {
+                    string resolvedValue;
+                    return string.Equals(a.TargetId, physicalAction.WidgetId, StringComparison.OrdinalIgnoreCase) &&
+                        TryResolveScenarioLiteral(a.Expression, model,
+                            new HashSet<string>(StringComparer.OrdinalIgnoreCase), out resolvedValue) &&
+                        ScenarioValuesEquivalent(resolvedValue, physicalAction.Value);
+                });
                 if (!drivesRequestedOutput) continue;
 
                 foreach (var stateAction in rule.Actions)
@@ -284,8 +289,8 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                     !IsUserControl(matches[0]) || !IsModeWidget(matches[0]))
                     continue;
 
-                string gateValue;
-                if (TryGetEqualityValue(rule.Condition.Expression, id, out gateValue) && gateValue == "0")
+                var gateValues = GetEqualityValuesThroughAliases(rule.Condition.Expression, id, model);
+                if (gateValues.Count == 1 && gateValues[0] == "0")
                     modeCandidates.Add(matches[0]);
             }
 
@@ -296,9 +301,9 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             {
                 foreach (var id in manualRule.Condition.Identifiers)
                 {
-                    string manualValue;
-                    if (!TryGetEqualityValue(manualRule.Condition.Expression, id, out manualValue) ||
-                        manualValue != "1")
+                    var manualValues = GetEqualityValuesThroughAliases(
+                        manualRule.Condition.Expression, id, model);
+                    if (manualValues.Count != 1 || manualValues[0] != "1")
                         continue;
 
                     var linked = manualRule.Actions.Any(a =>
@@ -412,18 +417,19 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             if (variable == null || model == null || !visiting.Add(variable.Name))
                 return false;
 
+            var definitions = model.Rules.SelectMany(r => r.Actions)
+                .Where(a => string.Equals(a.TargetId, variable.Name, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (definitions.Count == 0) return false;
+
             var resolved = new List<string>();
-            foreach (var rule in model.Rules)
+            foreach (var action in definitions)
             {
-                foreach (var action in rule.Actions)
-                {
-                    if (!string.Equals(action.TargetId, variable.Name, StringComparison.OrdinalIgnoreCase))
-                        continue;
-                    string candidate;
-                    if (TryResolveScenarioLiteral(action.Expression, model,
-                        new HashSet<string>(visiting, StringComparer.OrdinalIgnoreCase), out candidate))
-                        resolved.Add(candidate);
-                }
+                string candidate;
+                if (!TryResolveScenarioLiteral(action.Expression, model,
+                    new HashSet<string>(visiting, StringComparer.OrdinalIgnoreCase), out candidate))
+                    return false;
+                resolved.Add(candidate);
             }
 
             var unique = resolved.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
@@ -474,21 +480,13 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                 return true;
             if (model == null || !visiting.Add(variableName)) return false;
 
-            var matches = new List<bool>();
-            foreach (var rule in model.Rules)
-            {
-                foreach (var action in rule.Actions)
-                {
-                    if (!string.Equals(action.TargetId, variableName, StringComparison.OrdinalIgnoreCase))
-                        continue;
-                    var expression = action.Expression;
-                    var variable = expression as IoTExpr.Variable;
-                    if (variable != null)
-                        matches.Add(VariableResolvesToIdentifier(variable.Name, targetIdentifier, model,
-                            new HashSet<string>(visiting, StringComparer.OrdinalIgnoreCase)));
-                }
-            }
-            return matches.Count > 0 && matches.All(x => x);
+            var assignments = model.Rules.SelectMany(r => r.Actions)
+                .Where(a => string.Equals(a.TargetId, variableName, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (assignments.Count == 0) return false;
+            return assignments.All(a => ScenarioExpressionDependsOnIdentifier(
+                a.Expression, targetIdentifier, model,
+                new HashSet<string>(visiting, StringComparer.OrdinalIgnoreCase)));
         }
 
         // Follow data-flow through intermediate variables in both conditions
@@ -538,6 +536,46 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                     new HashSet<string>(visiting, StringComparer.OrdinalIgnoreCase)));
 
             return false;
+        }
+
+        private static IList<string> GetEqualityValuesThroughAliases(
+            IoTExpr expression,
+            string identifier,
+            DeviceScenarioModel model)
+        {
+            var values = new List<string>();
+            CollectEqualityValuesThroughAliases(expression, identifier, model, values);
+            return values.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        }
+
+        private static void CollectEqualityValuesThroughAliases(
+            IoTExpr expression,
+            string identifier,
+            DeviceScenarioModel model,
+            IList<string> values)
+        {
+            var binary = expression as IoTExpr.Binary;
+            if (binary == null) return;
+            if (binary.Operator == "==")
+            {
+                var left = binary.Left as IoTExpr.Variable;
+                var right = binary.Right as IoTExpr.Variable;
+                string literal;
+                if (left != null &&
+                    VariableResolvesToIdentifier(left.Name, identifier, model,
+                        new HashSet<string>(StringComparer.OrdinalIgnoreCase)) &&
+                    TryResolveScenarioLiteral(binary.Right, model,
+                        new HashSet<string>(StringComparer.OrdinalIgnoreCase), out literal))
+                    values.Add(literal);
+                if (right != null &&
+                    VariableResolvesToIdentifier(right.Name, identifier, model,
+                        new HashSet<string>(StringComparer.OrdinalIgnoreCase)) &&
+                    TryResolveScenarioLiteral(binary.Left, model,
+                        new HashSet<string>(StringComparer.OrdinalIgnoreCase), out literal))
+                    values.Add(literal);
+            }
+            CollectEqualityValuesThroughAliases(binary.Left, identifier, model, values);
+            CollectEqualityValuesThroughAliases(binary.Right, identifier, model, values);
         }
 
         private static bool TryGetEqualityValue(IoTExpr expression, string identifier, out string value)
