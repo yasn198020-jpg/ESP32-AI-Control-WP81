@@ -704,7 +704,11 @@ namespace ESP32AIControl.WP81
             LocalScenarioTitleBox.Text = string.Empty;
             LocalScenarioConditionsBox.Text = string.Empty;
             LocalScenarioActionsBox.Text = string.Empty;
+            LocalScenarioThresholdBox.Text = string.Empty;
+            LocalScenarioActionValueBox.Text = "1";
             LocalScenarioMessageBox.Text = "Условие выполнено: {value}";
+            if (LocalScenarioConnectorBox.Items.Count > 0) LocalScenarioConnectorBox.SelectedIndex = 0;
+            if (LocalScenarioOperatorBox.Items.Count > 0) LocalScenarioOperatorBox.SelectedIndex = 0;
             LocalScenarioEnabledCheckBox.IsChecked = true;
             LocalScenarioNotificationCheckBox.IsChecked = true;
             LocalScenarioSaveButton.Content = "Добавить сценарий";
