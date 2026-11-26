@@ -263,6 +263,35 @@ namespace ESP32AIControl.WP81.Core.Voice
             return null;
         }
 
+        private static bool HasOrdinalReference(string text)
+        {
+            return Regex.IsMatch(text ?? string.Empty,
+                @"\b(перв|втор|трет|четверт|последн|номер\s*[123])");
+        }
+
+        private WidgetState ResolveReference(string text, IList<WidgetState> widgets)
+        {
+            var candidates = (widgets ?? new List<WidgetState>())
+                .Where(IsControl)
+                .OrderBy(w => w.Order)
+                .ThenBy(w => w.Page ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(w => w.Description ?? w.Id, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var index = -1;
+            if (Regex.IsMatch(text ?? string.Empty, @"\b(перв|номер\s*1)")) index = 0;
+            else if (Regex.IsMatch(text ?? string.Empty, @"\b(втор|номер\s*2)")) index = 1;
+            else if (Regex.IsMatch(text ?? string.Empty, @"\b(трет|номер\s*3)")) index = 2;
+            else if (Regex.IsMatch(text ?? string.Empty, @"\bпоследн")) index = candidates.Count - 1;
+            if (index >= 0 && index < candidates.Count) return candidates[index];
+
+            var previous = _dialogContext.Snapshot();
+            if (IsPronoun(text) && previous != null && !string.IsNullOrWhiteSpace(previous.ActionValue))
+                return candidates.FirstOrDefault(w =>
+                    string.Equals(w.DeviceId, previous.DeviceId, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(w.Id, previous.WidgetId, StringComparison.OrdinalIgnoreCase));
+            return null;
+        }
+
         private MarfaCommandResult TryRefineLastControlTarget(string text)
         {
             if (_lastControlCandidates == null || _lastControlCandidates.Count < 2 ||
@@ -357,6 +386,22 @@ namespace ESP32AIControl.WP81.Core.Voice
                     return ResolveValueQuestion(text, widgets);
                 return Result(MarfaCommandKind.NotFound,
                     "Не поняла. Скажите, например: «включи свет», «закрой форточку» или «какая температура?»");
+            }
+
+            var referenced = ResolveReference(text, widgets);
+            if (referenced != null && (HasOrdinalReference(text) || IsPronoun(text)))
+            {
+                _lastTarget = referenced;
+                _lastValue = action;
+                _lastCommandText = text;
+                var referencedAction = new MarfaActionItem
+                {
+                    DeviceId = referenced.DeviceId, WidgetId = referenced.Id, Value = action
+                };
+                var referencedTitle = string.IsNullOrWhiteSpace(referenced.Description) ? referenced.Id : referenced.Description;
+                return ControlResult(new[] { referencedAction }, delay,
+                    (action == "1" ? "Включаю " : action == "0" ? "Выключаю " : "Устанавливаю значение " + action + " для ") +
+                    referencedTitle + (delay > 0 ? " через " + FormatDelay(delay) : string.Empty) + ".");
             }
 
             var analytical = _analyticalEngine.ResolveControl(text, widgets, action);
