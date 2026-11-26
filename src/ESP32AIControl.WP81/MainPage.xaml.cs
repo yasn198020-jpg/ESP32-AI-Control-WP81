@@ -956,29 +956,31 @@ namespace ESP32AIControl.WP81
             AddPopupMenuItem(items, "Проверка Марфы", delegate { VoiceButton_Click(NavMarfaButton, null); });
             AddPopupMenuItem(items, "О приложении", ShowAboutDialog);
 
+            var availableHeight = Math.Max(260, ActualHeight - 76);
             var scroll = new ScrollViewer
             {
                 Content = items,
-                MaxHeight = Math.Max(260, ActualHeight - 105),
+                MaxHeight = availableHeight,
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
             };
             var frame = new Border
             {
-                Width = Math.Min(340, Math.Max(260, ActualWidth - 24)),
-                MaxHeight = Math.Max(270, ActualHeight - 95),
+                Width = Math.Min(320, Math.Max(260, ActualWidth - 20)),
+                MaxHeight = availableHeight,
                 Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 36, 37, 42)),
                 BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 65, 67, 77)),
                 BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(14),
+                CornerRadius = new CornerRadius(12),
                 Child = scroll
             };
 
+            // Keep the menu attached directly below the compact Android-style app bar.
             _navigationPopup = new Popup
             {
                 Child = frame,
                 HorizontalOffset = 4,
-                VerticalOffset = 78,
+                VerticalOffset = 62,
                 IsOpen = true
             };
         }
