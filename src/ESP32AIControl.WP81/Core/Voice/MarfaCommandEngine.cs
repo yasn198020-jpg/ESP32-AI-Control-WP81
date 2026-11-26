@@ -200,7 +200,7 @@ namespace ESP32AIControl.WP81.Core.Voice
             if (candidates.Count == 0)
                 return Result(MarfaCommandKind.NotFound, "Среди подключённых виджетов не нашла датчиков.");
             var best = candidates[0];
-            if (candidates.Count > 1 && candidates[1].Score >= best.Score && best.Score > 0)
+            if (candidates.Count > 1 && (best.Score == 0 || candidates[1].Score >= best.Score))
             {
                 _pending = candidates.Take(6).Select(c => c.Widget).ToList();
                 return Result(MarfaCommandKind.Clarify, "Какой датчик проверить? " + BuildClarification(_pending));
