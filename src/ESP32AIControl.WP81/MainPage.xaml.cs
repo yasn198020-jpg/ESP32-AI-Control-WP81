@@ -4810,19 +4810,21 @@ namespace ESP32AIControl.WP81
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-            var header = new StackPanel { Margin = new Thickness(16, 14, 16, 10) };
+            var header = new StackPanel { Margin = new Thickness(14, 12, 14, 8) };
             header.Children.Add(new TextBlock
             {
-                Text = "Отложенные голосовые команды",
-                FontSize = 24,
-                FontWeight = Windows.UI.Text.FontWeights.SemiBold
+                Text = "Отложенные команды Марфы",
+                FontSize = 18,
+                FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255))
             });
             header.Children.Add(new TextBlock
             {
-                Text = "Здесь отображаются команды, которые Марфа уже приняла и ожидает к выполнению. Планировщик MQTT-команд ESP32 находится отдельно.",
-                FontSize = 13,
+                Text = "Команды, которые Марфа приняла и ожидает к выполнению. Команды из ручного планировщика ESP32 находятся отдельно.",
+                FontSize = 12,
                 TextWrapping = TextWrapping.Wrap,
-                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 185, 187, 198))
+                Margin = new Thickness(0, 3, 0, 0),
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 172, 173, 184))
             });
             root.Children.Add(header);
 
@@ -4852,14 +4854,23 @@ namespace ESP32AIControl.WP81
                 _pendingMarfaList.Children.Clear();
                 if (pending.Count == 0)
                 {
-                    _pendingMarfaList.Children.Add(new TextBlock
+                    _pendingMarfaList.Children.Add(new Border
                     {
-                        Text = "Сейчас отложенных команд Марфы нет.",
-                        FontSize = 16,
-                        TextWrapping = TextWrapping.Wrap,
-                        Margin = new Thickness(8, 18, 8, 18),
-                        Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 190, 192, 201))
+                        Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 43, 44, 52)),
+                        BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 65, 67, 77)),
+                        BorderThickness = new Thickness(1),
+                        CornerRadius = new CornerRadius(14),
+                        Padding = new Thickness(14),
+                        Margin = new Thickness(2, 4, 2, 8),
+                        Child = new TextBlock
+                        {
+                            Text = "Сейчас отложенных команд Марфы нет.",
+                            FontSize = 13,
+                            TextWrapping = TextWrapping.Wrap,
+                            Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 172, 173, 184))
+                        }
                     });
+                    ApplyFontScaleToTree(_pendingMarfaList, _currentFontScale);
                     return;
                 }
 
@@ -4880,28 +4891,32 @@ namespace ESP32AIControl.WP81
                     panel.Children.Add(new TextBlock
                     {
                         Text = item.Command,
-                        FontSize = 17,
+                        FontSize = 14,
                         FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                        Foreground = new SolidColorBrush(Windows.UI.Colors.White),
                         TextWrapping = TextWrapping.Wrap
                     });
                     panel.Children.Add(new TextBlock
                     {
                         Text = "Выполнение: " + item.ExecuteAt.ToLocalTime().ToString("dd.MM.yyyy  HH:mm", CultureInfo.InvariantCulture),
-                        FontSize = 13,
+                        FontSize = 12,
                         Margin = new Thickness(0, 5, 0, 0),
-                        Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 190, 192, 201))
+                        Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 172, 173, 184))
                     });
                     panel.Children.Add(new TextBlock
                     {
                         Text = remainingText,
-                        FontSize = 14,
-                        Margin = new Thickness(0, 3, 0, 5),
+                        FontSize = 12,
+                        FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                        Margin = new Thickness(0, 3, 0, 7),
                         Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255))
                     });
                     var cancel = new Button
                     {
                         Content = "Удалить из очереди",
-                        MinHeight = 42,
+                        MinHeight = 38,
+                        FontSize = 12,
+                        Padding = new Thickness(10, 4, 10, 4),
                         HorizontalAlignment = HorizontalAlignment.Left
                     };
                     var commandId = item.Id;
@@ -4919,13 +4934,14 @@ namespace ESP32AIControl.WP81
                     _pendingMarfaList.Children.Add(new Border
                     {
                         Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 43, 44, 52)),
-                        BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 70, 72, 82)),
+                        BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 65, 67, 77)),
                         BorderThickness = new Thickness(1),
-                        CornerRadius = new CornerRadius(12),
+                        CornerRadius = new CornerRadius(14),
                         Margin = new Thickness(2, 3, 2, 7),
                         Child = panel
                     });
                 }
+                ApplyFontScaleToTree(_pendingMarfaList, _currentFontScale);
             }
             catch (Exception ex) { Log("MARFA QUEUE ERROR: " + ex.Message); }
         }
@@ -5061,8 +5077,14 @@ namespace ESP32AIControl.WP81
             var root = new Grid();
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-            var header = new StackPanel { Margin = new Thickness(16, 14, 16, 8) };
-            header.Children.Add(new TextBlock { Text = "Обученные команды", FontSize = 24, FontWeight = Windows.UI.Text.FontWeights.SemiBold });
+            var header = new StackPanel { Margin = new Thickness(14, 12, 14, 8) };
+            header.Children.Add(new TextBlock
+            {
+                Text = "Обученные команды",
+                FontSize = 18,
+                FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255))
+            });
             header.Children.Add(new TextBlock
             {
                 Text = "Фразы, связанные с датчиками и действиями ESP32.",
@@ -5089,11 +5111,18 @@ namespace ESP32AIControl.WP81
             var count = new TextBlock
             {
                 Text = "Записанные команды: " + _trainedCommands.Count.ToString(CultureInfo.InvariantCulture),
-                FontSize = 16, FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                FontSize = 13, FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 172, 173, 184)),
                 VerticalAlignment = VerticalAlignment.Center
             };
             top.Children.Add(count);
-            var clear = new Button { Content = "Очистить всё", MinHeight = 42, Padding = new Thickness(10, 6, 10, 6) };
+            var clear = new Button
+            {
+                Content = "Очистить всё",
+                MinHeight = 38,
+                FontSize = 12,
+                Padding = new Thickness(9, 4, 9, 4)
+            };
             clear.Click += async delegate
             {
                 var dialog = new Windows.UI.Popups.MessageDialog("Будут удалены все сохранённые фразы и их варианты. Настройки MQTT и другие данные не изменятся.", "Очистить обученные команды?");
@@ -5121,7 +5150,7 @@ namespace ESP32AIControl.WP81
                     Child = new TextBlock
                     {
                         Text = "Пока нет обученных команд.\n\nЗажмите виджет на главном экране, чтобы связать с ним голосовую фразу.",
-                        FontSize = 15, TextWrapping = TextWrapping.Wrap,
+                        FontSize = 13, TextWrapping = TextWrapping.Wrap,
                         Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 190, 192, 201))
                     }
                 });
@@ -5137,14 +5166,15 @@ namespace ESP32AIControl.WP81
                     BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 65, 67, 77)),
                     BorderThickness = new Thickness(1),
                     CornerRadius = new CornerRadius(14),
-                    Padding = new Thickness(14),
+                    Padding = new Thickness(12),
                     Margin = new Thickness(0, 0, 0, 8)
                 };
                 var content = new StackPanel();
                 content.Children.Add(new TextBlock
                 {
                     Text = "«" + command.Phrase + "»",
-                    FontSize = 18, FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                    FontSize = 15, FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                    Foreground = new SolidColorBrush(Windows.UI.Colors.White),
                     TextWrapping = TextWrapping.Wrap,
                     Margin = new Thickness(0, 0, 0, 5)
                 });
@@ -5153,7 +5183,7 @@ namespace ESP32AIControl.WP81
                 content.Children.Add(new TextBlock
                 {
                     Text = command.DeviceId + "  •  " + widgetName,
-                    FontSize = 13, Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 190, 192, 201)),
+                    FontSize = 12, Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 172, 173, 184)),
                     TextWrapping = TextWrapping.Wrap,
                     Margin = new Thickness(0, 0, 0, 5)
                 });
@@ -5161,7 +5191,7 @@ namespace ESP32AIControl.WP81
                 content.Children.Add(new TextBlock
                 {
                     Text = action,
-                    FontSize = 12, FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                    FontSize = 11, FontWeight = Windows.UI.Text.FontWeights.SemiBold,
                     Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255)),
                     Margin = new Thickness(0, 0, 0, 7)
                 });
@@ -5174,7 +5204,7 @@ namespace ESP32AIControl.WP81
                         Margin = new Thickness(0, 0, 0, 7)
                     });
                 var buttons = new StackPanel { Orientation = Orientation.Horizontal };
-                var edit = new Button { Content = "Изменить", MinHeight = 40, Padding = new Thickness(10, 5, 10, 5), Margin = new Thickness(0, 0, 6, 0) };
+                var edit = new Button { Content = "Изменить", MinHeight = 36, FontSize = 12, Padding = new Thickness(8, 4, 8, 4), Margin = new Thickness(0, 0, 5, 0) };
                 edit.Click += delegate
                 {
                     if (state == null)
@@ -5190,9 +5220,9 @@ namespace ESP32AIControl.WP81
                     if (_trainingActionBox != null)
                         _trainingActionBox.SelectedIndex = command.Value == "0" ? 1 : 0;
                 };
-                var addVariant = new Button { Content = "＋ Вариант фразы", MinHeight = 40, Padding = new Thickness(10, 5, 10, 5), Margin = new Thickness(0, 0, 6, 0) };
+                var addVariant = new Button { Content = "＋ Вариант", MinHeight = 36, FontSize = 12, Padding = new Thickness(8, 4, 8, 4), Margin = new Thickness(0, 0, 5, 0) };
                 addVariant.Click += delegate { OpenVariantDialog(command.Phrase); };
-                var remove = new Button { Content = "Удалить", MinHeight = 40, Padding = new Thickness(10, 5, 10, 5) };
+                var remove = new Button { Content = "Удалить", MinHeight = 36, FontSize = 12, Padding = new Thickness(8, 4, 8, 4) };
                 remove.Click += delegate
                 {
                     _trainedCommands.RemoveAll(c =>
