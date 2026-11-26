@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Threading.Tasks;
 using ESP32AIControl.WP81.Core.Protocol;
 
 namespace ESP32AIControl.WP81.Core.Scenarios
@@ -19,6 +20,8 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, LocalScenarioRuntimeState> _runtime =
             new Dictionary<string, LocalScenarioRuntimeState>(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _scheduledDurationChecks =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         public LocalScenarioEngine(LocalScenarioStore store, Action<LocalScenarioDefinition, string> onTrigger)
         {
@@ -72,8 +75,7 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                         allKnown = false;
                         continue;
                     }
-                    state.ConditionValues[i] = Compare(value,
-                        scenario.Conditions[i].Operator, scenario.Conditions[i].Threshold);
+                    state.ConditionValues[i] = EvaluateCondition(scenario, state, i, value);
                 }
 
                 if (allKnown && state.ConditionValues.Count == scenario.Conditions.Count)
@@ -153,7 +155,7 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                         continue;
                     }
 
-                    var matched = Compare(actual, condition.Operator, condition.Threshold);
+                    var matched = EvaluateCondition(scenario, state, i, actual);
                     current[i] = matched;
                     bool previous;
                     if (string.Equals(condition.WidgetId, message.WidgetId, StringComparison.OrdinalIgnoreCase) &&
@@ -245,6 +247,117 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             // reported yet; this is required to detect a later TRUE -> FALSE edge.
             foreach (var pair in values)
                 state.ConditionValues[pair.Key] = pair.Value;
+        }
+
+        private bool EvaluateCondition(
+            LocalScenarioDefinition scenario,
+            LocalScenarioRuntimeState state,
+            int index,
+            double actual)
+        {
+            var condition = scenario.Conditions[index];
+            if (!string.Equals(condition.Operator, "ON_FOR_GT", StringComparison.OrdinalIgnoreCase))
+                return Compare(actual, condition.Operator, condition.Threshold);
+
+            if (actual <= condition.Threshold)
+            {
+                state.ConditionStartedAt.Remove(index);
+                return false;
+            }
+
+            DateTimeOffset started;
+            if (!state.ConditionStartedAt.TryGetValue(index, out started))
+            {
+                started = DateTimeOffset.UtcNow;
+                state.ConditionStartedAt[index] = started;
+            }
+
+            var duration = Math.Max(0, condition.DurationMs);
+            var elapsed = (DateTimeOffset.UtcNow - started).TotalMilliseconds;
+            if (elapsed >= duration) return true;
+            ScheduleDurationCheck(scenario.Id, index, duration - elapsed);
+            return false;
+        }
+
+        private void ScheduleDurationCheck(string scenarioId, int conditionIndex, double remainingMs)
+        {
+            var key = scenarioId + "#" + conditionIndex.ToString(CultureInfo.InvariantCulture);
+            if (!_scheduledDurationChecks.Add(key)) return;
+
+            var delay = (int)Math.Max(1, Math.Min(int.MaxValue, Math.Ceiling(remainingMs)));
+            Task.Run(async delegate
+            {
+                try { await Task.Delay(delay); }
+                catch { }
+
+                LocalScenarioDefinition triggered = null;
+                string triggerValue = string.Empty;
+                lock (_sync)
+                {
+                    _scheduledDurationChecks.Remove(key);
+                    var scenario = _store.Load().FirstOrDefault(item => item.Id == scenarioId);
+                    if (scenario == null || !scenario.Enabled || scenario.Conditions.Count == 0)
+                        return;
+
+                    LocalScenarioRuntimeState state;
+                    if (!_runtime.TryGetValue(scenario.Id, out state))
+                    {
+                        state = new LocalScenarioRuntimeState();
+                        _runtime[scenario.Id] = state;
+                    }
+
+                    var current = new Dictionary<int, bool>();
+                    var known = true;
+                    for (var i = 0; i < scenario.Conditions.Count; i++)
+                    {
+                        double actual;
+                        if (!_values.TryGetValue(scenario.Conditions[i].WidgetId, out actual))
+                        {
+                            known = false;
+                            continue;
+                        }
+                        current[i] = EvaluateCondition(scenario, state, i, actual);
+                    }
+
+                    if (!known || current.Count != scenario.Conditions.Count)
+                    {
+                        CopyConditionValues(state, current);
+                        _store.SaveRuntimeState(scenario.Id, state);
+                        return;
+                    }
+
+                    var expression = current[0];
+                    for (var i = 1; i < scenario.Conditions.Count; i++)
+                    {
+                        expression = string.Equals(scenario.Conditions[i].Connector, "OR", StringComparison.OrdinalIgnoreCase)
+                            ? expression || current[i]
+                            : expression && current[i];
+                    }
+
+                    if (!expression)
+                    {
+                        state.Fired = false;
+                        CopyConditionValues(state, current);
+                        _store.SaveRuntimeState(scenario.Id, state);
+                        return;
+                    }
+
+                    if (!state.Fired && !state.AwaitingTrueUpdate)
+                    {
+                        state.Fired = true;
+                        triggered = scenario;
+                        triggerValue = _values.ContainsKey(scenario.Conditions[conditionIndex].WidgetId)
+                            ? _values[scenario.Conditions[conditionIndex].WidgetId].ToString(CultureInfo.InvariantCulture)
+                            : string.Empty;
+                    }
+
+                    CopyConditionValues(state, current);
+                    _store.SaveRuntimeState(scenario.Id, state);
+                }
+
+                if (triggered != null && _onTrigger != null)
+                    _onTrigger(triggered, triggerValue);
+            });
         }
 
         private static bool Compare(double actual, string op, double expected)
