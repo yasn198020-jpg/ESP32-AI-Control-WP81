@@ -408,6 +408,27 @@
                                                FontSize="12" Foreground="#FFACADB8" Margin="0,8,0,0"/>
                                 </StackPanel>
                             </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </PivotItem>
+                <PivotItem Header="Голос">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="10,4,10,12">
+                            <TextBlock Text="Голосовое управление" FontSize="17" FontWeight="SemiBold"
+                                       Foreground="#FFD0BCFF" Margin="0,14,0,6"/>
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1"
+                                    CornerRadius="14" Padding="12" Margin="0,4,0,8">
+                                <StackPanel>
+                                    <TextBlock Text="СИНТЕЗ РЕЧИ" FontSize="14" FontWeight="SemiBold"
+                                               Foreground="#FFD0BCFF" Margin="0,0,0,4"/>
+                                    <TextBlock Text="Голос используется для ответа Марфы после выполнения обученной команды."
+                                               FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                                    <ComboBox x:Name="TtsVoiceBox" Header="Системный голос" MinHeight="48"/>
+                                    <Button Content="Проверить голос" Click="TtsTestButton_Click" Margin="0,4,0,0"/>
+                                    <TextBlock x:Name="TtsVoiceStatus" Text="Выберите голос и запустите проверку."
+                                               FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                                </StackPanel>
+                            </Border>
                             <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1"
                                     CornerRadius="14" Padding="12" Margin="0,4,0,8">
                                 <StackPanel>
