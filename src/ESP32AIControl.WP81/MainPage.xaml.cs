@@ -193,7 +193,7 @@ namespace ESP32AIControl.WP81
             _measurementStore = new LocalMeasurementStore();
             _recorder = new MeasurementRecorder(
                 _measurementStore,
-                delegate { return Math.Max(1, _appSettings.MeasurementIntervalSeconds); });
+                delegate(WidgetState state)\n                {\n                    int configured;\n                    if (_appSettings.WidgetMeasurementIntervals != null &&\n                        _appSettings.WidgetMeasurementIntervals.TryGetValue(state.Key, out configured))\n                        return Math.Max(1, configured);\n                    return Math.Max(1, _appSettings.MeasurementIntervalSeconds);\n                });
 
             _exporter = new RtfHistoryExporter();
             _commandExecutor = new Esp32CommandExecutor(_mqtt, _devices);
