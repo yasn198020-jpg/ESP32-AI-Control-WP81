@@ -527,93 +527,86 @@
                 <PivotItem Header="Автосценарии">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel Margin="10,4,10,12">
-                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1" CornerRadius="14" Padding="12" Margin="0,4,0,8"><StackPanel><TextBlock Text="ЛОКАЛЬНЫЕ АВТОСЦЕНАРИИ" FontSize="14" FontWeight="SemiBold"
-                                       Foreground="#FFD0BCFF" Margin="0,12,0,4"/>
-                            <TextBlock Text="Условия проверяются по данным MQTT и WebSocket. Сценарий срабатывает один раз, повторно — после перехода хотя бы одного условия в FALSE."
-                                       TextWrapping="Wrap" Foreground="#FFACADB8" Margin="0,0,0,8"/>
-                            <TextBox x:Name="LocalScenarioTitleBox" Header="Название сценария"
-                                     PlaceholderText="Например, высокая температура"/>
-                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1"
-                                    CornerRadius="14" Padding="12" Margin="0,4,0,8">
+                            <StackPanel Margin="2,8,2,10">
+                                <TextBlock Text="Автоматические сценарии" FontSize="21" FontWeight="SemiBold" Foreground="#FFEAF1F7" Margin="0,0,0,3"/>
+                                <TextBlock Text="Создавайте локальные правила: проверяйте значения датчиков и запускайте действия на устройствах. Правила обрабатываются по данным MQTT и WebSocket." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1" CornerRadius="14" Padding="12" Margin="0,0,0,10">
                                 <StackPanel>
-                                    <TextBlock Text="КОНСТРУКТОР УСЛОВИЯ" FontWeight="SemiBold"
-                                               Foreground="#FFD0BCFF" Margin="0,0,0,6"/>
+                                    <TextBlock Text="НОВЫЙ СЦЕНАРИЙ" FontSize="14" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,0,0,3"/>
+                                    <TextBlock Text="Сначала задайте понятное название правила." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,0,0,5"/>
+                                    <TextBox x:Name="LocalScenarioTitleBox" Header="Название сценария" PlaceholderText="Например, высокая температура"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1" CornerRadius="14" Padding="12" Margin="0,0,0,10">
+                                <StackPanel>
+                                    <TextBlock Text="1. УСЛОВИЯ СРАБАТЫВАНИЯ" FontSize="14" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,0,0,3"/>
+                                    <TextBlock Text="Выберите датчик, оператор сравнения и пороговое значение." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,0,0,6"/>
                                     <ComboBox x:Name="LocalScenarioConditionWidgetBox" Header="Датчик или виджет" Margin="0,2,0,6"/>
-                                    <Grid Margin="0,0,0,6">
-                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                        <ComboBox x:Name="LocalScenarioConnectorBox" Header="Связь" SelectedIndex="0" Margin="0,0,4,0">
-                                            <ComboBoxItem Content="И (AND)" Tag="AND"/>
-                                            <ComboBoxItem Content="ИЛИ (OR)" Tag="OR"/>
-                                        </ComboBox>
-                                        <ComboBox x:Name="LocalScenarioOperatorBox" Grid.Column="1" Header="Условие" SelectedIndex="0" Margin="4,0,0,0">
-                                            <ComboBoxItem Content="Больше >" Tag=">"/>
-                                            <ComboBoxItem Content="Не меньше ≥" Tag=">="/>
-                                            <ComboBoxItem Content="Меньше &lt;" Tag="&lt;"/>
-                                            <ComboBoxItem Content="Не больше ≤" Tag="&lt;="/>
-                                            <ComboBoxItem Content="Равно =" Tag="="/>
-                                            <ComboBoxItem Content="Не равно ≠" Tag="!="/>
-                                        </ComboBox>
-                                    </Grid>
-                                    <TextBox x:Name="LocalScenarioThresholdBox" Header="Порог / значение"
-                                             PlaceholderText="Например, 25" Margin="0,0,0,6"/>
-                                    <Button Content="＋ Добавить условие" Click="LocalScenarioAddConditionButton_Click"
-                                            HorizontalAlignment="Stretch"/>
+                                    <ComboBox x:Name="LocalScenarioConnectorBox" Header="Связь с предыдущим условием" SelectedIndex="0" Margin="0,0,0,6">
+                                        <ComboBoxItem Content="И (AND)" Tag="AND"/>
+                                        <ComboBoxItem Content="ИЛИ (OR)" Tag="OR"/>
+                                    </ComboBox>
+                                    <ComboBox x:Name="LocalScenarioOperatorBox" Header="Оператор сравнения" SelectedIndex="0" Margin="0,0,0,6">
+                                        <ComboBoxItem Content="Больше >" Tag=">"/>
+                                        <ComboBoxItem Content="Не меньше ≥" Tag=">="/>
+                                        <ComboBoxItem Content="Меньше &lt;" Tag="&lt;"/>
+                                        <ComboBoxItem Content="Не больше ≤" Tag="&lt;="/>
+                                        <ComboBoxItem Content="Равно =" Tag="="/>
+                                        <ComboBoxItem Content="Не равно ≠" Tag="!="/>
+                                    </ComboBox>
+                                    <TextBox x:Name="LocalScenarioThresholdBox" Header="Пороговое значение" PlaceholderText="Например, 25" Margin="0,0,0,8"/>
+                                    <Button Content="＋ Добавить условие" Click="LocalScenarioAddConditionButton_Click" HorizontalAlignment="Stretch"/>
                                 </StackPanel>
                             </Border>
-                            </StackPanel>
-                            </Border>
-                            <TextBox x:Name="LocalScenarioConditionsBox" Header="Условия правила"
-                                     AcceptsReturn="True" TextWrapping="Wrap" Height="100"
-                                     PlaceholderText="sensor1 > 25&#10;AND sensor2 = 1&#10;OR sensor3 &lt; 10"/>
-                            <TextBlock Text="Формат: widgetId оператор значение. Для следующих строк укажите AND или OR в начале."
-                                       TextWrapping="Wrap" FontSize="12" Foreground="#FFACADB8" Margin="0,2,0,6"/>
-                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1"
-                                    CornerRadius="14" Padding="12" Margin="0,4,0,8">
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1" CornerRadius="14" Padding="12" Margin="0,0,0,10">
                                 <StackPanel>
-                                    <TextBlock Text="КОНСТРУКТОР ДЕЙСТВИЯ" FontWeight="SemiBold"
-                                               Foreground="#FFD0BCFF" Margin="0,0,0,6"/>
-                                    <ComboBox x:Name="LocalScenarioActionWidgetBox" Header="Устройство и исполнительный виджет"
-                                              Margin="0,2,0,6"/>
-                                    <TextBox x:Name="LocalScenarioActionValueBox" Header="Отправляемое значение"
-                                             Text="1" PlaceholderText="1 или 0" Margin="0,0,0,6"/>
-                                    <Button Content="＋ Добавить действие" Click="LocalScenarioAddActionButton_Click"
-                                            HorizontalAlignment="Stretch"/>
+                                    <TextBlock Text="СПИСОК УСЛОВИЙ" FontSize="14" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,0,0,3"/>
+                                    <TextBlock Text="Проверьте последовательность условий. Для следующих строк используйте AND или OR в начале." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                                    <TextBox x:Name="LocalScenarioConditionsBox" Header="Условия правила" AcceptsReturn="True" TextWrapping="Wrap" Height="110" PlaceholderText="sensor1 > 25&#10;AND sensor2 = 1&#10;OR sensor3 &lt; 10"/>
+                                    <TextBlock Text="Формат строки: widgetId оператор значение." FontSize="11" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="2,6,2,0"/>
                                 </StackPanel>
                             </Border>
-                            <TextBox x:Name="LocalScenarioActionsBox" Header="Действия правила"
-                                     AcceptsReturn="True" TextWrapping="Wrap" Height="72"
-                                     PlaceholderText="esp32/relay1=1"/>
-                            <TextBox x:Name="LocalScenarioMessageBox" Header="Текст уведомления"
-                                     Text="Условие выполнено: {value}"/>
-                            <CheckBox x:Name="LocalScenarioEnabledCheckBox" Content="Сценарий включён"
-                                      Margin="0,4,0,0"/>
-                            <CheckBox x:Name="LocalScenarioNotificationCheckBox" Content="Показывать уведомление"
-                                      Margin="0,0,0,6"/>
-                            <StackPanel Orientation="Horizontal" Margin="0,4,0,8">
-                                <Button x:Name="LocalScenarioSaveButton" Content="Добавить сценарий"
-                                        Click="LocalScenarioSaveButton_Click" Margin="0,0,6,0"/>
-                                <Button Content="Очистить" Click="LocalScenarioClearButton_Click"/>
-                            </StackPanel>
-                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D"
-                                    BorderThickness="1" CornerRadius="14" Padding="12"
-                                    Margin="0,10,0,8">
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1" CornerRadius="14" Padding="12" Margin="0,0,0,10">
                                 <StackPanel>
-                                    <TextBlock Text="СОХРАНЁННЫЕ СЦЕНАРИИ" FontWeight="SemiBold"
-                                               FontSize="14" Foreground="#FFD0BCFF" Margin="0,0,0,4"/>
-                                    <TextBlock Text="Выберите правило, чтобы изменить его состояние или удалить."
-                                               FontSize="12" Foreground="#FFACADB8"
-                                               TextWrapping="Wrap" Margin="0,0,0,8"/>
-                                    <ListView x:Name="LocalScenariosList" Height="220"
-                                              SelectionMode="Single"
-                                              SelectionChanged="LocalScenariosList_SelectionChanged"/>
-                                    <Button Content="Включить / выключить выбранный"
-                                            Click="LocalScenarioToggleButton_Click"
-                                            Margin="0,8,0,4"/>
-                                    <Button Content="Удалить выбранный сценарий"
-                                            Click="LocalScenarioDeleteButton_Click"
-                                            Margin="0,4,0,0"/>
-                                    <TextBlock x:Name="LocalScenariosStatus" Text="" TextWrapping="Wrap"
-                                               FontSize="12" Foreground="#FFACADB8" Margin="0,8,0,0"/>
+                                    <TextBlock Text="2. ДЕЙСТВИЯ ПРИ СРАБАТЫВАНИИ" FontSize="14" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,0,0,3"/>
+                                    <TextBlock Text="Укажите исполнительный виджет и значение, которое будет отправлено." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                                    <ComboBox x:Name="LocalScenarioActionWidgetBox" Header="Устройство и исполнительный виджет" Margin="0,2,0,6"/>
+                                    <TextBox x:Name="LocalScenarioActionValueBox" Header="Отправляемое значение" Text="1" PlaceholderText="Например, 1 или 0" Margin="0,0,0,8"/>
+                                    <Button Content="＋ Добавить действие" Click="LocalScenarioAddActionButton_Click" HorizontalAlignment="Stretch"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1" CornerRadius="14" Padding="12" Margin="0,0,0,10">
+                                <StackPanel>
+                                    <TextBlock Text="СПИСОК ДЕЙСТВИЙ" FontSize="14" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,0,0,3"/>
+                                    <TextBlock Text="Проверьте команды, которые будут отправлены при выполнении правила." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                                    <TextBox x:Name="LocalScenarioActionsBox" Header="Действия правила" AcceptsReturn="True" TextWrapping="Wrap" Height="90" PlaceholderText="esp32/relay1=1"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1" CornerRadius="14" Padding="12" Margin="0,0,0,10">
+                                <StackPanel>
+                                    <TextBlock Text="3. УВЕДОМЛЕНИЯ И АКТИВАЦИЯ" FontSize="14" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,0,0,3"/>
+                                    <TextBlock Text="Настройте сообщение и выберите, должен ли сценарий быть активен сразу после сохранения." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                                    <TextBox x:Name="LocalScenarioMessageBox" Header="Текст уведомления" Text="Условие выполнено: {value}"/>
+                                    <CheckBox x:Name="LocalScenarioEnabledCheckBox" Content="Сценарий включён" Margin="0,8,0,2"/>
+                                    <CheckBox x:Name="LocalScenarioNotificationCheckBox" Content="Показывать уведомление" Margin="0,2,0,2"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1" CornerRadius="14" Padding="12" Margin="0,0,0,10">
+                                <StackPanel>
+                                    <TextBlock Text="СОХРАНЕНИЕ СЦЕНАРИЯ" FontSize="14" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,0,0,6"/>
+                                    <Button x:Name="LocalScenarioSaveButton" Content="Добавить сценарий" Click="LocalScenarioSaveButton_Click" HorizontalAlignment="Stretch" Background="#FFD0BCFF" BorderBrush="#FFD0BCFF" Foreground="#FF202020" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                                    <Button Content="Очистить форму" Click="LocalScenarioClearButton_Click" HorizontalAlignment="Stretch"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1" CornerRadius="14" Padding="12" Margin="0,0,0,8">
+                                <StackPanel>
+                                    <TextBlock Text="СОХРАНЁННЫЕ СЦЕНАРИИ" FontSize="14" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,0,0,3"/>
+                                    <TextBlock Text="Выберите правило, чтобы включить, выключить или удалить его. Сценарий срабатывает один раз и может сработать снова после того, как хотя бы одно условие станет FALSE." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                                    <ListView x:Name="LocalScenariosList" Height="220" SelectionMode="Single" SelectionChanged="LocalScenariosList_SelectionChanged"/>
+                                    <Button Content="Включить / выключить выбранный" Click="LocalScenarioToggleButton_Click" HorizontalAlignment="Stretch" Margin="0,8,0,6"/>
+                                    <Button Content="Удалить выбранный сценарий" Click="LocalScenarioDeleteButton_Click" HorizontalAlignment="Stretch"/>
+                                    <TextBlock x:Name="LocalScenariosStatus" Text="" TextWrapping="Wrap" FontSize="12" Foreground="#FFACADB8" Margin="0,8,0,0"/>
                                 </StackPanel>
                             </Border>
                         </StackPanel>
