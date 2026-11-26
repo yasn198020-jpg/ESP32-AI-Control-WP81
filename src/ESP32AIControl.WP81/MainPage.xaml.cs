@@ -1856,7 +1856,10 @@ namespace ESP32AIControl.WP81
                 ScenarioTextBox.Text = scenario;
                 _appSettings.IoTManagerScenario = scenario;
                 await _settingsStore.SaveAsync(_appSettings);
-                RefreshScenarioPlanPreview();
+                ScenarioPlanList.Items.Clear();
+                ScenarioPlanStatus.Text = "Сценарий распознан: " +
+                    parsedRules.ToString(CultureInfo.InvariantCulture) +
+                    " правил. Для просмотра зависимостей заполните команды открытия/закрытия и нажмите «Проверить план».";
 
                 SettingsStatus.Text = "Сценарий загружен и распознан. Правил: " +
                     parsedRules.ToString(CultureInfo.InvariantCulture) + ".";
