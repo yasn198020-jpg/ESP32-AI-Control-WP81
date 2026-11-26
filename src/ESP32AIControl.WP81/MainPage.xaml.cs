@@ -4859,16 +4859,35 @@ namespace ESP32AIControl.WP81
             preview.Children.Add(_scenarioProbeBox);
             var check = new Button
             {
-                Content = "Проверить план",
+                Content = "Проверить команду Марфы",
                 MinHeight = 44,
                 Margin = new Thickness(0, 8, 0, 6),
-                HorizontalAlignment = HorizontalAlignment.Left,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
                 Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255)),
                 Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 32, 32, 32)),
                 FontWeight = Windows.UI.Text.FontWeights.SemiBold
             };
             check.Click += ScenarioProbeButton_Click;
             preview.Children.Add(check);
+            var diagnosticActions = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6) };
+            var clearResult = new Button
+            {
+                Content = "Очистить результат",
+                MinHeight = 40,
+                Margin = new Thickness(0, 0, 6, 0),
+                FontSize = 12
+            };
+            clearResult.Click += ClearScenarioProbeResult_Click;
+            diagnosticActions.Children.Add(clearResult);
+            var copyResult = new Button
+            {
+                Content = "Копировать результат",
+                MinHeight = 40,
+                FontSize = 12
+            };
+            copyResult.Click += CopyScenarioProbeResult_Click;
+            diagnosticActions.Children.Add(copyResult);
+            preview.Children.Add(diagnosticActions);
             _scenarioProbeResult = new TextBlock
             {
                 Text = "Результат проверки появится здесь.",
@@ -4877,7 +4896,15 @@ namespace ESP32AIControl.WP81
                 Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 190, 192, 201)),
                 Margin = new Thickness(0, 4, 0, 2)
             };
-            preview.Children.Add(_scenarioProbeResult);
+            preview.Children.Add(new Border
+            {
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 36, 37, 42)),
+                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 65, 67, 77)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(10),
+                Padding = new Thickness(10),
+                Child = _scenarioProbeResult
+            });
             content.Children.Add(new Border
             {
                 Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 43, 44, 52)),
@@ -4929,6 +4956,29 @@ namespace ESP32AIControl.WP81
                 Margin = new Thickness(0, 0, 0, 8),
                 Child = panel
             };
+        }
+
+        private void ClearScenarioProbeResult_Click(object sender, RoutedEventArgs e)
+        {
+            if (_scenarioProbeBox != null) _scenarioProbeBox.Text = string.Empty;
+            if (_scenarioProbeResult != null) _scenarioProbeResult.Text = "Результат очищен.";
+        }
+
+        private void CopyScenarioProbeResult_Click(object sender, RoutedEventArgs e)
+        {
+            var text = _scenarioProbeResult == null ? string.Empty : _scenarioProbeResult.Text;
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                if (_scenarioProbeResult != null) _scenarioProbeResult.Text = "Нет результата для копирования.";
+                return;
+            }
+
+            var package = new Windows.ApplicationModel.DataTransfer.DataPackage();
+            package.SetText(text);
+            Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(package);
+            Windows.ApplicationModel.DataTransfer.Clipboard.Flush();
+            if (_scenarioProbeResult != null)
+                _scenarioProbeResult.Text = text + Environment.NewLine + "Результат скопирован.";
         }
 
         private void ScenarioProbeButton_Click(object sender, RoutedEventArgs e)
