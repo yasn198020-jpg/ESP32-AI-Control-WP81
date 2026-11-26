@@ -1848,13 +1848,20 @@ namespace ESP32AIControl.WP81
                     return;
 
                 var scenario = await Windows.Storage.FileIO.ReadTextAsync(file);
+                _commandExecutor.SetScenarioScript(scenario);
+                var parsedRules = _commandExecutor.GetScenarioRuleCount();
+                if (parsedRules <= 0)
+                    throw new InvalidOperationException("В файле не найдено ни одного распознанного правила scenario=>. Проверьте экспорт IoTManager.");
+
                 ScenarioTextBox.Text = scenario;
                 _appSettings.IoTManagerScenario = scenario;
-                _commandExecutor.SetScenarioScript(scenario);
                 await _settingsStore.SaveAsync(_appSettings);
+                RefreshScenarioPlanPreview();
 
-                SettingsStatus.Text = "Сценарий IoTManager загружен.";
-                Log("SCENARIO IMPORT: " + file.Name);
+                SettingsStatus.Text = "Сценарий загружен и распознан. Правил: " +
+                    parsedRules.ToString(CultureInfo.InvariantCulture) + ".";
+                Log("SCENARIO IMPORT: " + file.Name + " · rules=" +
+                    parsedRules.ToString(CultureInfo.InvariantCulture));
             }
             catch (Exception ex)
             {
@@ -1867,41 +1874,64 @@ namespace ESP32AIControl.WP81
         {
             try
             {
-                _commandExecutor.SetScenarioScript(ScenarioTextBox.Text ?? string.Empty);
+                RefreshScenarioPlanPreview();
+                if (ScenarioPlanList.Items.Count == 0)
+                    throw new InvalidOperationException("Нет плана для проверки. Заполните команды открытия/закрытия.");
 
-                Log("SCENARIO READ: разобрано правил = " +
-                    _commandExecutor.GetScenarioRuleCount().ToString(CultureInfo.InvariantCulture));
-
-                var open = VoiceOpenCommandBox.Text.Trim();
-                var close = VoiceCloseCommandBox.Text.Trim();
-
-                if (string.IsNullOrEmpty(open) && string.IsNullOrEmpty(close))
-                    throw new InvalidOperationException("Заполните команды открытия/закрытия.");
-
-                if (!string.IsNullOrEmpty(open))
-                    LogScenarioPlan("OPEN", open);
-
-                if (!string.IsNullOrEmpty(close))
-                    LogScenarioPlan("CLOSE", close);
-
-                SettingsStatus.Text = "План проверен. См. диагностику MQTT.";
+                SettingsStatus.Text = "План проверен: " +
+                    ScenarioPlanList.Items.Count.ToString(CultureInfo.InvariantCulture) +
+                    " шаг(ов). Команды не отправлялись.";
             }
             catch (Exception ex)
             {
+                ScenarioPlanList.Items.Clear();
+                ScenarioPlanStatus.Text = "Проверка не пройдена: " + ex.Message;
                 SettingsStatus.Text = "Ошибка проверки: " + ex.Message;
                 Log("SCENARIO TEST ERROR: " + ex.Message);
             }
         }
 
-        private void LogScenarioPlan(string name, string command)
+        private void RefreshScenarioPlanPreview()
         {
-            Log("SCENARIO TEST " + name + ": " + command);
+            _commandExecutor.SetScenarioScript(ScenarioTextBox.Text ?? string.Empty);
+            var ruleCount = _commandExecutor.GetScenarioRuleCount();
+            ScenarioPlanList.Items.Clear();
 
+            if (ruleCount <= 0)
+                throw new InvalidOperationException("Не найдено распознанных правил scenario=>.");
+
+            var open = VoiceOpenCommandBox.Text == null ? string.Empty : VoiceOpenCommandBox.Text.Trim();
+            var close = VoiceCloseCommandBox.Text == null ? string.Empty : VoiceCloseCommandBox.Text.Trim();
+            if (string.IsNullOrEmpty(open) && string.IsNullOrEmpty(close))
+                throw new InvalidOperationException("Заполните хотя бы одну команду открытия или закрытия.");
+
+            if (!string.IsNullOrEmpty(open))
+                AddScenarioPlanPreview("ОТКРЫТИЕ", open);
+            if (!string.IsNullOrEmpty(close))
+                AddScenarioPlanPreview("ЗАКРЫТИЕ", close);
+
+            ScenarioPlanStatus.Text = "Распознано правил: " +
+                ruleCount.ToString(CultureInfo.InvariantCulture) +
+                ". Ниже показан порядок действий; отправки на ESP32 не было.";
+        }
+
+        private void AddScenarioPlanPreview(string title, string command)
+        {
             var plan = _commandExecutor.BuildPlan(command);
-
+            ScenarioPlanList.Items.Add("── " + title + " ──");
             for (var i = 0; i < plan.Actions.Count; i++)
             {
                 var action = plan.Actions[i];
+                var state = _devices.Get(action.DeviceId, action.WidgetId);
+                var current = state == null || string.IsNullOrWhiteSpace(state.Value)
+                    ? "текущее: неизвестно"
+                    : "сейчас " + state.Value;
+                var kind = action.IsDependency ? "ЗАВИСИМОСТЬ" : "ОСНОВНОЕ ДЕЙСТВИЕ";
+                var reason = string.IsNullOrWhiteSpace(action.Reason)
+                    ? string.Empty : Environment.NewLine + "Причина: " + action.Reason;
+                var line = (i + 1).ToString(CultureInfo.InvariantCulture) + ". " + kind +
+                    Environment.NewLine + action.Command + " · " + current + reason;
+                ScenarioPlanList.Items.Add(line);
                 Log("PLAN " + (action.IsDependency ? "DEP " : "ACT ") + action.Command +
                     (string.IsNullOrEmpty(action.Reason) ? string.Empty : " | " + action.Reason));
             }
