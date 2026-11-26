@@ -80,6 +80,8 @@ namespace ESP32AIControl.WP81
         private string _variantPhraseTarget;
         private MediaElement _speechPlayback;
         private SpeechSynthesizer _speechSynthesizer;
+        private readonly List<string> _logLines = new List<string>();
+        private bool _applyingTtsSettings;
 
         private readonly Dictionary<string, WidgetVisual> _visuals =
             new Dictionary<string, WidgetVisual>();
@@ -235,7 +237,9 @@ namespace ESP32AIControl.WP81
                 _appSettings = await _settingsStore.LoadAsync();
                 if (_appSettings.GraphWidgetColors == null) _appSettings.GraphWidgetColors = new Dictionary<string, string>();
                 RefreshGraphSetPicker();
-                LogText.Text = string.Join(Environment.NewLine, _connectionJournal.Load());
+                _logLines.Clear();
+                _logLines.AddRange(_connectionJournal.Load().Take(250));
+                RefreshLogView();
                 if (_appSettings.SavedMqttProfiles == null)
                     _appSettings.SavedMqttProfiles = new List<SavedMqttProfile>();
                 ApplyDefaultMqttProfileToSettings();
@@ -1579,6 +1583,7 @@ namespace ESP32AIControl.WP81
                 _appSettings.VoiceOpenCommand = VoiceOpenCommandBox.Text.Trim();
                 _appSettings.VoiceCloseCommand = VoiceCloseCommandBox.Text.Trim();
                 _appSettings.TtsVoiceId = SelectedSpeechVoiceId();
+                ReadTtsSettingsFromUi();
                 _appSettings.IoTManagerScenario = ScenarioTextBox.Text ?? string.Empty;
 
                 // FileSavePicker is not supported reliably on Windows Phone 8.1.
@@ -1658,6 +1663,8 @@ namespace ESP32AIControl.WP81
                 _appSettings.AutoExportPeriod = GetAutoExportTag();
                 _appSettings.VoiceOpenCommand = VoiceOpenCommandBox.Text.Trim();
                 _appSettings.VoiceCloseCommand = VoiceCloseCommandBox.Text.Trim();
+                _appSettings.TtsVoiceId = SelectedSpeechVoiceId();
+                ReadTtsSettingsFromUi();
                 _appSettings.IoTManagerScenario = ScenarioTextBox.Text ?? string.Empty;
 
                 _voiceParser = new VoiceCommandParser(
@@ -1898,6 +1905,8 @@ namespace ESP32AIControl.WP81
             VoiceOpenCommandBox.Text = _appSettings.VoiceOpenCommand;
             VoiceCloseCommandBox.Text = _appSettings.VoiceCloseCommand;
             LoadAvailableSpeechVoices();
+            NormalizeTtsSettings();
+            ApplyTtsSettingsToUi();
             ScenarioTextBox.Text = _appSettings.IoTManagerScenario;
             RefreshSavedMqttProfiles();
 
@@ -6171,6 +6180,96 @@ namespace ESP32AIControl.WP81
             return item == null ? string.Empty : (item.Tag as string ?? string.Empty);
         }
 
+        private void NormalizeTtsSettings()
+        {
+            if (_appSettings == null) return;
+            if (_appSettings.TtsVoiceRate < 0.75f || _appSettings.TtsVoiceRate > 1.15f)
+                _appSettings.TtsVoiceRate = 0.92f;
+            if (_appSettings.TtsVoicePitch < 0.85f || _appSettings.TtsVoicePitch > 1.25f)
+                _appSettings.TtsVoicePitch = 1.05f;
+            if (string.IsNullOrWhiteSpace(_appSettings.TtsVoicePreset))
+                _appSettings.TtsVoicePreset = "friendly";
+        }
+
+        private void ApplyTtsSettingsToUi()
+        {
+            if (_appSettings == null || TtsRateSlider == null || TtsPitchSlider == null) return;
+            NormalizeTtsSettings();
+            _applyingTtsSettings = true;
+            TtsRateSlider.Value = Math.Max(0.75, Math.Min(1.15, _appSettings.TtsVoiceRate));
+            TtsPitchSlider.Value = Math.Max(0.85, Math.Min(1.25, _appSettings.TtsVoicePitch));
+            var preset = TtsPresetBox.Items.OfType<ComboBoxItem>().FirstOrDefault(item =>
+                string.Equals(item.Tag as string, _appSettings.TtsVoicePreset, StringComparison.OrdinalIgnoreCase));
+            if (preset == null)
+                preset = TtsPresetBox.Items.OfType<ComboBoxItem>().FirstOrDefault(item =>
+                    string.Equals(item.Tag as string, "friendly", StringComparison.OrdinalIgnoreCase));
+            TtsPresetBox.SelectedItem = preset;
+            _applyingTtsSettings = false;
+            UpdateTtsValueLabels();
+        }
+
+        private void ReadTtsSettingsFromUi()
+        {
+            if (_appSettings == null) return;
+            _appSettings.TtsVoicePreset = SelectedTtsPresetId();
+            _appSettings.TtsVoiceRate = (float)TtsRateSlider.Value;
+            _appSettings.TtsVoicePitch = (float)TtsPitchSlider.Value;
+        }
+
+        private string SelectedTtsPresetId()
+        {
+            var item = TtsPresetBox == null ? null : TtsPresetBox.SelectedItem as ComboBoxItem;
+            return item == null ? "friendly" : (item.Tag as string ?? "friendly");
+        }
+
+        private void UpdateTtsValueLabels()
+        {
+            if (TtsRateValueText != null)
+                TtsRateValueText.Text = TtsRateSlider.Value.ToString("0.00", CultureInfo.CurrentCulture);
+            if (TtsPitchValueText != null)
+                TtsPitchValueText.Text = TtsPitchSlider.Value.ToString("0.00", CultureInfo.CurrentCulture);
+        }
+
+        private void TtsRateSlider_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
+        {
+            if (TtsRateValueText != null)
+                TtsRateValueText.Text = e.NewValue.ToString("0.00", CultureInfo.CurrentCulture);
+        }
+
+        private void TtsPitchSlider_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
+        {
+            if (TtsPitchValueText != null)
+                TtsPitchValueText.Text = e.NewValue.ToString("0.00", CultureInfo.CurrentCulture);
+        }
+
+        private void TtsPresetBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_applyingTtsSettings || TtsPresetBox == null) return;
+            var preset = SelectedTtsPresetId();
+            _applyingTtsSettings = true;
+            switch (preset)
+            {
+                case "soft":
+                    TtsRateSlider.Value = 0.88;
+                    TtsPitchSlider.Value = 1.12;
+                    break;
+                case "natural":
+                    TtsRateSlider.Value = 0.98;
+                    TtsPitchSlider.Value = 1.00;
+                    break;
+                case "assistant":
+                    TtsRateSlider.Value = 0.94;
+                    TtsPitchSlider.Value = 0.96;
+                    break;
+                default:
+                    TtsRateSlider.Value = 0.92;
+                    TtsPitchSlider.Value = 1.05;
+                    break;
+            }
+            _applyingTtsSettings = false;
+            UpdateTtsValueLabels();
+        }
+
         private async void TtsTestButton_Click(object sender, RoutedEventArgs e)
         {
             if (string.IsNullOrEmpty(SelectedSpeechVoiceId()))
@@ -6180,11 +6279,13 @@ namespace ESP32AIControl.WP81
             }
 
             TtsVoiceStatus.Text = "Проверка голоса…";
-            await SpeakTextAsync("Марфа слушает. Проверка синтеза речи.");
-            TtsVoiceStatus.Text = "Тестовая фраза отправлена выбранному голосу.";
+            var completed = await SpeakTextAsync("Марфа слушает. Проверка синтеза речи.", true);
+            if (completed)
+                TtsVoiceStatus.Text = "Тестовая фраза синтезирована и передана на воспроизведение.";
+            // On failure SpeakTextAsync leaves the detailed error in this status field.
         }
 
-        private async Task SpeakTextAsync(string text)
+        private async Task<bool> SpeakTextAsync(string text, bool useCurrentSettings = false)
         {
             try
             {
@@ -6207,30 +6308,85 @@ namespace ESP32AIControl.WP81
                 if (selectedVoice != null)
                     _speechSynthesizer.Voice = selectedVoice;
 
-                var stream = await _speechSynthesizer.SynthesizeTextToStreamAsync(text);
+                var rate = useCurrentSettings
+                    ? (float)TtsRateSlider.Value
+                    : (_appSettings == null ? 0.92f : _appSettings.TtsVoiceRate);
+                var pitch = useCurrentSettings
+                    ? (float)TtsPitchSlider.Value
+                    : (_appSettings == null ? 1.05f : _appSettings.TtsVoicePitch);
+                var ratePercent = (int)Math.Round((rate - 1.0f) * 100.0f);
+                var pitchPercent = (int)Math.Round((pitch - 1.0f) * 100.0f);
+                var rateText = (ratePercent >= 0 ? "+" : string.Empty) + ratePercent.ToString(CultureInfo.InvariantCulture) + "%";
+                var pitchText = (pitchPercent >= 0 ? "+" : string.Empty) + pitchPercent.ToString(CultureInfo.InvariantCulture) + "%";
+                var safeText = (text ?? string.Empty).Replace("&", "&amp;").Replace("<", "&lt;")
+                    .Replace(">", "&gt;").Replace("\"", "&quot;").Replace("'", "&apos;");
+                var ssml = "<speak version=\"1.0\" xml:lang=\"ru-RU\"><prosody rate=\"" +
+                    rateText + "\" pitch=\"" + pitchText + "\">" + safeText + "</prosody></speak>";
+
+                var stream = await _speechSynthesizer.SynthesizeSsmlToStreamAsync(ssml);
                 _speechPlayback.SetSource(stream, stream.ContentType);
                 _speechPlayback.Play();
+                return true;
             }
             catch (Exception ex)
             {
                 if (TtsVoiceStatus != null)
                     TtsVoiceStatus.Text = "Ошибка синтеза речи: " + ex.Message;
                 Log("TTS ERROR: " + ex.Message);
+                return false;
             }
+        }
+
+        private void LogFilterBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            RefreshLogView();
+        }
+
+        private void CopyLogButton_Click(object sender, RoutedEventArgs e)
+        {
+            var text = LogText == null ? string.Empty : LogText.Text;
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                if (SettingsStatus != null) SettingsStatus.Text = "Нет записей для копирования.";
+                return;
+            }
+
+            var package = new Windows.ApplicationModel.DataTransfer.DataPackage();
+            package.SetText(text);
+            Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(package);
+            Windows.ApplicationModel.DataTransfer.Clipboard.Flush();
+            if (SettingsStatus != null) SettingsStatus.Text = "Отображаемые записи журнала скопированы.";
+        }
+
+        private void RefreshLogView()
+        {
+            if (LogText == null) return;
+            var filterItem = LogFilterBox == null ? null : LogFilterBox.SelectedItem as ComboBoxItem;
+            var filter = filterItem == null ? "ALL" : (filterItem.Tag as string ?? "ALL");
+            IEnumerable<string> visible = _logLines;
+            if (filter == "MQTT")
+                visible = visible.Where(line => line.IndexOf("MQTT", StringComparison.OrdinalIgnoreCase) >= 0);
+            else if (filter == "UDP")
+                visible = visible.Where(line => line.IndexOf("UDP", StringComparison.OrdinalIgnoreCase) >= 0);
+            else if (filter == "WS")
+                visible = visible.Where(line => line.IndexOf("WS", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    line.IndexOf("WebSocket", StringComparison.OrdinalIgnoreCase) >= 0);
+            else if (filter == "ERROR")
+                visible = visible.Where(line => line.IndexOf("ERROR", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    line.IndexOf("ошибка", StringComparison.OrdinalIgnoreCase) >= 0);
+            else if (filter == "SCENARIO")
+                visible = visible.Where(line => line.IndexOf("СЦЕНАРИЙ", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    line.IndexOf("SCENARIO", StringComparison.OrdinalIgnoreCase) >= 0);
+            LogText.Text = string.Join(Environment.NewLine, visible);
         }
 
         private void Log(string text)
         {
             var line = "[" + DateTime.Now.ToString("HH:mm:ss") + "] " + text;
-            var old = LogText.Text ?? string.Empty;
-            LogText.Text = line + Environment.NewLine + old;
-
-            var lines = LogText.Text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-            if (lines.Length > 250)
-            {
-                var keep = lines.Take(250).ToArray();
-                LogText.Text = string.Join(Environment.NewLine, keep);
-            }
+            _logLines.Insert(0, line);
+            if (_logLines.Count > 250)
+                _logLines.RemoveRange(250, _logLines.Count - 250);
+            RefreshLogView();
 
             var udpDiagnostic =
                 text.IndexOf("UDP", StringComparison.OrdinalIgnoreCase) >= 0 &&
