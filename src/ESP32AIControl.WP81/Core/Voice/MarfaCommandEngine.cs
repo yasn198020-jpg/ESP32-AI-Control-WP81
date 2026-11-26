@@ -4,11 +4,12 @@ using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
 using ESP32AIControl.WP81.Core.State;
+using ESP32AIControl.WP81.Core.Scenarios;
 using ESP32AIControl.WP81.Models;
 
 namespace ESP32AIControl.WP81.Core.Voice
 {
-    public enum MarfaCommandKind { Control, ReadValue, Clarify, Stop, NotFound }
+    public enum MarfaCommandKind { Control, ReadValue, SmartRule, Clarify, Stop, NotFound }
 
     public sealed class MarfaActionItem
     {
@@ -26,6 +27,7 @@ namespace ESP32AIControl.WP81.Core.Voice
         public bool NeedsConfirmation { get; set; }
         public List<MarfaActionItem> Actions { get; set; }
         public string Value { get; set; }
+        public LocalScenarioDefinition Scenario { get; set; }
     }
 
     /// <summary>
@@ -148,6 +150,16 @@ namespace ESP32AIControl.WP81.Core.Voice
 
             if (_pending.Count > 0 || !string.IsNullOrWhiteSpace(_pendingOriginalText))
                 return ResolvePending(text, widgets);
+
+            var smartScenario = MarfaSmartRuleParser.TryParse(text, _analyticalEngine, widgets);
+            if (smartScenario != null)
+                return new MarfaCommandResult
+                {
+                    Kind = MarfaCommandKind.SmartRule,
+                    Reply = "Поняла правило: " + smartScenario.Title,
+                    Scenario = smartScenario,
+                    Actions = new List<MarfaActionItem>()
+                };
 
             var trained = TryResolveTrainedCommand(text, widgets);
             if (trained != null) return trained;
