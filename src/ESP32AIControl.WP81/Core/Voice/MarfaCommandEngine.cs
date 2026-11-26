@@ -187,6 +187,12 @@ namespace ESP32AIControl.WP81.Core.Voice
                     Actions = new List<MarfaActionItem>()
                 };
 
+            var originalText = (command ?? string.Empty).ToLowerInvariant().Replace('ё', 'е');
+            if (DetectAction(text) != null &&
+                Regex.IsMatch(originalText, @"\b(если|когда|при условии|как только)\b"))
+                return Result(MarfaCommandKind.Clarify,
+                    "Я распознала условную команду, но не смогла безопасно построить правило. Уточните датчик, порог и действие.");
+
             var trained = TryResolveTrainedCommand(text, widgets);
             if (trained != null) return trained;
 
