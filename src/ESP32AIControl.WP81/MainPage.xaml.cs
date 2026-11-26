@@ -2981,7 +2981,8 @@ namespace ESP32AIControl.WP81
             page = new PageVisual
             {
                 Name = pageName,
-                Content = new StackPanel { Margin = new Thickness(0, 0, 0, 8) }
+                // Keep a consistent inset between the page tabs and the widget cards.
+                Content = new StackPanel { Margin = new Thickness(8, 10, 8, 12) }
             };
 
             var item = new PivotItem
@@ -2990,7 +2991,8 @@ namespace ESP32AIControl.WP81
                 Content = new ScrollViewer
                 {
                     Content = page.Content,
-                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
                 },
                 Tag = pageName
             };
