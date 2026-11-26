@@ -6344,9 +6344,28 @@ namespace ESP32AIControl.WP81
             }
         }
 
+        private void LogModeBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            RefreshLogView();
+        }
+
         private void LogFilterBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             RefreshLogView();
+        }
+
+        private async void ClearLogButton_Click(object sender, RoutedEventArgs e)
+        {
+            var confirmed = await ShowAppConfirmationAsync(
+                "Очистить журнал?",
+                "Будут удалены текущие записи и сохранённая сетевая диагностика. История измерений и настройки останутся.",
+                "Очистить");
+            if (!confirmed) return;
+
+            _connectionJournal.Clear();
+            _logLines.Clear();
+            RefreshLogView();
+            if (LogActionStatus != null) LogActionStatus.Text = "Журнал очищен.";
         }
 
         private void CopyLogButton_Click(object sender, RoutedEventArgs e)
@@ -6368,9 +6387,13 @@ namespace ESP32AIControl.WP81
         private void RefreshLogView()
         {
             if (LogText == null) return;
+            var modeItem = LogModeBox == null ? null : LogModeBox.SelectedItem as ComboBoxItem;
+            var mode = modeItem == null ? "SESSION" : (modeItem.Tag as string ?? "SESSION");
             var filterItem = LogFilterBox == null ? null : LogFilterBox.SelectedItem as ComboBoxItem;
             var filter = filterItem == null ? "ALL" : (filterItem.Tag as string ?? "ALL");
-            IEnumerable<string> visible = _logLines;
+            IEnumerable<string> visible = mode == "SAVED"
+                ? _connectionJournal.Load().Take(250)
+                : _logLines;
             if (filter == "MQTT")
                 visible = visible.Where(line => line.IndexOf("MQTT", StringComparison.OrdinalIgnoreCase) >= 0);
             else if (filter == "UDP")
