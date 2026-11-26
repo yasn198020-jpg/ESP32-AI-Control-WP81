@@ -6294,7 +6294,9 @@ namespace ESP32AIControl.WP81
                 if (_speechSynthesizer == null)
                     _speechSynthesizer = new SpeechSynthesizer();
 
-                var selectedId = SelectedSpeechVoiceId();
+                var selectedId = useCurrentSettings
+                    ? SelectedSpeechVoiceId()
+                    : (_appSettings == null ? string.Empty : _appSettings.TtsVoiceId);
                 var selectedVoice = SpeechSynthesizer.AllVoices.FirstOrDefault(v =>
                     !string.IsNullOrWhiteSpace(selectedId) &&
                     string.Equals(v.Id, selectedId, StringComparison.OrdinalIgnoreCase));
