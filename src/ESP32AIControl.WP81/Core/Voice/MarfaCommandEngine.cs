@@ -126,7 +126,25 @@ namespace ESP32AIControl.WP81.Core.Voice
                 core.DeviceId = result.Actions[0].DeviceId;
                 core.WidgetId = result.Actions[0].WidgetId;
                 core.Value = result.Actions[0].Value;
+                core.ActionDeviceId = result.Actions[0].DeviceId;
+                core.ActionWidgetId = result.Actions[0].WidgetId;
+                core.ActionValue = result.Actions[0].Value;
             }
+            if (result.Scenario != null)
+            {
+                core.ScenarioPlan = result.Scenario;
+                var firstAction = result.Scenario.Actions.FirstOrDefault();
+                if (firstAction != null)
+                {
+                    core.ActionDeviceId = firstAction.DeviceId;
+                    core.ActionWidgetId = firstAction.WidgetId;
+                    core.ActionValue = firstAction.Value;
+                }
+            }
+            if (result.Kind == MarfaCommandKind.Clarify)
+                _dialogContext.SetPending(command);
+            else
+                _dialogContext.ClearPending();
             _dialogContext.Remember(command, core);
         }
 
