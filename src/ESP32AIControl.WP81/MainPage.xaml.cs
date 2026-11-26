@@ -2921,6 +2921,25 @@ namespace ESP32AIControl.WP81
             return false;
         }
 
+        private async void SaveWidgetIntervalButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var key = GraphWidgetBox.SelectedItem as string;
+                if (string.IsNullOrWhiteSpace(key)) { WidgetIntervalStatus.Text = "Сначала выберите датчик."; return; }
+                int seconds;
+                if (!int.TryParse((WidgetIntervalBox.Text ?? string.Empty).Trim(), out seconds) || seconds < 1)
+                { WidgetIntervalStatus.Text = "Введите интервал не меньше 1 секунды."; return; }
+                if (_appSettings.WidgetMeasurementIntervals == null)
+                    _appSettings.WidgetMeasurementIntervals = new Dictionary<string, int>();
+                _appSettings.WidgetMeasurementIntervals[key] = seconds;
+                await _settingsStore.SaveAsync(_appSettings);
+                WidgetIntervalStatus.Text = "Для " + key + " установлен интервал " + seconds + " сек.";
+                Log("HISTORY INTERVAL: " + key + " = " + seconds + "s");
+            }
+            catch (Exception ex) { WidgetIntervalStatus.Text = "Ошибка сохранения: " + ex.Message; Log("HISTORY INTERVAL ERROR: " + ex.Message); }
+        }
+
         private async void BuildGraphButton_Click(object sender, RoutedEventArgs e)
         {
             try
