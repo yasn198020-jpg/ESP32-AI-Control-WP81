@@ -2623,30 +2623,45 @@ namespace ESP32AIControl.WP81
 
             if (fill)
             {
-                canvas.Clip = (Geometry)new EllipseGeometry
-                {
-                    Center = new Point(size / 2, size / 2),
-                    RadiusX = size / 2 - 4,
-                    RadiusY = size / 2 - 4
-                };
+                var circleRadius = size / 2.0 - 4;
+                var circleCenter = size / 2.0;
+                var waveBrush = new SolidColorBrush(ParseWidgetColor(GetWidgetConfigString(state, "waveColor"),
+                    Windows.UI.Color.FromArgb(180, 0, 188, 212)));
                 canvas.Children.Add(new Ellipse
                 {
                     Width = size - 8, Height = size - 8,
                     Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 37, 38, 45)),
-                    Stroke = new SolidColorBrush(primary), StrokeThickness = 5,
                     Margin = new Thickness(4)
                 });
-                var wave = new Rectangle
+                // WP8.1 exposes FrameworkElement.Clip as RectangleGeometry.
+                // Build the liquid boundary from horizontal chords instead of an ellipse clip.
+                if (fraction > 0)
                 {
-                    Width = size - 8,
-                    Height = (size - 8) * fraction,
-                    Fill = new SolidColorBrush(ParseWidgetColor(GetWidgetConfigString(state, "waveColor"),
-                        Windows.UI.Color.FromArgb(180, 0, 188, 212))),
-                    VerticalAlignment = VerticalAlignment.Bottom
-                };
-                Canvas.SetLeft(wave, 4);
-                Canvas.SetTop(wave, 4 + (size - 8) * (1 - fraction));
-                canvas.Children.Add(wave);
+                    const int waveSteps = 28;
+                    var liquidTop = circleCenter + circleRadius - (circleRadius * 2.0 * fraction);
+                    for (var step = 0; step < waveSteps; step++)
+                    {
+                        var y = liquidTop + (circleCenter + circleRadius - liquidTop) * (step + 0.5) / waveSteps;
+                        var dy = y - circleCenter;
+                        var halfWidth = Math.Sqrt(Math.Max(0, circleRadius * circleRadius - dy * dy));
+                        var strip = new Rectangle
+                        {
+                            Width = halfWidth * 2.0 + 1.0,
+                            Height = (circleCenter + circleRadius - liquidTop) / waveSteps + 1.0,
+                            Fill = waveBrush
+                        };
+                        Canvas.SetLeft(strip, circleCenter - halfWidth);
+                        Canvas.SetTop(strip, y - strip.Height / 2.0);
+                        canvas.Children.Add(strip);
+                    }
+                }
+                canvas.Children.Add(new Ellipse
+                {
+                    Width = size - 8, Height = size - 8,
+                    Stroke = new SolidColorBrush(primary), StrokeThickness = 5,
+                    Fill = new SolidColorBrush(Windows.UI.Colors.Transparent),
+                    Margin = new Thickness(4)
+                });
                 var label = new TextBlock
                 {
                     Text = Math.Round(fraction * 100).ToString(CultureInfo.InvariantCulture) + "%",
