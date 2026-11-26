@@ -531,7 +531,6 @@
                                     <TextBlock Text="Профиль звучания" FontSize="13"
                                                FontWeight="SemiBold" Margin="0,10,0,2"/>
                                     <ComboBox x:Name="TtsPresetBox" Header="Готовый пресет"
-                                              SelectedIndex="1"
                                               SelectionChanged="TtsPresetBox_SelectionChanged">
                                         <ComboBoxItem Content="Нежный — мягкий и спокойный" Tag="soft"/>
                                         <ComboBoxItem Content="Дружелюбный — тёплый и естественный" Tag="friendly"/>
@@ -802,8 +801,10 @@
                                         <ComboBoxItem Content="MQTT" Tag="MQTT"/>
                                         <ComboBoxItem Content="UDP / обнаружение" Tag="UDP"/>
                                         <ComboBoxItem Content="WebSocket" Tag="WS"/>
-                                        <ComboBoxItem Content="Ошибки" Tag="ERROR"/>
                                         <ComboBoxItem Content="Сценарии" Tag="SCENARIO"/>
+                                        <ComboBoxItem Content="Действия" Tag="ACTION"/>
+                                        <ComboBoxItem Content="Проверка" Tag="VERIFY"/>
+                                        <ComboBoxItem Content="Ошибки" Tag="ERROR"/>
                                     </ComboBox>
                                     <Button Content="Копировать отображаемые записи"
                                             Click="CopyLogButton_Click"
