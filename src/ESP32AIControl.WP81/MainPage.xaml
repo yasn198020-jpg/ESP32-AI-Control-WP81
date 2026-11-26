@@ -555,7 +555,7 @@
                     Height="80" Padding="2" BorderThickness="0"
                     Background="Transparent" Foreground="#FFACADB8"
                     AutomationProperties.Name="Голосовое управление Марфа">
-                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="2">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                     <Border x:Name="NavMarfaButtonIndicator" Width="64" Height="30"
                             CornerRadius="16" Background="Transparent"
                             HorizontalAlignment="Center" VerticalAlignment="Center">
@@ -570,7 +570,7 @@
             <Button x:Name="NavCommandsButton" Grid.Column="2" Click="NavigateCommands_Click"
                     Height="80" Padding="2" BorderThickness="0"
                     Background="Transparent" Foreground="#FFACADB8">
-                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="2">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                     <Border x:Name="NavCommandsButtonIndicator" Width="64" Height="30"
                             CornerRadius="16" Background="Transparent"
                             HorizontalAlignment="Center" VerticalAlignment="Center">
@@ -585,7 +585,7 @@
             <Button x:Name="NavGraphsButton" Grid.Column="3" Click="NavigateGraphs_Click"
                     Height="80" Padding="2" BorderThickness="0"
                     Background="Transparent" Foreground="#FFACADB8">
-                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="2">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                     <Border x:Name="NavGraphsButtonIndicator" Width="64" Height="30"
                             CornerRadius="16" Background="Transparent"
                             HorizontalAlignment="Center" VerticalAlignment="Center">
@@ -600,7 +600,7 @@
             <Button x:Name="NavTasksButton" Grid.Column="4" Click="NavigateTasks_Click"
                     Height="80" Padding="2" BorderThickness="0"
                     Background="Transparent" Foreground="#FFACADB8">
-                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="2">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                     <Border x:Name="NavTasksButtonIndicator" Width="64" Height="30"
                             CornerRadius="16" Background="Transparent"
                             HorizontalAlignment="Center" VerticalAlignment="Center">
