@@ -308,7 +308,11 @@ namespace ESP32AIControl.WP81.Core.Voice
 
             var pageTokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var widget in widgets ?? new List<WidgetState>())
-                foreach (var token in RussianSemanticNormalizer.Tokens(widget.Page ?? string.Empty))
+                foreach (var token in RussianSemanticNormalizer.Tokens(
+                    (widget.Page ?? string.Empty) + " " +
+                    (widget.Description ?? string.Empty) + " " +
+                    (widget.DeviceId ?? string.Empty) + " " +
+                    (widget.DefinitionName ?? string.Empty)))
                     pageTokens.Add(token);
 
             var result = new List<string>();
