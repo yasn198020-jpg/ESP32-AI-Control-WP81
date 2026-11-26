@@ -216,10 +216,12 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                     if (string.Equals(stateAction.TargetId, physicalAction.WidgetId, StringComparison.OrdinalIgnoreCase))
                         continue;
                     string stateValue;
-                    if (!TryGetLiteral(stateAction.Expression, out stateValue) ||
+                    if (!TryResolveScenarioLiteral(stateAction.Expression, model,
+                        new HashSet<string>(StringComparer.OrdinalIgnoreCase), out stateValue) ||
                         (stateValue != "0" && stateValue != "1"))
                         continue;
-                    if (!ExpressionHasEquality(rule.Condition.Expression, stateAction.TargetId))
+                    if (!ExpressionHasEqualityThroughAliases(rule.Condition.Expression,
+                        stateAction.TargetId, stateValue, model))
                         continue;
 
                     var matches = _devices.GetWidgetsById(stateAction.TargetId);
@@ -386,6 +388,99 @@ namespace ESP32AIControl.WP81.Core.Scenarios
         {
             string ignored;
             return TryGetEqualityValue(expression, identifier, out ignored);
+        }
+
+        // Resolve intermediate IoTManager variables without guessing. A variable
+        // is accepted only when every reachable assignment resolves to one value.
+        private static bool TryResolveScenarioLiteral(
+            IoTExpr expression,
+            DeviceScenarioModel model,
+            ISet<string> visiting,
+            out string value)
+        {
+            value = null;
+            if (TryGetLiteral(expression, out value)) return true;
+            var variable = expression as IoTExpr.Variable;
+            if (variable == null || model == null || !visiting.Add(variable.Name))
+                return false;
+
+            var resolved = new List<string>();
+            foreach (var rule in model.Rules)
+            {
+                foreach (var action in rule.Actions)
+                {
+                    if (!string.Equals(action.TargetId, variable.Name, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    string candidate;
+                    if (TryResolveScenarioLiteral(action.Expression, model,
+                        new HashSet<string>(visiting, StringComparer.OrdinalIgnoreCase), out candidate))
+                        resolved.Add(candidate);
+                }
+            }
+
+            var unique = resolved.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            if (unique.Count != 1) return false;
+            value = unique[0];
+            return true;
+        }
+
+        private static bool ExpressionHasEqualityThroughAliases(
+            IoTExpr expression,
+            string targetIdentifier,
+            string expectedValue,
+            DeviceScenarioModel model)
+        {
+            var binary = expression as IoTExpr.Binary;
+            if (binary == null) return false;
+            if (binary.Operator == "==")
+            {
+                var left = binary.Left as IoTExpr.Variable;
+                var right = binary.Right as IoTExpr.Variable;
+                string literal;
+                if (left != null &&
+                    VariableResolvesToIdentifier(left.Name, targetIdentifier, model,
+                        new HashSet<string>(StringComparer.OrdinalIgnoreCase)) &&
+                    TryResolveScenarioLiteral(binary.Right, model,
+                        new HashSet<string>(StringComparer.OrdinalIgnoreCase), out literal) &&
+                    ScenarioValuesEquivalent(literal, expectedValue))
+                    return true;
+                if (right != null &&
+                    VariableResolvesToIdentifier(right.Name, targetIdentifier, model,
+                        new HashSet<string>(StringComparer.OrdinalIgnoreCase)) &&
+                    TryResolveScenarioLiteral(binary.Left, model,
+                        new HashSet<string>(StringComparer.OrdinalIgnoreCase), out literal) &&
+                    ScenarioValuesEquivalent(literal, expectedValue))
+                    return true;
+            }
+            return ExpressionHasEqualityThroughAliases(binary.Left, targetIdentifier, expectedValue, model) ||
+                ExpressionHasEqualityThroughAliases(binary.Right, targetIdentifier, expectedValue, model);
+        }
+
+        private static bool VariableResolvesToIdentifier(
+            string variableName,
+            string targetIdentifier,
+            DeviceScenarioModel model,
+            ISet<string> visiting)
+        {
+            if (string.Equals(variableName, targetIdentifier, StringComparison.OrdinalIgnoreCase))
+                return true;
+            if (model == null || !visiting.Add(variableName)) return false;
+
+            var matches = new List<bool>();
+            foreach (var rule in model.Rules)
+            {
+                foreach (var action in rule.Actions)
+                {
+                    if (!string.Equals(action.TargetId, variableName, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    var expression = action.Expression;
+                    var variable = expression as IoTExpr.Variable;
+                    if (variable != null)
+                        matches.Add(VariableResolvesToIdentifier(variable.Name, targetIdentifier, model,
+                            new HashSet<string>(visiting, StringComparer.OrdinalIgnoreCase)));
+                }
+            }
+            return matches.Count > 0 && matches.All(x => x);
         }
 
         private static bool TryGetEqualityValue(IoTExpr expression, string identifier, out string value)
