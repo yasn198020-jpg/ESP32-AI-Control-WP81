@@ -549,7 +549,7 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                     // edge set so aliases assigned constants inside IF blocks
                     // still retain their upstream control dependencies.
                     var identifiers = new List<string>();
-                    CollectExpressionIdentifiers(action.Expression, identifiers);
+                    CollectRequiredExpressionIdentifiers(action.Expression, identifiers);
                     if (rule.Condition != null)
                         CollectRequiredConditionIdentifiers(rule.Condition.Expression, identifiers);
                     definitions.Add(identifiers
@@ -559,6 +559,46 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                 }
             }
             return graph;
+        }
+
+        // Preserve only dependencies that are guaranteed by a boolean
+        // expression. A variable present in just one OR alternative is not
+        // a required data-flow dependency; AND retains both sides.
+        private static void CollectRequiredExpressionIdentifiers(
+            IoTExpr expression,
+            IList<string> identifiers)
+        {
+            if (expression == null) return;
+            var variable = expression as IoTExpr.Variable;
+            if (variable != null) { identifiers.Add(variable.Name); return; }
+            var unary = expression as IoTExpr.Unary;
+            if (unary != null)
+            {
+                CollectRequiredExpressionIdentifiers(unary.Expression, identifiers);
+                return;
+            }
+            var binary = expression as IoTExpr.Binary;
+            if (binary == null)
+            {
+                var call = expression as IoTExpr.Call;
+                if (call != null)
+                    foreach (var argument in call.Arguments)
+                        CollectRequiredExpressionIdentifiers(argument, identifiers);
+                return;
+            }
+            if (binary.Operator == "|")
+            {
+                var left = new List<string>();
+                var right = new List<string>();
+                CollectRequiredExpressionIdentifiers(binary.Left, left);
+                CollectRequiredExpressionIdentifiers(binary.Right, right);
+                foreach (var id in left.Distinct(StringComparer.OrdinalIgnoreCase))
+                    if (right.Any(x => string.Equals(x, id, StringComparison.OrdinalIgnoreCase)))
+                        identifiers.Add(id);
+                return;
+            }
+            CollectRequiredExpressionIdentifiers(binary.Left, identifiers);
+            CollectRequiredExpressionIdentifiers(binary.Right, identifiers);
         }
 
         private static void CollectExpressionIdentifiers(IoTExpr expression, IList<string> identifiers)
