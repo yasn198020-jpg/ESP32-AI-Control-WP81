@@ -47,6 +47,8 @@ namespace ESP32AIControl.WP81.Core.Voice
         private TrainedCommandMatcher _trainedCommandMatcher;
         private readonly DialogContext _dialogContext = new DialogContext();
         private List<WidgetState> _pending = new List<WidgetState>();
+        private List<WidgetState> _lastControlCandidates = new List<WidgetState>();
+        private string _lastCommandText = string.Empty;
         private string _pendingValue = "1";
         private long _pendingDelay;
         private string _pendingOriginalText = string.Empty;
@@ -212,6 +214,12 @@ namespace ESP32AIControl.WP81.Core.Voice
             var action = DetectAction(text);
             var question = IsValueQuestion(text);
 
+            if (action == null && !question)
+            {
+                var refined = TryRefineLastControlTarget(text);
+                if (refined != null) return refined;
+            }
+
             // A time-only follow-up repeats the last resolved control command.
             var previous = _dialogContext.Snapshot();
             if (action == null && !question && _lastTarget != null &&
@@ -253,6 +261,37 @@ namespace ESP32AIControl.WP81.Core.Voice
                 }
             }
             return null;
+        }
+
+        private MarfaCommandResult TryRefineLastControlTarget(string text)
+        {
+            if (_lastControlCandidates == null || _lastControlCandidates.Count < 2 ||
+                string.IsNullOrWhiteSpace(text))
+                return null;
+
+            var options = _lastControlCandidates.Select(w => new MarfaClarificationCandidate
+            {
+                DeviceId = w.DeviceId, WidgetId = w.Id, Title = w.Description,
+                Page = w.Page, DeviceName = w.DeviceId
+            }).ToList();
+            var selection = MarfaClarificationResolver.Resolve(text, options);
+            if (selection == null || selection.Count != 1) return null;
+
+            var index = selection[0];
+            if (index < 0 || index >= _lastControlCandidates.Count) return null;
+            var chosen = _lastControlCandidates[index];
+            var previous = _dialogContext.Snapshot();
+            if (previous == null || string.IsNullOrWhiteSpace(previous.ActionValue)) return null;
+
+            _lastTarget = chosen;
+            _lastValue = previous.ActionValue;
+            var action = new MarfaActionItem
+            {
+                DeviceId = chosen.DeviceId, WidgetId = chosen.Id, Value = previous.ActionValue
+            };
+            return ControlResult(new[] { action }, 0,
+                (previous.ActionValue == "1" ? "Включаю " : "Выключаю ") +
+                (string.IsNullOrWhiteSpace(chosen.Description) ? chosen.Id : chosen.Description) + ".");
         }
 
         private MarfaCommandResult TryResolveTrainedCommand(string text, IList<WidgetState> widgets)
@@ -327,6 +366,7 @@ namespace ESP32AIControl.WP81.Core.Voice
             else if (analytical.Candidates != null && analytical.Candidates.Count > 0)
             {
                 _pending = analytical.Candidates.Select(c => c.Widget).ToList();
+                _lastControlCandidates = _pending.ToList();
                 _pendingValue = action;
                 _pendingOriginalText = text;
                 _pendingReadValue = false;
@@ -366,6 +406,7 @@ namespace ESP32AIControl.WP81.Core.Voice
             if (ambiguous || best.Score < 2)
             {
                 _pending = candidates.Where(c => c.Score >= best.Score - 2).Select(c => c.Widget).Take(6).ToList();
+                _lastControlCandidates = _pending.ToList();
                 _pendingValue = action;
                 _pendingDelay = delay;
                 return Result(MarfaCommandKind.Clarify, BuildClarification(_pending));
@@ -373,6 +414,7 @@ namespace ESP32AIControl.WP81.Core.Voice
 
             _lastTarget = best.Widget;
             _lastValue = action;
+            _lastCommandText = text;
             var actionItem = new MarfaActionItem
             {
                 DeviceId = best.Widget.DeviceId,
