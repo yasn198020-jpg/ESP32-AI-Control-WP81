@@ -122,10 +122,17 @@ namespace ESP32AIControl.WP81.Core.State
             return true;
         }
 
-        public void Apply(Esp32Message message)
+        public bool Apply(Esp32Message message)
         {
             if (message == null || string.IsNullOrEmpty(message.WidgetId))
-                return;
+                return false;
+
+            // Only CONFIG registers a widget. STATUS/EVENT messages for an
+            // unknown widget are ignored instead of creating orphan records.
+            if (message.Kind != Esp32MessageKind.Config &&
+                message.Kind != Esp32MessageKind.Status &&
+                message.Kind != Esp32MessageKind.Event)
+                return false;
 
             var key = (message.DeviceId ?? string.Empty) + "/" + message.WidgetId;
             WidgetState state;
@@ -134,6 +141,9 @@ namespace ESP32AIControl.WP81.Core.State
             {
                 if (!_widgets.TryGetValue(key, out state))
                 {
+                    if (message.Kind != Esp32MessageKind.Config)
+                        return false;
+
                     state = new WidgetState
                     {
                         DeviceId = message.DeviceId,
@@ -174,7 +184,7 @@ namespace ESP32AIControl.WP81.Core.State
                     message.Kind == Esp32MessageKind.Event)
                 {
                     if (IsDuplicate(key, message.Value))
-                        return;
+                        return false;
 
                     var isChart = (state.DefinitionName ?? string.Empty).StartsWith("chart", StringComparison.OrdinalIgnoreCase) ||
                         string.Equals(GetConfigString(state.ConfigJson, "widget"), "chart", StringComparison.OrdinalIgnoreCase);
@@ -188,6 +198,7 @@ namespace ESP32AIControl.WP81.Core.State
             var handler = WidgetChanged;
             if (handler != null)
                 handler(this, state.Clone());
+            return true;
         }
 
         private static string GetConfigString(string json, string key)
