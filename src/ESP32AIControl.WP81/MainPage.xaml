@@ -159,19 +159,22 @@
                     <Grid Grid.Row="0">
                         <Pivot x:Name="WidgetPages" Margin="0"
                                HeaderTemplate="{StaticResource WidgetPageHeaderTemplate}"/>
-                        <StackPanel x:Name="DashboardEmptyState" VerticalAlignment="Center"
-                                    HorizontalAlignment="Center" Margin="24"
-                                    IsHitTestVisible="False">
-                            <TextBlock Text="Дашборд" FontSize="27" FontWeight="SemiBold"
-                                       Foreground="#FFD0BCFF" HorizontalAlignment="Center"/>
-                            <TextBlock Text="Здесь появятся виджеты теплиц"
-                                       FontSize="16" Foreground="#FFEAF1F7"
-                                       TextAlignment="Center" Margin="0,12,0,4"/>
-                            <TextBlock Text="Откройте меню ☰ и подключитесь к MQTT в настройках."
-                                       FontSize="13" Foreground="#FFB0B0B0"
-                                       TextAlignment="Center" TextWrapping="Wrap"
-                                       HorizontalAlignment="Center"/>
-                        </StackPanel>
+                        <Border Background="#FF2B2C34" BorderBrush="#FF41434D"
+                                BorderThickness="1" CornerRadius="16" Padding="22"
+                                Margin="24" IsHitTestVisible="False">
+                            <StackPanel x:Name="DashboardEmptyState" VerticalAlignment="Center"
+                                        HorizontalAlignment="Center">
+                                <TextBlock Text="Дашборд" FontSize="25" FontWeight="SemiBold"
+                                           Foreground="#FFD0BCFF" HorizontalAlignment="Center"/>
+                                <TextBlock Text="Здесь появятся виджеты теплиц"
+                                           FontSize="16" Foreground="#FFEAF1F7"
+                                           TextAlignment="Center" Margin="0,12,0,4"/>
+                                <TextBlock Text="Откройте меню ☰ и подключитесь к MQTT в настройках."
+                                           FontSize="13" Foreground="#FFACADB8"
+                                           TextAlignment="Center" TextWrapping="Wrap"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
                     </Grid>
 
                     <!-- The bottom-nav microphone reports recognition here without taking dashboard space. -->
