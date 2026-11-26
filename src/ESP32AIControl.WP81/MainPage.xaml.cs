@@ -4070,10 +4070,20 @@ namespace ESP32AIControl.WP81
                 var statusLabel = new TextBlock
                 {
                     Text = item.Status,
-                    FontSize = 14,
+                    FontSize = 12,
                     FontWeight = Windows.UI.Text.FontWeights.SemiBold,
-                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 174, 151, 255)),
-                    Margin = new Thickness(0, 0, 0, 3)
+                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255)),
+                    Margin = new Thickness(0, 0, 0, 4)
+                };
+                var sourceLabel = new TextBlock
+                {
+                    Text = string.Equals(item.Origin, "Voice", StringComparison.OrdinalIgnoreCase)
+                        ? "МАРФА"
+                        : "ПЛАНИРОВЩИК",
+                    FontSize = 10,
+                    FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 172, 173, 184)),
+                    Margin = new Thickness(0, 0, 0, 4)
                 };
                 var detailsText = item.ExecuteAt.ToLocalTime().ToString(
                     "dd.MM.yyyy  HH:mm", CultureInfo.InvariantCulture) +
@@ -4085,22 +4095,33 @@ namespace ESP32AIControl.WP81
                 {
                     Text = detailsText,
                     FontSize = 12,
-                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 185, 187, 198)),
+                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 172, 173, 184)),
                     TextWrapping = TextWrapping.Wrap
                 };
                 var rowContent = new StackPanel
                 {
-                    Margin = new Thickness(2, 1, 2, 1)
+                    Margin = new Thickness(10)
                 };
+                rowContent.Children.Add(sourceLabel);
                 rowContent.Children.Add(statusLabel);
                 rowContent.Children.Add(detailsLabel);
 
+                var rowCard = new Border
+                {
+                    Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 43, 44, 52)),
+                    BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 65, 67, 77)),
+                    BorderThickness = new Thickness(1),
+                    CornerRadius = new CornerRadius(14),
+                    Margin = new Thickness(2, 3, 2, 6),
+                    Child = rowContent
+                };
                 ScheduleList.Items.Add(new ListViewItem
                 {
-                    Content = rowContent,
+                    Content = rowCard,
                     Tag = item.Id
                 });
             }
+            ApplyFontScaleToTree(ScheduleList, _currentFontScale);
         }
 
         private async void Scheduler_TaskChanged(object sender, ScheduledCommand e)
