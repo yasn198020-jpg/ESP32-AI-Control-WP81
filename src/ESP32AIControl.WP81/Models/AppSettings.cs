@@ -26,6 +26,9 @@ namespace ESP32AIControl.WP81.Models
         [DataMember] public string VoiceOpenCommand { get; set; }
         [DataMember] public string VoiceCloseCommand { get; set; }
         [DataMember] public string TtsVoiceId { get; set; }
+        [DataMember] public string TtsVoicePreset { get; set; }
+        [DataMember] public float TtsVoiceRate { get; set; }
+        [DataMember] public float TtsVoicePitch { get; set; }
         [DataMember] public string IoTManagerScenario { get; set; }
 
         public AppSettings()
@@ -49,6 +52,9 @@ namespace ESP32AIControl.WP81.Models
             VoiceOpenCommand = string.Empty;
             VoiceCloseCommand = string.Empty;
             TtsVoiceId = string.Empty;
+            TtsVoicePreset = "friendly";
+            TtsVoiceRate = 0.92f;
+            TtsVoicePitch = 1.05f;
             IoTManagerScenario = string.Empty;
         }
 
