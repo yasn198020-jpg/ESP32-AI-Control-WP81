@@ -627,13 +627,7 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                 return false;
 
             var model = _scenarioAnalyzer.LanguageModel;
-            var variables = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var id in model.Identifiers)
-            {
-                var matches = _devices.GetWidgetsById(id);
-                if (matches.Count == 1)
-                    variables[id] = matches[0].Value ?? string.Empty;
-            }
+            var variables = BuildScenarioVariableContext(model);
 
             var candidates = new List<IList<ScenarioAction>>();
             foreach (var rule in model.Rules)
@@ -736,6 +730,83 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             if (!ContainsAction(plan, target.DeviceId, target.WidgetId, target.Value))
                 plan.Actions.Add(target);
             return true;
+        }
+
+        private Dictionary<string, string> BuildScenarioVariableContext(DeviceScenarioModel model)
+        {
+            var variables = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (model == null || model.Identifiers == null) return variables;
+
+            var internalIdentifiers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var id in model.Identifiers)
+            {
+                var matches = _devices.GetWidgetsById(id);
+                if (matches.Count == 1)
+                    variables[id] = matches[0].Value ?? string.Empty;
+                else if (matches.Count == 0)
+                    internalIdentifiers.Add(id);
+                // Duplicate widget IDs are deliberately left unresolved.
+            }
+
+            // Resolve internal IoTManager variables from the current device
+            // snapshot. Each variable is added only if all its definitions
+            // evaluate to the same known value; iterate to reveal multi-hop
+            // assignment chains without overwriting live widget values.
+            for (var pass = 0; pass < 12 && internalIdentifiers.Count > 0; pass++)
+            {
+                bool changed = false;
+                foreach (var id in internalIdentifiers.ToList())
+                {
+                    var definitions = model.Rules.SelectMany(r => r.Actions)
+                        .Where(a => string.Equals(a.TargetId, id, StringComparison.OrdinalIgnoreCase))
+                        .ToList();
+                    if (definitions.Count == 0) continue;
+
+                    var resolved = new List<string>();
+                    bool complete = true;
+                    var context = new IoTScenarioEvaluationContext(
+                        new Dictionary<string, string>(variables, StringComparer.OrdinalIgnoreCase));
+                    foreach (var definition in definitions)
+                    {
+                        var value = IoTScenarioEvaluator.Evaluate(definition.Expression, context);
+                        string formatted;
+                        if (!TryFormatScenarioValue(value, out formatted))
+                        {
+                            complete = false;
+                            break;
+                        }
+                        resolved.Add(formatted);
+                    }
+
+                    var unique = resolved.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                    if (complete && unique.Count == 1)
+                    {
+                        variables[id] = unique[0];
+                        internalIdentifiers.Remove(id);
+                        changed = true;
+                        break;
+                    }
+                }
+                if (!changed) break;
+            }
+            return variables;
+        }
+
+        private static bool TryFormatScenarioValue(IoTValue value, out string formatted)
+        {
+            formatted = null;
+            if (value == null || value is IoTValue.Unknown) return false;
+            var number = value as IoTValue.Number;
+            if (number != null)
+            {
+                formatted = number.Value.ToString("0.################", System.Globalization.CultureInfo.InvariantCulture);
+                return true;
+            }
+            var text = value as IoTValue.Text;
+            if (text != null) { formatted = text.Value ?? string.Empty; return true; }
+            var boolean = value as IoTValue.BooleanValue;
+            if (boolean != null) { formatted = boolean.Value ? "1" : "0"; return true; }
+            return false;
         }
 
         private static bool ScenarioValueMatches(IoTValue value, string expected)
