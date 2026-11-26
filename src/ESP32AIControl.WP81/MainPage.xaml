@@ -292,54 +292,53 @@
                 <PivotItem Header="Подключение">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel Margin="10,4,10,12">
-                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1"
-                                    CornerRadius="14" Padding="12" Margin="0,8,0,8">
+                            <StackPanel Margin="2,8,2,10">
+                                <TextBlock Text="Подключение" FontSize="21" FontWeight="SemiBold" Foreground="#FFEAF1F7" Margin="0,0,0,3"/>
+                                <TextBlock Text="Настройте MQTT-сервер, параметры клиента и состояние соединения с контроллером." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1" CornerRadius="14" Padding="12" Margin="0,0,0,10">
                                 <StackPanel>
-                                    <TextBlock Text="ПОДКЛЮЧЕНИЕ К MQTT" FontSize="14" FontWeight="SemiBold"
-                                               Foreground="#FFD0BCFF" Margin="0,0,0,6"/>
-                                    <TextBlock Text="Параметры сервера и учётной записи" FontSize="12"
-                                               Foreground="#FFACADB8" Margin="0,0,0,4"/>
+                                    <TextBlock Text="MQTT-СЕРВЕР" FontSize="14" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,0,0,3"/>
+                                    <TextBlock Text="Адрес брокера и пространство MQTT-топиков." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,0,0,5"/>
                                     <TextBox x:Name="HostBox" Header="MQTT сервер или адрес" Text="m4.wqtt.ru" LostFocus="MqttSetting_LostFocus"/>
-                                    <Grid>
-                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                        <TextBox x:Name="PortBox" Header="Порт подключения" Text="2815" LostFocus="MqttSetting_LostFocus" Margin="0,7,5,7"/>
-                                        <TextBox x:Name="PrefixBox" Grid.Column="1" Header="Префикс MQTT" Text="dghjko" LostFocus="MqttSetting_LostFocus" Margin="5,7,0,7"/>
-                                    </Grid>
-                                    <TextBox x:Name="UserNameBox" Header="Имя пользователя" LostFocus="MqttSetting_LostFocus"/>
-                                    <TextBox x:Name="ClientIdBox" Header="Идентификатор клиента" Text="ESP32-AI-Control-WP81" LostFocus="MqttSetting_LostFocus"/>
-                                    <PasswordBox x:Name="PasswordBox" Header="Пароль MQTT" LostFocus="MqttSetting_LostFocus"/>
-                                    <CheckBox x:Name="MqttTlsCheckBox" Content="Использовать защищённое TLS-соединение" Margin="0,8,0,2" Checked="MqttTlsCheckBox_Changed" Unchecked="MqttTlsCheckBox_Changed"/>
+                                    <TextBox x:Name="PortBox" Header="Порт подключения" Text="2815" LostFocus="MqttSetting_LostFocus"/>
+                                    <TextBox x:Name="PrefixBox" Header="Префикс MQTT" Text="dghjko" LostFocus="MqttSetting_LostFocus"/>
                                 </StackPanel>
                             </Border>
-                            
-                        <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1"
-                                CornerRadius="14" Padding="12" Margin="0,4,0,8">
-                            <StackPanel>
-                                <TextBlock Text="МАСШТАБ ИНТЕРФЕЙСА" FontSize="14" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,0,0,4"/>
-                                <TextBlock Text="Размер текста и элементов интерфейса" FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap"/>
-                                <Slider x:Name="UiFontScaleSlider" Minimum="0.7" Maximum="1.1" Value="0.85" StepFrequency="0.05"/>
-                            </StackPanel>
-                        </Border>
-
-                        <Border Background="#FF2B2C34" BorderBrush="#FF41434D"
-                                BorderThickness="1" CornerRadius="14" Padding="14" Margin="0,10,0,10">
-                            <StackPanel>
-                                <TextBlock x:Name="ConnectionText" Text="MQTT: отключено"
-                                           FontSize="16" Foreground="#FFFFB454" Margin="0,0,0,8"/>
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-                                    <Button Content="Подключиться" Click="ConnectButton_Click"
-                                            Margin="0,0,4,4" Padding="6,8"/>
-                                    <Button Grid.Column="1" Content="Отключиться"
-                                            Click="DisconnectButton_Click" Margin="4,0,0,4" Padding="6,8"/>
-                                </Grid>
-                                <Button Content="Запросить данные (HELLO)" Click="HelloButton_Click"
-                                        HorizontalAlignment="Stretch" Margin="0,4,0,0"/>
-                            </StackPanel>
-                        </Border>
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1" CornerRadius="14" Padding="12" Margin="0,0,0,10">
+                                <StackPanel>
+                                    <TextBlock Text="УЧЁТНАЯ ЗАПИСЬ КЛИЕНТА" FontSize="14" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,0,0,3"/>
+                                    <TextBlock Text="Данные авторизации и уникальный идентификатор этого приложения." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,0,0,5"/>
+                                    <TextBox x:Name="UserNameBox" Header="Имя пользователя" LostFocus="MqttSetting_LostFocus"/>
+                                    <PasswordBox x:Name="PasswordBox" Header="Пароль MQTT" LostFocus="MqttSetting_LostFocus"/>
+                                    <TextBox x:Name="ClientIdBox" Header="Идентификатор клиента" Text="ESP32-AI-Control-WP81" LostFocus="MqttSetting_LostFocus"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1" CornerRadius="14" Padding="12" Margin="0,0,0,10">
+                                <StackPanel>
+                                    <TextBlock Text="ЗАЩИТА СОЕДИНЕНИЯ" FontSize="14" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,0,0,4"/>
+                                    <CheckBox x:Name="MqttTlsCheckBox" Content="Использовать защищённое TLS-соединение" Margin="0,4,0,2" Checked="MqttTlsCheckBox_Changed" Unchecked="MqttTlsCheckBox_Changed"/>
+                                    <TextBlock Text="Включайте TLS, если выбранный MQTT-брокер поддерживает защищённое подключение на указанном порту." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1" CornerRadius="14" Padding="12" Margin="0,0,0,10">
+                                <StackPanel>
+                                    <TextBlock Text="СОЕДИНЕНИЕ С КОНТРОЛЛЕРОМ" FontSize="14" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,0,0,6"/>
+                                    <TextBlock x:Name="ConnectionText" Text="MQTT: отключено" FontSize="16" Foreground="#FFFFB454" Margin="0,0,0,8"/>
+                                    <Button Content="Подключиться" Click="ConnectButton_Click" Background="#FFD0BCFF" BorderBrush="#FFD0BCFF" Foreground="#FF202020" FontWeight="SemiBold" HorizontalAlignment="Stretch" Margin="0,0,0,6"/>
+                                    <Button Content="Отключиться" Click="DisconnectButton_Click" HorizontalAlignment="Stretch" Margin="0,0,0,6"/>
+                                    <Button Content="Запросить данные (HELLO)" Click="HelloButton_Click" HorizontalAlignment="Stretch"/>
+                                    <TextBlock Text="Параметры MQTT сохраняются автоматически при изменении полей. При нажатии «Подключиться» они также сохраняются перед запуском соединения." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1" CornerRadius="14" Padding="12" Margin="0,0,0,8">
+                                <StackPanel>
+                                    <TextBlock Text="ВНЕШНИЙ ВИД" FontSize="14" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,0,0,3"/>
+                                    <TextBlock Text="Масштаб текста и элементов интерфейса." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap"/>
+                                    <Slider x:Name="UiFontScaleSlider" Minimum="0.7" Maximum="1.1" Value="0.85" StepFrequency="0.05"/>
+                                    <TextBlock Text="Точный выбор размера также доступен через пункт «Размер текста» в меню." FontSize="11" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
                     </ScrollViewer>
                 </PivotItem>
