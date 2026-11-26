@@ -193,9 +193,10 @@ namespace ESP32AIControl.WP81.Core.Voice
 
         private MarfaCommandResult ResolveValueQuestion(string text, IList<WidgetState> widgets)
         {
-            var candidates = RankCandidates(text, widgets, false);
+            var sensors = widgets.Where(IsSensor).ToList();
+            var candidates = RankCandidates(text, sensors, false);
             if (candidates.Count == 0)
-                candidates = widgets.Where(IsSensor).Select(w => new Candidate { Widget = w, Score = 0 }).ToList();
+                candidates = sensors.Select(w => new Candidate { Widget = w, Score = 0 }).ToList();
             if (candidates.Count == 0)
                 return Result(MarfaCommandKind.NotFound, "Среди подключённых виджетов не нашла датчиков.");
             var best = candidates[0];
