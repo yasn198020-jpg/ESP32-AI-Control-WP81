@@ -234,6 +234,7 @@
                             <StackPanel>
                                 <TextBlock Text="Результат" FontSize="17" FontWeight="SemiBold" Margin="2,0,2,4"/>
                                 <TextBlock x:Name="GraphSummary" Text="Выберите датчик и период" Foreground="#FFACADB8" FontSize="12" TextWrapping="Wrap" Margin="2,0,2,8"/>
+                                <TextBlock x:Name="GraphSelectedPoint" Text="Выберите точку на графике" Foreground="#FFD0BCFF" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" Margin="2,0,2,8"/>
                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,6">
                                     <Button Content="−" Click="ZoomOutGraphButton_Click" MinWidth="44" MinHeight="40"/>
                                     <TextBlock x:Name="GraphZoomLabel" Text="×1,0" VerticalAlignment="Center" Margin="8,0"/>
