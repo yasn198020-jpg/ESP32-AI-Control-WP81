@@ -105,20 +105,29 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             }
         }
 
-        public Task ExecuteLocalActionAsync(string deviceId, string widgetId, string value)
+        public async Task ExecuteLocalActionAsync(string deviceId, string widgetId, string value)
         {
-            var current = _devices.Get(deviceId, widgetId);
-            if (current != null && AreValuesEqual(current.Value, value))
-                return Task.FromResult(0);
+            if (string.IsNullOrWhiteSpace(deviceId) || string.IsNullOrWhiteSpace(widgetId) ||
+                string.IsNullOrWhiteSpace(value))
+                throw new ArgumentException("Не заданы устройство, виджет или значение локальной команды.");
 
-            return ExecuteActionAsync(new ScenarioAction
+            var matches = _devices.GetWidgetsById(widgetId);
+            var current = _devices.Get(deviceId, widgetId);
+            if (matches.Count != 1 || current == null ||
+                !string.Equals(matches[0].DeviceId, deviceId, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException(
+                    "Нельзя однозначно найти виджет " + deviceId + "/" + widgetId + ".");
+
+            if (AreValuesEqual(current.Value, value))
+                return;
+
+            await ExecuteActionAsync(new ScenarioAction
             {
                 DeviceId = deviceId,
                 WidgetId = widgetId,
                 Value = value,
-                Command = (deviceId ?? string.Empty) + "/" +
-                    (widgetId ?? string.Empty) + "=" + (value ?? string.Empty)
-            });
+                Command = deviceId + "/" + widgetId + "=" + value
+            }, current.UpdatedAt);
         }
 
         private async Task ExecuteActionAsync(ScenarioAction action)
