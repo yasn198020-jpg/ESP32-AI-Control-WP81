@@ -4289,11 +4289,11 @@ namespace ESP32AIControl.WP81
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-            var header = new StackPanel { Margin = new Thickness(16, 14, 16, 10) };
+            var header = new StackPanel { Margin = new Thickness(14, 12, 14, 8) };
             header.Children.Add(new TextBlock
             {
                 Text = "Возможности приложения",
-                FontSize = 24,
+                FontSize = 20,
                 FontWeight = Windows.UI.Text.FontWeights.SemiBold
             });
             header.Children.Add(new TextBlock
@@ -4308,7 +4308,7 @@ namespace ESP32AIControl.WP81
             var scroll = new ScrollViewer
             {
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                Margin = new Thickness(12, 0, 12, 12)
+                Margin = new Thickness(10, 0, 10, 10)
             };
             var content = new StackPanel();
             content.Children.Add(CreateCapabilityCard(
@@ -4331,8 +4331,10 @@ namespace ESP32AIControl.WP81
             var note = new Border
             {
                 Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 43, 44, 52)),
-                CornerRadius = new CornerRadius(12),
-                Padding = new Thickness(14),
+                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 65, 67, 77)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(14),
+                Padding = new Thickness(12),
                 Margin = new Thickness(0, 2, 0, 8),
                 Child = new TextBlock
                 {
@@ -4367,8 +4369,9 @@ namespace ESP32AIControl.WP81
             heading.Children.Add(new TextBlock
             {
                 Text = title,
-                FontSize = 17,
+                FontSize = 14,
                 FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255)),
                 VerticalAlignment = VerticalAlignment.Center
             });
             var state = new TextBlock
@@ -4392,8 +4395,8 @@ namespace ESP32AIControl.WP81
             content.Children.Add(new TextBlock
             {
                 Text = description,
-                FontSize = 13,
-                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 190, 192, 201)),
+                FontSize = 12,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 172, 173, 184)),
                 TextWrapping = TextWrapping.Wrap
             });
             card.Child = content;
@@ -4406,7 +4409,7 @@ namespace ESP32AIControl.WP81
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-            var header = new StackPanel { Margin = new Thickness(16, 14, 16, 10) };
+            var header = new StackPanel { Margin = new Thickness(14, 12, 14, 8) };
             header.Children.Add(new TextBlock
             {
                 Text = "ХРАНЕНИЕ ДАННЫХ",
@@ -4417,7 +4420,7 @@ namespace ESP32AIControl.WP81
             header.Children.Add(new TextBlock
             {
                 Text = "Очистка приложения",
-                FontSize = 24,
+                FontSize = 20,
                 FontWeight = Windows.UI.Text.FontWeights.SemiBold
             });
             header.Children.Add(new TextBlock
@@ -4432,7 +4435,7 @@ namespace ESP32AIControl.WP81
             var scroll = new ScrollViewer
             {
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                Margin = new Thickness(12, 0, 12, 12)
+                Margin = new Thickness(10, 0, 10, 10)
             };
             var content = new StackPanel();
 
@@ -4442,28 +4445,29 @@ namespace ESP32AIControl.WP81
                 BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 65, 67, 77)),
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(14),
-                Padding = new Thickness(14),
+                Padding = new Thickness(12),
                 Margin = new Thickness(0, 0, 0, 10)
             };
             var historyBody = new StackPanel();
             historyBody.Children.Add(new TextBlock
             {
                 Text = "Старые измерения",
-                FontSize = 18,
-                FontWeight = Windows.UI.Text.FontWeights.SemiBold
+                FontSize = 14,
+                FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255))
             });
             historyBody.Children.Add(new TextBlock
             {
                 Text = "Будут удалены только точки истории старше установленного срока хранения. Текущие MQTT-виджеты и их значения не удаляются.",
-                FontSize = 13,
-                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 190, 192, 201)),
+                FontSize = 12,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 172, 173, 184)),
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 5, 0, 8)
             });
             var historyButton = new Button
             {
                 Content = "Очистить старые измерения",
-                MinHeight = 46,
+                MinHeight = 44,
                 Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255)),
                 Foreground = new SolidColorBrush(Windows.UI.Colors.White)
             };
@@ -4576,11 +4580,11 @@ namespace ESP32AIControl.WP81
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-            var header = new StackPanel { Margin = new Thickness(16, 14, 16, 10) };
+            var header = new StackPanel { Margin = new Thickness(14, 12, 14, 8) };
             header.Children.Add(new TextBlock
             {
                 Text = "Сценарии Марфы",
-                FontSize = 24,
+                FontSize = 20,
                 FontWeight = Windows.UI.Text.FontWeights.SemiBold
             });
             header.Children.Add(new TextBlock
@@ -4592,7 +4596,7 @@ namespace ESP32AIControl.WP81
             });
             root.Children.Add(header);
 
-            var content = new StackPanel { Margin = new Thickness(14, 0, 14, 12) };
+            var content = new StackPanel { Margin = new Thickness(10, 0, 10, 10) };
             var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = content };
             Grid.SetRow(scroll, 1);
             root.Children.Add(scroll);
@@ -4616,12 +4620,13 @@ namespace ESP32AIControl.WP81
                     SettingsPivot.SelectedIndex = 5;
                 }));
 
-            var preview = new StackPanel { Margin = new Thickness(12) };
+            var preview = new StackPanel { Margin = new Thickness(0) };
             preview.Children.Add(new TextBlock
             {
                 Text = "Проверка команды",
-                FontSize = 18,
-                FontWeight = Windows.UI.Text.FontWeights.SemiBold
+                FontSize = 14,
+                FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255))
             });
             preview.Children.Add(new TextBlock
             {
@@ -4666,8 +4671,9 @@ namespace ESP32AIControl.WP81
                 Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 43, 44, 52)),
                 BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 70, 72, 82)),
                 BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(12),
-                Margin = new Thickness(2, 3, 2, 8),
+                CornerRadius = new CornerRadius(14),
+                Padding = new Thickness(12),
+                Margin = new Thickness(0, 0, 0, 8),
                 Child = preview
             });
 
@@ -4676,12 +4682,13 @@ namespace ESP32AIControl.WP81
 
         private Border CreateScenarioHubCard(string title, string description, string actionText, Action action)
         {
-            var panel = new StackPanel { Margin = new Thickness(12) };
+            var panel = new StackPanel { Margin = new Thickness(0) };
             panel.Children.Add(new TextBlock
             {
                 Text = title,
-                FontSize = 17,
+                FontSize = 14,
                 FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255)),
                 TextWrapping = TextWrapping.Wrap
             });
             panel.Children.Add(new TextBlock
@@ -4705,8 +4712,9 @@ namespace ESP32AIControl.WP81
                 Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 43, 44, 52)),
                 BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 70, 72, 82)),
                 BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(12),
-                Margin = new Thickness(2, 3, 2, 8),
+                CornerRadius = new CornerRadius(14),
+                Padding = new Thickness(12),
+                Margin = new Thickness(0, 0, 0, 8),
                 Child = panel
             };
         }
@@ -4892,11 +4900,11 @@ namespace ESP32AIControl.WP81
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-            var header = new StackPanel { Margin = new Thickness(16, 14, 16, 10) };
+            var header = new StackPanel { Margin = new Thickness(14, 12, 14, 8) };
             header.Children.Add(new TextBlock
             {
                 Text = "Удаление элемента",
-                FontSize = 24,
+                FontSize = 20,
                 FontWeight = Windows.UI.Text.FontWeights.SemiBold
             });
             header.Children.Add(new TextBlock
@@ -4910,7 +4918,7 @@ namespace ESP32AIControl.WP81
 
             var scroll = new ScrollViewer
             {
-                Margin = new Thickness(12, 0, 12, 10),
+                Margin = new Thickness(10, 0, 10, 10),
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto
             };
             _deleteWidgetList = new StackPanel();
@@ -4935,20 +4943,23 @@ namespace ESP32AIControl.WP81
                 _deleteWidgetList.Children.Add(new TextBlock
                 {
                     Text = "Нет известных элементов для удаления.",
-                    FontSize = 16,
-                    Margin = new Thickness(8, 18, 8, 18)
+                    FontSize = 13,
+                    TextWrapping = TextWrapping.Wrap,
+                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 172, 173, 184)),
+                    Margin = new Thickness(12, 18, 12, 18)
                 });
                 return;
             }
 
             foreach (var state in widgets)
             {
-                var panel = new StackPanel { Margin = new Thickness(12) };
+                var panel = new StackPanel { Margin = new Thickness(0) };
                 panel.Children.Add(new TextBlock
                 {
                     Text = string.IsNullOrWhiteSpace(state.Description) ? state.Id : state.Description,
-                    FontSize = 17,
+                    FontSize = 14,
                     FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255)),
                     TextWrapping = TextWrapping.Wrap
                 });
                 panel.Children.Add(new TextBlock
@@ -4962,7 +4973,7 @@ namespace ESP32AIControl.WP81
                 var remove = new Button
                 {
                     Content = "Удалить локально",
-                    MinHeight = 42,
+                    MinHeight = 44,
                     HorizontalAlignment = HorizontalAlignment.Left
                 };
                 var deviceId = state.DeviceId;
@@ -5000,7 +5011,7 @@ namespace ESP32AIControl.WP81
                 _deleteWidgetList.Children.Add(new Border
                 {
                     Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 43, 44, 52)),
-                    BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 70, 72, 82)),
+                    BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 65, 67, 77)),
                     BorderThickness = new Thickness(1),
                     CornerRadius = new CornerRadius(12),
                     Margin = new Thickness(2, 3, 2, 7),
