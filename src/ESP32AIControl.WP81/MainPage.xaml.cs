@@ -4350,6 +4350,34 @@ namespace ESP32AIControl.WP81
             }
         }
 
+        private async void ClearHistoryButton_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new Windows.UI.Popups.MessageDialog(
+                "Все сохранённые измерения будут удалены. Продолжить?",
+                "Очистка истории");
+            dialog.Commands.Add(new Windows.UI.Popups.UICommand("Удалить"));
+            dialog.Commands.Add(new Windows.UI.Popups.UICommand("Отмена"));
+            dialog.DefaultCommandIndex = 1;
+            dialog.CancelCommandIndex = 1;
+            var result = await dialog.ShowAsync();
+            if (result == null || result.Label != "Удалить") return;
+
+            try
+            {
+                await _measurementStore.DeleteBeforeAsync(DateTimeOffset.MaxValue);
+                _lastGraphPoints.Clear();
+                GraphCanvas.Children.Clear();
+                GraphSummary.Text = "История измерений очищена.";
+                if (GraphSelectedPoint != null) GraphSelectedPoint.Text = "Нет выбранного измерения";
+                Log("HISTORY CLEARED");
+            }
+            catch (Exception ex)
+            {
+                GraphSummary.Text = "Не удалось очистить историю: " + ex.Message;
+                Log("HISTORY CLEAR ERROR: " + ex.Message);
+            }
+        }
+
         private async Task CleanupHistoryAsync()
         {
             var cutoff = DateTimeOffset.Now.AddDays(-Math.Max(1, _appSettings.RetentionDays));
