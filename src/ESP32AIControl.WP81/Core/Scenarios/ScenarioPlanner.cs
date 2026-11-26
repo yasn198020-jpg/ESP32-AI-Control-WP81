@@ -516,30 +516,9 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             string expectedValue,
             DeviceScenarioModel model)
         {
-            var binary = expression as IoTExpr.Binary;
-            if (binary == null) return false;
-            if (binary.Operator == "==")
-            {
-                var left = binary.Left as IoTExpr.Variable;
-                var right = binary.Right as IoTExpr.Variable;
-                string literal;
-                if (left != null &&
-                    VariableResolvesToIdentifier(left.Name, targetIdentifier, model,
-                        new HashSet<string>(StringComparer.OrdinalIgnoreCase)) &&
-                    TryResolveScenarioLiteral(binary.Right, model,
-                        new HashSet<string>(StringComparer.OrdinalIgnoreCase), out literal) &&
-                    ScenarioValuesEquivalent(literal, expectedValue))
-                    return true;
-                if (right != null &&
-                    VariableResolvesToIdentifier(right.Name, targetIdentifier, model,
-                        new HashSet<string>(StringComparer.OrdinalIgnoreCase)) &&
-                    TryResolveScenarioLiteral(binary.Left, model,
-                        new HashSet<string>(StringComparer.OrdinalIgnoreCase), out literal) &&
-                    ScenarioValuesEquivalent(literal, expectedValue))
-                    return true;
-            }
-            return ExpressionHasEqualityThroughAliases(binary.Left, targetIdentifier, expectedValue, model) ||
-                ExpressionHasEqualityThroughAliases(binary.Right, targetIdentifier, expectedValue, model);
+            string resolved;
+            return TryGetRequiredEqualityValue(expression, targetIdentifier, model, out resolved) &&
+                ScenarioValuesEquivalent(resolved, expectedValue);
         }
 
         private sealed class ScenarioDependencyGraph
@@ -718,9 +697,80 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             string identifier,
             DeviceScenarioModel model)
         {
-            var values = new List<string>();
-            CollectEqualityValuesThroughAliases(expression, identifier, model, values);
-            return values.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            string value;
+            if (!TryGetRequiredEqualityValue(expression, identifier, model, out value))
+                return new List<string>();
+            return new List<string> { value };
+        }
+
+        // An equality is considered a reliable gate only if it is required
+        // by the complete logical expression. For OR both branches must prove
+        // the same equality; for AND either conjunct may establish it. Negated
+        // and non-logical compound expressions are deliberately not inferred.
+        private static bool TryGetRequiredEqualityValue(
+            IoTExpr expression,
+            string identifier,
+            DeviceScenarioModel model,
+            out string value)
+        {
+            value = null;
+            var binary = expression as IoTExpr.Binary;
+            if (binary == null) return false;
+
+            if (binary.Operator == "==")
+            {
+                string leftValue;
+                string rightValue;
+                bool leftMatches = TryResolveEqualitySide(binary.Left, binary.Right,
+                    identifier, model, out leftValue);
+                bool rightMatches = TryResolveEqualitySide(binary.Right, binary.Left,
+                    identifier, model, out rightValue);
+                if (leftMatches && rightMatches &&
+                    !ScenarioValuesEquivalent(leftValue, rightValue))
+                    return false;
+                if (leftMatches) { value = leftValue; return true; }
+                if (rightMatches) { value = rightValue; return true; }
+                return false;
+            }
+
+            if (binary.Operator != "&" && binary.Operator != "|")
+                return false;
+
+            string left;
+            string right;
+            bool hasLeft = TryGetRequiredEqualityValue(binary.Left, identifier, model, out left);
+            bool hasRight = TryGetRequiredEqualityValue(binary.Right, identifier, model, out right);
+
+            if (binary.Operator == "|")
+            {
+                if (!hasLeft || !hasRight || !ScenarioValuesEquivalent(left, right))
+                    return false;
+                value = left;
+                return true;
+            }
+
+            if (hasLeft && hasRight && !ScenarioValuesEquivalent(left, right))
+                return false;
+            if (hasLeft) { value = left; return true; }
+            if (hasRight) { value = right; return true; }
+            return false;
+        }
+
+        private static bool TryResolveEqualitySide(
+            IoTExpr candidate,
+            IoTExpr literalExpression,
+            string identifier,
+            DeviceScenarioModel model,
+            out string value)
+        {
+            value = null;
+            var variable = candidate as IoTExpr.Variable;
+            if (variable == null ||
+                !VariableResolvesToIdentifier(variable.Name, identifier, model,
+                    new HashSet<string>(StringComparer.OrdinalIgnoreCase)))
+                return false;
+            return TryResolveScenarioLiteral(literalExpression, model,
+                new HashSet<string>(StringComparer.OrdinalIgnoreCase), out value);
         }
 
         private static void CollectEqualityValuesThroughAliases(
