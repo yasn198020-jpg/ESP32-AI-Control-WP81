@@ -42,6 +42,8 @@ namespace ESP32AIControl.WP81.Core.Voice
 
         private readonly DeviceRepository _devices;
         private readonly MarfaAnalyticalEngine _analyticalEngine = new MarfaAnalyticalEngine();
+        private TrainedCommandMatcher _trainedCommandMatcher;
+        private readonly DialogContext _dialogContext = new DialogContext();
         private List<WidgetState> _pending = new List<WidgetState>();
         private string _pendingValue = "1";
         private long _pendingDelay;
@@ -53,6 +55,23 @@ namespace ESP32AIControl.WP81.Core.Voice
         public MarfaCommandEngine(DeviceRepository devices)
         {
             _devices = devices;
+        }
+
+        public void SetTrainedCommandRepository(ITrainedCommandRepository repository)
+        {
+            _trainedCommandMatcher = repository == null ? null : new TrainedCommandMatcher(repository);
+        }
+
+        public DialogTargetContext DialogSnapshot()
+        {
+            return _dialogContext.Snapshot();
+        }
+
+        public void ClearDialogContext()
+        {
+            _dialogContext.Clear();
+            ClearPending();
+            _lastTarget = null;
         }
 
         public MarfaCommandResult Parse(string command)
@@ -82,7 +101,10 @@ namespace ESP32AIControl.WP81.Core.Voice
             if (_pending.Count > 0 || !string.IsNullOrWhiteSpace(_pendingOriginalText))
                 return ResolvePending(text, widgets);
 
-            var split = SplitCommands(text, widgets);
+            var trained = TryResolveTrainedCommand(text, widgets);
+            if (trained != null) return trained;
+
+            var split = MarfaMultiCommandSplitter.Split(text, widgets).ToList();
             if (split.Count > 1)
             {
                 var combined = new List<MarfaActionItem>();
@@ -100,6 +122,59 @@ namespace ESP32AIControl.WP81.Core.Voice
             }
 
             return ParseSingle(text, widgets);
+        }
+
+        private MarfaCommandResult TryResolveTrainedCommand(string text, IList<WidgetState> widgets)
+        {
+            if (_trainedCommandMatcher == null) return null;
+            var matches = _trainedCommandMatcher.MatchAll(text);
+            if (matches == null || matches.Count == 0) return null;
+
+            var actions = new List<MarfaActionItem>();
+            WidgetState readTarget = null;
+            foreach (var match in matches)
+            {
+                var widget = (widgets ?? new List<WidgetState>()).FirstOrDefault(w =>
+                    string.Equals(w.DeviceId, match.DeviceId, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(w.Id, match.WidgetId, StringComparison.OrdinalIgnoreCase));
+                if (widget == null) return null;
+
+                if (string.Equals(match.Value, TrainedCommandConstants.ReadValue, StringComparison.Ordinal))
+                {
+                    if (readTarget != null) return null;
+                    readTarget = widget;
+                }
+                else
+                {
+                    actions.Add(new MarfaActionItem
+                    {
+                        DeviceId = widget.DeviceId, WidgetId = widget.Id,
+                        Value = string.IsNullOrWhiteSpace(match.Value) ? "1" : match.Value
+                    });
+                }
+            }
+
+            if (readTarget != null)
+            {
+                if (actions.Count != 0) return null;
+                _lastTarget = readTarget;
+                return new MarfaCommandResult
+                {
+                    Kind = MarfaCommandKind.ReadValue,
+                    Value = readTarget.Value,
+                    Reply = MarfaSpeechTextFormatter.FormatValue(readTarget.Value, readTarget.Unit, readTarget.Description),
+                    Actions = new List<MarfaActionItem>()
+                };
+            }
+
+            if (actions.Count == 0) return null;
+            _lastTarget = (widgets ?? new List<WidgetState>()).FirstOrDefault(w =>
+                string.Equals(w.DeviceId, actions[0].DeviceId, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(w.Id, actions[0].WidgetId, StringComparison.OrdinalIgnoreCase));
+            _lastValue = actions[0].Value;
+            return ControlResult(actions, 0, actions.Count == 1
+                ? "Выполняю обученную команду."
+                : "Выполняю обученную группу команд.");
         }
 
         private MarfaCommandResult ParseSingle(string text, IList<WidgetState> widgets)
@@ -186,22 +261,15 @@ namespace ESP32AIControl.WP81.Core.Voice
             }
 
             var selected = new List<WidgetState>();
-            var ordinal = Regex.Match(text, @"\b(первый|первая|первое|второй|вторая|второе|третий|третья|третье|четвертый|четвертая|последний)\b");
-            if (ordinal.Success && _pending.Count > 0)
+            var clarificationCandidates = _pending.Select(w => new MarfaClarificationCandidate
             {
-                var index = ordinal.Value.StartsWith("перв") ? 0 :
-                    ordinal.Value.StartsWith("втор") ? 1 :
-                    ordinal.Value.StartsWith("трет") ? 2 :
-                    ordinal.Value.StartsWith("чет") ? 3 : _pending.Count - 1;
-                if (index >= 0 && index < _pending.Count) selected.Add(_pending[index]);
-            }
-            else
-            {
-                var ranked = RankCandidates(text, _pending, false);
-                if (ranked.Count > 0 && ranked[0].Score >= 1 &&
-                    (ranked.Count == 1 || ranked[0].Score > ranked[1].Score))
-                    selected.Add(ranked[0].Widget);
-            }
+                DeviceId = w.DeviceId, WidgetId = w.Id, Title = w.Description,
+                Page = w.Page, DeviceName = w.DeviceId
+            }).ToList();
+            var resolvedIndexes = MarfaClarificationResolver.Resolve(text, clarificationCandidates);
+            if (resolvedIndexes != null)
+                foreach (var index in resolvedIndexes)
+                    if (index >= 0 && index < _pending.Count) selected.Add(_pending[index]);
 
             if (selected.Count == 0)
             {
@@ -452,6 +520,11 @@ namespace ESP32AIControl.WP81.Core.Voice
         }
 
         private static string Normalize(string text)
+        {
+            return EmojiSemanticText.Normalize(text);
+        }
+
+        private static string NormalizeLegacy(string text)
         {
             return RussianSemanticNormalizer.Normalize(text);
         }
