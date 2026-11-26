@@ -4873,6 +4873,22 @@ namespace ESP32AIControl.WP81
                         Margin = new Thickness(0, 0, 0, 7)
                     });
                 var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+                var edit = new Button { Content = "Изменить", MinHeight = 40, Padding = new Thickness(10, 5, 10, 5), Margin = new Thickness(0, 0, 6, 0) };
+                edit.Click += delegate
+                {
+                    if (state == null)
+                    {
+                        VoiceResultText.Text = "Виджет больше не существует. Удалите старую команду или восстановите виджет.";
+                        return;
+                    }
+                    OpenTrainingDialog(state);
+                    if (_trainingPhraseBox != null)
+                        _trainingPhraseBox.Text = command.Phrase;
+                    if (_trainingModeBox != null)
+                        _trainingModeBox.SelectedIndex = 0;
+                    if (_trainingActionBox != null)
+                        _trainingActionBox.SelectedIndex = command.Value == "0" ? 1 : 0;
+                };
                 var addVariant = new Button { Content = "＋ Вариант фразы", MinHeight = 40, Padding = new Thickness(10, 5, 10, 5), Margin = new Thickness(0, 0, 6, 0) };
                 addVariant.Click += delegate { OpenVariantDialog(command.Phrase); };
                 var remove = new Button { Content = "Удалить", MinHeight = 40, Padding = new Thickness(10, 5, 10, 5) };
@@ -4884,6 +4900,7 @@ namespace ESP32AIControl.WP81
                     SaveTrainedCommands();
                     RefreshTrainedCommandsScreen();
                 };
+                buttons.Children.Add(edit);
                 buttons.Children.Add(addVariant);
                 buttons.Children.Add(remove);
                 content.Children.Add(buttons);
