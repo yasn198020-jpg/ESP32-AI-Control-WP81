@@ -59,6 +59,24 @@ namespace ESP32AIControl.WP81.Core.State
             return null;
         }
 
+        public IList<WidgetState> GetWidgetsById(string widgetId)
+        {
+            var result = new List<WidgetState>();
+            if (string.IsNullOrWhiteSpace(widgetId))
+                return result;
+
+            lock (_widgets)
+            {
+                foreach (var state in _widgets.Values)
+                {
+                    if (string.Equals(state.Id, widgetId, StringComparison.OrdinalIgnoreCase))
+                        result.Add(state.Clone());
+                }
+            }
+
+            return result;
+        }
+
         public IList<WidgetState> GetWidgetsSnapshot()
         {
             var result = new List<WidgetState>();
