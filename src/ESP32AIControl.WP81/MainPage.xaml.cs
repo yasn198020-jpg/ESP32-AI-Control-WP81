@@ -3672,9 +3672,23 @@ namespace ESP32AIControl.WP81
             GraphSummary.Text = "Удалён набор: " + name;
         }
 
-        private void GraphPresetDayButton_Click(object sender, RoutedEventArgs e) { GraphTo.Date = DateTime.Now.Date; GraphFrom.Date = DateTime.Now.Date.AddDays(-1); }
-        private void GraphPresetWeekButton_Click(object sender, RoutedEventArgs e) { GraphTo.Date = DateTime.Now.Date; GraphFrom.Date = DateTime.Now.Date.AddDays(-7); }
-        private void GraphPresetMonthButton_Click(object sender, RoutedEventArgs e) { GraphTo.Date = DateTime.Now.Date; GraphFrom.Date = DateTime.Now.Date.AddDays(-30); }
+        private void SelectGraphPeriod(string tag)
+        {
+            if (GraphPeriodBox == null) return;
+            for (var i = 0; i < GraphPeriodBox.Items.Count; i++)
+            {
+                var item = GraphPeriodBox.Items[i] as ComboBoxItem;
+                if (item != null && string.Equals(item.Tag as string, tag, StringComparison.Ordinal))
+                {
+                    GraphPeriodBox.SelectedItem = item;
+                    return;
+                }
+            }
+        }
+
+        private void GraphPresetDayButton_Click(object sender, RoutedEventArgs e) { SelectGraphPeriod("today"); }
+        private void GraphPresetWeekButton_Click(object sender, RoutedEventArgs e) { SelectGraphPeriod("7d"); }
+        private void GraphPresetMonthButton_Click(object sender, RoutedEventArgs e) { SelectGraphPeriod("30d"); }
 
         private void AddCompareWidgetButton_Click(object sender, RoutedEventArgs e)
         {
