@@ -2591,7 +2591,7 @@ namespace ESP32AIControl.WP81
                     var array = raw.GetArray();
                     for (uint i = 0; i < array.Count; i++)
                     {
-                        var item = array.GetAt(i);
+                        var item = array[(int)i];
                         if (item.ValueType == JsonValueType.String)
                             result.Add(item.GetString());
                     }
@@ -2623,7 +2623,7 @@ namespace ESP32AIControl.WP81
 
             if (fill)
             {
-                canvas.Clip = new EllipseGeometry
+                canvas.Clip = (Geometry)new EllipseGeometry
                 {
                     Center = new Point(size / 2, size / 2),
                     RadiusX = size / 2 - 4,
@@ -3773,7 +3773,7 @@ namespace ESP32AIControl.WP81
             }
 
             if (GraphZoomLabel != null)
-                GraphZoomLabel.Text = "×" + _graphZoom.ToString("0.0", CultureInfo.GetCultureInfo("ru-RU"));
+                GraphZoomLabel.Text = "×" + _graphZoom.ToString("0.0", new CultureInfo("ru-RU"));
         }
 
         private void DrawGraph(IList<MeasurementPoint> points)
@@ -3873,7 +3873,7 @@ namespace ESP32AIControl.WP81
                 _graphSelectedIndex = _graphNumericPoints.Count - 1;
             DrawSelectedGraphPoint(numeric, minValue, maxValue, height, padding);
             if (GraphZoomLabel != null)
-                GraphZoomLabel.Text = "×" + _graphZoom.ToString("0.0", CultureInfo.GetCultureInfo("ru-RU"));
+                GraphZoomLabel.Text = "×" + _graphZoom.ToString("0.0", new CultureInfo("ru-RU"));
         }
 
         private void DrawSelectedGraphPoint(IList<Tuple<double, double>> numeric, double minValue, double maxValue, double height, double padding)
@@ -4489,14 +4489,14 @@ namespace ESP32AIControl.WP81
                 foreach (var command in _trainedCommands)
                 {
                     var item = new JsonObject();
-                    item.Insert("phrase", JsonValue.CreateStringValue(command.Phrase ?? string.Empty));
-                    item.Insert("deviceId", JsonValue.CreateStringValue(command.DeviceId ?? string.Empty));
-                    item.Insert("widgetId", JsonValue.CreateStringValue(command.WidgetId ?? string.Empty));
-                    item.Insert("value", JsonValue.CreateStringValue(command.Value ?? string.Empty));
+                    item["phrase"] = JsonValue.CreateStringValue(command.Phrase ?? string.Empty);
+                    item["deviceId"] = JsonValue.CreateStringValue(command.DeviceId ?? string.Empty);
+                    item["widgetId"] = JsonValue.CreateStringValue(command.WidgetId ?? string.Empty);
+                    item["value"] = JsonValue.CreateStringValue(command.Value ?? string.Empty);
                     var variants = new JsonArray();
                     foreach (var variant in (command.Variants ?? new List<string>()).Distinct(StringComparer.OrdinalIgnoreCase))
                         variants.Add(JsonValue.CreateStringValue(variant));
-                    item.Insert("variants", variants);
+                    item["variants"] = variants;
                     array.Add(item);
                 }
                 ApplicationData.Current.LocalSettings.Values[TrainedCommandsStorageKey] = array.ToString();
@@ -4971,6 +4971,16 @@ namespace ESP32AIControl.WP81
             if (_scenarioProbeResult != null) _scenarioProbeResult.Text = "Результат очищен.";
         }
 
+        private string _pendingShareText;
+
+        private void ShareText_DataRequested(Windows.ApplicationModel.DataTransfer.DataTransferManager sender,
+            Windows.ApplicationModel.DataTransfer.DataRequestedEventArgs args)
+        {
+            args.Request.Data.Properties.Title = "ESP32 AI Control";
+            args.Request.Data.SetText(_pendingShareText ?? string.Empty);
+            sender.DataRequested -= ShareText_DataRequested;
+        }
+
         private void CopyScenarioProbeResult_Click(object sender, RoutedEventArgs e)
         {
             var text = _scenarioProbeResult == null ? string.Empty : _scenarioProbeResult.Text;
@@ -4982,8 +4992,10 @@ namespace ESP32AIControl.WP81
 
             var package = new Windows.ApplicationModel.DataTransfer.DataPackage();
             package.SetText(text);
-            Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(package);
-            Windows.ApplicationModel.DataTransfer.Clipboard.Flush();
+            Windows.ApplicationModel.DataTransfer.DataTransferManager.GetForCurrentView().DataRequested += ShareText_DataRequested;
+            _pendingShareText = text;
+            Windows.ApplicationModel.DataTransfer.DataTransferManager.ShowShareUI();
+            
             if (_scenarioProbeResult != null)
                 _scenarioProbeResult.Text = text + Environment.NewLine + "Результат скопирован.";
         }
@@ -6379,8 +6391,10 @@ namespace ESP32AIControl.WP81
 
             var package = new Windows.ApplicationModel.DataTransfer.DataPackage();
             package.SetText(text);
-            Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(package);
-            Windows.ApplicationModel.DataTransfer.Clipboard.Flush();
+            Windows.ApplicationModel.DataTransfer.DataTransferManager.GetForCurrentView().DataRequested += ShareText_DataRequested;
+            _pendingShareText = text;
+            Windows.ApplicationModel.DataTransfer.DataTransferManager.ShowShareUI();
+            
             if (LogActionStatus != null) LogActionStatus.Text = "Отображаемые записи журнала скопированы.";
         }
 
