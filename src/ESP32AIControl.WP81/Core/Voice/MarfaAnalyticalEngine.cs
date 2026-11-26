@@ -74,6 +74,17 @@ namespace ESP32AIControl.WP81.Core.Voice
             }
 
             var contextPages = page == null ? MatchingContextPages(normalized, widgets) : new List<string>();
+            if (page == null && contextPages.Count == 0 && !HasNonLexicalPage(widgets))
+            {
+                var unknownContext = UnknownContextWords(normalized, widgets);
+                if (unknownContext.Count > 0)
+                    return new MarfaAnalyticalResolution
+                    {
+                        Clarification = "Я нашла объект, но не нашла совпадение контекста «" +
+                            string.Join(", ", unknownContext.ToArray()) + "». Уточните вкладку. Доступные вкладки: " +
+                            AvailablePages(widgets) + "."
+                    };
+            }
             if (page != null)
                 all = all.Where(c => RussianSemanticNormalizer.Normalize(c.Widget.Page).Trim() == page).ToList();
             else if (contextPages.Count == 1)
@@ -138,6 +149,21 @@ namespace ESP32AIControl.WP81.Core.Voice
                     Clarification = "Не нашла указанную вкладку. Доступные вкладки: " + AvailablePages(widgets) + "."
                 };
             var kind = DetectSensorKind(normalized);
+            if (page == null && !HasNonLexicalPage(widgets))
+            {
+                var contextPages = MatchingContextPages(normalized, widgets);
+                if (contextPages.Count == 0)
+                {
+                    var unknownContext = UnknownContextWords(normalized, widgets);
+                    if (unknownContext.Count > 0)
+                        return new MarfaAnalyticalResolution
+                        {
+                            Clarification = "Я нашла датчик, но не нашла совпадение контекста «" +
+                                string.Join(", ", unknownContext.ToArray()) + "». Уточните вкладку. Доступные вкладки: " +
+                                AvailablePages(widgets) + "."
+                        };
+                }
+            }
             var all = new List<MarfaAnalyticalCandidate>();
             foreach (var widget in widgets ?? new List<WidgetState>())
             {
@@ -182,6 +208,70 @@ namespace ESP32AIControl.WP81.Core.Voice
                     Clarification = BuildSensorClarification(all)
                 };
             return new MarfaAnalyticalResolution { Candidate = best, Candidates = all };
+        }
+
+        private static bool HasNonLexicalPage(IList<WidgetState> widgets)
+        {
+            return (widgets ?? new List<WidgetState>()).Any(w =>
+                !string.IsNullOrWhiteSpace(w.Page) &&
+                RussianSemanticNormalizer.Normalize(w.Page).Length == 0 &&
+                w.Page.Any(ch => !char.IsLetterOrDigit(ch) && !char.IsWhiteSpace(ch)));
+        }
+
+        private static List<string> UnknownContextWords(string text, IList<WidgetState> widgets)
+        {
+            var ignored = new HashSet<string>(new[]
+            {
+                "включить", "выключить", "открыть", "закрыть", "запустить", "остановить",
+                "показать", "сказать", "марфа", "пожалуйста", "через", "спустя",
+                "на", "в", "во", "по", "для", "из", "с", "со", "к", "у", "и", "а",
+                "двер", "форточк", "окн", "ворот", "насос", "вентилятор", "вент",
+                "обогрев", "отоп", "кран", "клапан", "свет", "ламп", "полив", "рел",
+                "кнопк", "канал", "выход", "gpio", "автомат", "управлен",
+                "температур", "темп", "влажност", "давлен", "датчик", "значен",
+                "какая", "какое", "какие", "какую", "какой", "сколько", "покажи",
+                "показать", "скажи", "сказать", "узнай", "узнать", "что", "там", "здесь",
+                "если", "когда", "при", "условии", "выше", "больше", "ниже", "меньше",
+                "градус", "градуса", "градусов", "номер", "состояние", "статус"
+            }, StringComparer.OrdinalIgnoreCase);
+
+            var pageTokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var widget in widgets ?? new List<WidgetState>())
+                foreach (var token in RussianSemanticNormalizer.Tokens(widget.Page ?? string.Empty))
+                    pageTokens.Add(token);
+
+            var result = new List<string>();
+            foreach (var token in RussianSemanticNormalizer.Tokens(text))
+            {
+                if (token.Length < 3 || ignored.Contains(token) || Regex.IsMatch(token, @"^\d+$") ||
+                    IsSelectionToken(token))
+                    continue;
+                var knownId = (widgets ?? new List<WidgetState>()).Any(w =>
+                    string.Equals(RussianSemanticNormalizer.Normalize(w.Id), token, StringComparison.OrdinalIgnoreCase));
+                if (knownId) continue;
+                var knownPage = pageTokens.Any(pageToken =>
+                    token == pageToken ||
+                    (token.Length >= 5 && pageToken.Length >= 5 &&
+                     (token.StartsWith(pageToken, StringComparison.Ordinal) ||
+                      pageToken.StartsWith(token, StringComparison.Ordinal))));
+                if (!knownPage && !result.Contains(token, StringComparer.OrdinalIgnoreCase))
+                    result.Add(token);
+            }
+            return result;
+        }
+
+        private static bool IsSelectionToken(string token)
+        {
+            if (Regex.IsMatch(token ?? string.Empty, @"^\d+$")) return true;
+            var forms = new[]
+            {
+                "ноль", "один", "одна", "одно", "два", "две", "три", "четыре",
+                "пять", "шесть", "семь", "восемь", "девять", "десять",
+                "первый", "первая", "первое", "первую", "второй", "вторая",
+                "второе", "вторую", "третий", "третья", "третье", "третью",
+                "четвертый", "четвертая", "четвертую", "пятый", "пятая", "пятое"
+            };
+            return forms.Any(form => RussianSemanticNormalizer.NormalizeToken(form) == token);
         }
 
         private static List<string> MatchingContextPages(string text, IList<WidgetState> widgets)
