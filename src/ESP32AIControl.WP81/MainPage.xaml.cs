@@ -229,6 +229,7 @@ namespace ESP32AIControl.WP81
             try
             {
                 _appSettings = await _settingsStore.LoadAsync();
+                if (_appSettings.GraphWidgetColors == null) _appSettings.GraphWidgetColors = new Dictionary<string, string>();
                 RefreshGraphSetPicker();
                 LogText.Text = string.Join(Environment.NewLine, _connectionJournal.Load());
                 if (_appSettings.SavedMqttProfiles == null)
@@ -2981,6 +2982,50 @@ namespace ESP32AIControl.WP81
             }
         }
 
+        private Windows.UI.Color GetCompareWidgetColor(string key, int fallbackIndex)
+        {
+            string colorName;
+            if (_appSettings.GraphWidgetColors != null &&
+                _appSettings.GraphWidgetColors.TryGetValue(key, out colorName))
+            {
+                switch (colorName)
+                {
+                    case "Orange": return Windows.UI.Colors.Orange;
+                    case "Green": return Windows.UI.Colors.LimeGreen;
+                    case "Magenta": return Windows.UI.Colors.Magenta;
+                    case "Cyan": return Windows.UI.Colors.Cyan;
+                    case "Yellow": return Windows.UI.Colors.Yellow;
+                    case "Red": return Windows.UI.Colors.Red;
+                    case "Purple": return Windows.UI.Colors.MediumPurple;
+                    default: return Windows.UI.Colors.DodgerBlue;
+                }
+            }
+            var palette = new Windows.UI.Color[] {
+                Windows.UI.Colors.DodgerBlue, Windows.UI.Colors.Orange,
+                Windows.UI.Colors.LimeGreen, Windows.UI.Colors.Magenta,
+                Windows.UI.Colors.Cyan, Windows.UI.Colors.Yellow
+            };
+            return palette[fallbackIndex % palette.Length];
+        }
+
+        private async void ApplyCompareColorButton_Click(object sender, RoutedEventArgs e)
+        {
+            var key = GraphCompareList.SelectedItem as string;
+            var item = GraphColorBox.SelectedItem as ComboBoxItem;
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                GraphSummary.Text = "Сначала выберите датчик в списке сравнения.";
+                return;
+            }
+            if (item == null || item.Tag == null) return;
+            if (_appSettings.GraphWidgetColors == null)
+                _appSettings.GraphWidgetColors = new Dictionary<string, string>();
+            _appSettings.GraphWidgetColors[key] = item.Tag.ToString();
+            await _settingsStore.SaveAsync(_appSettings);
+            GraphSummary.Text = "Цвет сохранён для датчика: " + key;
+            BuildCompareGraphButton_Click(null, null);
+        }
+
         private void RemoveCompareWidgetButton_Click(object sender, RoutedEventArgs e)
         {
             var key = GraphCompareList.SelectedItem as string;
@@ -3099,11 +3144,7 @@ namespace ESP32AIControl.WP81
             _graphNumericPoints.Clear();
             _graphPointXPositions.Clear();
 
-            var palette = new Windows.UI.Color[] {
-                Windows.UI.Colors.DodgerBlue, Windows.UI.Colors.Orange,
-                Windows.UI.Colors.LimeGreen, Windows.UI.Colors.Magenta,
-                Windows.UI.Colors.Cyan, Windows.UI.Colors.Yellow
-            };
+
             var prepared = new List<Tuple<string, List<Tuple<DateTimeOffset, double>>>>();
             foreach (var trace in traces)
             {
@@ -3157,7 +3198,7 @@ namespace ESP32AIControl.WP81
                 var low = values.Min(p => p.Item2);
                 var high = values.Max(p => p.Item2);
                 if (Math.Abs(high - low) < 0.000001) high = low + 1.0;
-                var brush = new SolidColorBrush(palette[panel % palette.Length]);
+                var brush = new SolidColorBrush(GetCompareWidgetColor(trace.Item1, panel));
 
                 var title = new TextBlock
                 {
