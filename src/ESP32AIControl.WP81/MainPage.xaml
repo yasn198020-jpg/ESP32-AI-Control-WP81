@@ -526,13 +526,40 @@
                                     <TextBlock Text="Выберите установленный в Windows системный голос. Марфа использует его для озвучивания ответов после выполнения команды."
                                                FontSize="12" Foreground="#FFACADB8"
                                                TextWrapping="Wrap" Margin="0,0,0,8"/>
-                                    <ComboBox x:Name="TtsVoiceBox" Header="Системный голос"
+                                    <ComboBox x:Name="TtsVoiceBox" Header="Установленный голос"
                                               MinHeight="48"/>
+                                    <TextBlock Text="Профиль звучания" FontSize="13"
+                                               FontWeight="SemiBold" Margin="0,10,0,2"/>
+                                    <ComboBox x:Name="TtsPresetBox" Header="Готовый пресет"
+                                              SelectedIndex="1"
+                                              SelectionChanged="TtsPresetBox_SelectionChanged">
+                                        <ComboBoxItem Content="Нежный — мягкий и спокойный" Tag="soft"/>
+                                        <ComboBoxItem Content="Дружелюбный — тёплый и естественный" Tag="friendly"/>
+                                        <ComboBoxItem Content="Естественный — нейтральный" Tag="natural"/>
+                                        <ComboBoxItem Content="Ассистент — чёткий и спокойный" Tag="assistant"/>
+                                    </ComboBox>
+                                    <TextBlock Text="Скорость речи" FontSize="13"
+                                               FontWeight="SemiBold" Margin="0,8,0,0"/>
+                                    <TextBlock x:Name="TtsRateValueText" Text="0,92"
+                                               FontSize="12" Foreground="#FFACADB8"/>
+                                    <Slider x:Name="TtsRateSlider" Minimum="0.75" Maximum="1.15"
+                                            Value="0.92" StepFrequency="0.01"
+                                            ValueChanged="TtsRateSlider_ValueChanged"/>
+                                    <TextBlock Text="Высота голоса" FontSize="13"
+                                               FontWeight="SemiBold" Margin="0,6,0,0"/>
+                                    <TextBlock x:Name="TtsPitchValueText" Text="1,05"
+                                               FontSize="12" Foreground="#FFACADB8"/>
+                                    <Slider x:Name="TtsPitchSlider" Minimum="0.85" Maximum="1.25"
+                                            Value="1.05" StepFrequency="0.01"
+                                            ValueChanged="TtsPitchSlider_ValueChanged"/>
+                                    <TextBlock Text="Изменения применяются к ответам Марфы после сохранения общих настроек. Для проверки можно прослушать текущие значения до сохранения."
+                                               FontSize="11" Foreground="#FFACADB8"
+                                               TextWrapping="Wrap" Margin="0,4,0,6"/>
                                     <Button Content="Проверить голос" Click="TtsTestButton_Click"
                                             HorizontalAlignment="Stretch" MinHeight="46"
-                                            Margin="0,6,0,0"/>
+                                            Margin="0,4,0,0"/>
                                     <TextBlock x:Name="TtsVoiceStatus"
-                                               Text="Выберите голос и запустите проверку."
+                                               Text="Выберите голос, профиль и проверьте звучание."
                                                FontSize="12" Foreground="#FFACADB8"
                                                TextWrapping="Wrap" Margin="0,8,0,0"/>
                                 </StackPanel>
@@ -765,9 +792,22 @@
                                 <StackPanel>
                                     <TextBlock Text="ЖУРНАЛ СОЕДИНЕНИЯ" FontSize="14" FontWeight="SemiBold"
                                                Foreground="#FFD0BCFF" Margin="0,0,0,4"/>
-                                    <TextBlock Text="События MQTT, UDP, WebSocket и сетевые ошибки. Время каждой записи указано в начале строки."
+                                    <TextBlock Text="События MQTT, UDP, WebSocket и сетевые ошибки. Выберите категорию, чтобы быстрее найти нужную запись."
                                                FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap"
                                                Margin="0,0,0,8"/>
+                                    <ComboBox x:Name="LogFilterBox" Header="Фильтр событий"
+                                              SelectedIndex="0"
+                                              SelectionChanged="LogFilterBox_SelectionChanged">
+                                        <ComboBoxItem Content="Все события" Tag="ALL"/>
+                                        <ComboBoxItem Content="MQTT" Tag="MQTT"/>
+                                        <ComboBoxItem Content="UDP / обнаружение" Tag="UDP"/>
+                                        <ComboBoxItem Content="WebSocket" Tag="WS"/>
+                                        <ComboBoxItem Content="Ошибки" Tag="ERROR"/>
+                                        <ComboBoxItem Content="Сценарии" Tag="SCENARIO"/>
+                                    </ComboBox>
+                                    <Button Content="Копировать отображаемые записи"
+                                            Click="CopyLogButton_Click"
+                                            HorizontalAlignment="Stretch" Margin="0,2,0,8"/>
                                     <Border Background="#FF1E1F25" BorderBrush="#FF41434D"
                                             BorderThickness="1" CornerRadius="10" Padding="8">
                                         <ScrollViewer Height="230" VerticalScrollBarVisibility="Auto"
