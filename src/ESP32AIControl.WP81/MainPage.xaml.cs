@@ -85,6 +85,9 @@ namespace ESP32AIControl.WP81
             new Dictionary<string, WidgetVisual>();
         private readonly Dictionary<string, PageVisual> _pages =
             new Dictionary<string, PageVisual>();
+        // Keep the active device page stable while MQTT adds, moves or removes widgets.
+        private string _selectedWidgetPageName;
+        private bool _restoringWidgetPageSelection;
         private readonly Dictionary<string, WidgetState> _widgetIndex =
             new Dictionary<string, WidgetState>();
         private readonly List<ScheduledCommand> _scheduleRows =
@@ -116,6 +119,7 @@ namespace ESP32AIControl.WP81
         public MainPage()
         {
             InitializeComponent();
+            WidgetPages.SelectionChanged += WidgetPages_SelectionChanged;
             GraphCanvas.Tapped += GraphCanvas_Tapped;
             _trainedCommands.AddRange(LoadTrainedCommands());
             _trainedCommandsSection = new Grid
@@ -2972,12 +2976,63 @@ namespace ESP32AIControl.WP81
             CleanupEmptyPages();
         }
 
+        private void WidgetPages_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_restoringWidgetPageSelection) return;
+            var selected = WidgetPages.SelectedItem as PivotItem;
+            if (selected == null)
+            {
+                _selectedWidgetPageName = null;
+                return;
+            }
+
+            _selectedWidgetPageName = selected.Tag as string;
+            if (string.IsNullOrEmpty(_selectedWidgetPageName))
+                _selectedWidgetPageName = selected.Header as string;
+        }
+
+        private void RestoreWidgetPageSelection(string preferredPageName)
+        {
+            if (WidgetPages.Items.Count == 0)
+            {
+                _selectedWidgetPageName = null;
+                return;
+            }
+
+            PageVisual target = null;
+            if (!string.IsNullOrEmpty(preferredPageName))
+                _pages.TryGetValue(preferredPageName, out target);
+
+            // Match Android dashboard behavior: return to the default page when
+            // the active device page disappears, otherwise use the first page.
+            if (target == null)
+                _pages.TryGetValue("Основная", out target);
+            if (target == null)
+            {
+                var firstItem = WidgetPages.Items[0] as PivotItem;
+                if (firstItem != null)
+                {
+                    var firstName = firstItem.Tag as string;
+                    if (!string.IsNullOrEmpty(firstName))
+                        _pages.TryGetValue(firstName, out target);
+                }
+            }
+
+            if (target == null) return;
+            _restoringWidgetPageSelection = true;
+            try { WidgetPages.SelectedItem = target.Item; }
+            finally { _restoringWidgetPageSelection = false; }
+            _selectedWidgetPageName = target.Name;
+        }
+
         private PageVisual GetOrCreatePageVisual(string pageName)
         {
             PageVisual page;
             if (_pages.TryGetValue(pageName, out page))
                 return page;
 
+            var previouslySelected = _selectedWidgetPageName;
+            var hadPages = WidgetPages.Items.Count > 0;
             page = new PageVisual
             {
                 Name = pageName,
@@ -3000,24 +3055,50 @@ namespace ESP32AIControl.WP81
             _pages[pageName] = page;
             WidgetPages.Items.Add(item);
             if (DashboardEmptyState != null) DashboardEmptyState.Visibility = Visibility.Collapsed;
+
+            // Adding a new device must not pull the user away from the page
+            // they are currently viewing. The first page remains auto-selected.
+            if (hadPages)
+                RestoreWidgetPageSelection(previouslySelected);
+            else
+                RestoreWidgetPageSelection(pageName);
             return page;
         }
 
         private void CleanupEmptyPages()
         {
+            var preferredPageName = _selectedWidgetPageName;
+            var selectedItem = WidgetPages.SelectedItem as PivotItem;
+            if (selectedItem != null)
+            {
+                var selectedName = selectedItem.Tag as string;
+                if (!string.IsNullOrEmpty(selectedName))
+                    preferredPageName = selectedName;
+            }
+
             var empty = new List<string>();
             foreach (var pair in _pages)
                 if (pair.Value.Content.Children.Count == 0) empty.Add(pair.Key);
 
-            foreach (var name in empty)
+            _restoringWidgetPageSelection = true;
+            try
             {
-                var page = _pages[name];
-                WidgetPages.Items.Remove(page.Item);
-                _pages.Remove(name);
+                foreach (var name in empty)
+                {
+                    var page = _pages[name];
+                    WidgetPages.Items.Remove(page.Item);
+                    _pages.Remove(name);
+                }
+            }
+            finally
+            {
+                _restoringWidgetPageSelection = false;
             }
 
             if (DashboardEmptyState != null)
                 DashboardEmptyState.Visibility = WidgetPages.Items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+            RestoreWidgetPageSelection(preferredPageName);
         }
 
         private void ApplyWidgetTitle(WidgetVisual visual, WidgetState state)
