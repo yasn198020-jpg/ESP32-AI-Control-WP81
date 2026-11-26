@@ -39,7 +39,7 @@ namespace ESP32AIControl.WP81.Core.Voice
 
             int ordinal = -1;
             for (var n = 0; n < Ordinals.Length && ordinal < 0; n++)
-                if (tokens.Any(t => Ordinals[n].Contains(t))) ordinal = n;
+                if (tokens.Any(t => Ordinals[n].Any(form => RussianSemanticNormalizer.NormalizeToken(form) == t))) ordinal = n;
             if (ordinal < 0)
             {
                 var number = tokens.FirstOrDefault(t => t.Length == 1 && t[0] >= '1' && t[0] <= '9');
@@ -54,11 +54,11 @@ namespace ESP32AIControl.WP81.Core.Voice
             {
                 var collision = candidates.Any(c =>
                     RussianSemanticNormalizer.Tokens((c.Title ?? "") + " " + (c.Page ?? "") + " " + (c.DeviceName ?? ""))
-                    .Any(t => Ordinals[ordinal].Contains(t)));
+                    .Any(t => Ordinals[ordinal].Any(form => RussianSemanticNormalizer.NormalizeToken(form) == t)));
                 if (!collision) return new List<int> { ordinal };
             }
 
-            if (tokens.Any(t => BothWords.Contains(t)))
+            if (tokens.Any(t => MatchesNormalizedForm(t, BothWords)))
                 return candidates.Count == 2 ? (IList<int>)new List<int> { 0, 1 } : null;
 
             if (positive.Count > 0)
@@ -67,9 +67,15 @@ namespace ESP32AIControl.WP81.Core.Voice
                 var best = positive.Where(i => scores[i] == max).ToList();
                 if (best.Count == 1) return best;
             }
-            if (tokens.Any(t => AllWords.Contains(t)))
+            if (tokens.Any(t => MatchesNormalizedForm(t, AllWords)))
                 return Enumerable.Range(0, candidates.Count).ToList();
             return null;
+        }
+
+        private static bool MatchesNormalizedForm(string token, IEnumerable<string> forms)
+        {
+            return forms.Any(form =>
+                string.Equals(RussianSemanticNormalizer.NormalizeToken(form), token, StringComparison.OrdinalIgnoreCase));
         }
 
         private static int Score(IList<string> query, MarfaClarificationCandidate candidate)
@@ -80,7 +86,7 @@ namespace ESP32AIControl.WP81.Core.Voice
             var score = 0;
             foreach (var token in query)
             {
-                if (token.Length < 3 || StopWords.Contains(token) || AllWords.Contains(token) || BothWords.Contains(token)) continue;
+                if (token.Length < 3 || MatchesNormalizedForm(token, StopWords) || AllWords.Contains(token) || BothWords.Contains(token)) continue;
                 if (title.Contains(token)) score += 8;
                 if (page.Contains(token)) score += 10;
                 if (device.Contains(token)) score += 4;
