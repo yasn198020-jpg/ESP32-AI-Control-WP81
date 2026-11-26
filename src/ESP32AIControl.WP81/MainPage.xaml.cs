@@ -3413,8 +3413,20 @@ namespace ESP32AIControl.WP81
             for (var i = 0; i < HistoryWidgetList.Items.Count; i++)
             {
                 var existing = HistoryWidgetList.Items[i] as ListViewItem;
-                if (existing != null && string.Equals(existing.Tag as string, state.Key, StringComparison.Ordinal))
-                    return;
+                if (existing == null || !string.Equals(existing.Tag as string, state.Key, StringComparison.Ordinal))
+                    continue;
+
+                var existingBody = existing.Content as StackPanel;
+                if (existingBody != null && existingBody.Children.Count >= 2)
+                {
+                    var title = existingBody.Children[0] as TextBlock;
+                    var value = existingBody.Children[1] as TextBlock;
+                    if (title != null)
+                        title.Text = string.IsNullOrWhiteSpace(state.Description) ? state.Id : state.Description;
+                    if (value != null)
+                        value.Text = (state.Value ?? "—") + (state.Unit ?? string.Empty) + "   •   " + (state.Page ?? state.DeviceId);
+                }
+                return;
             }
 
             var body = new StackPanel { Margin = new Thickness(2, 3, 2, 3) };
