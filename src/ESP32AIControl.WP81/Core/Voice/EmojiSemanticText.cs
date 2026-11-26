@@ -53,15 +53,27 @@ namespace ESP32AIControl.WP81.Core.Voice
             if (string.IsNullOrWhiteSpace(value)) return string.Empty;
             var result = value;
             foreach (var pair in Replacements) result = result.Replace(pair.Key, " " + pair.Value + " ");
-            var output = new StringBuilder(result.Length);
-            foreach (var ch in result)
+            var output = new StringBuilder(result.Length + 16);
+            for (var i = 0; i < result.Length; i++)
             {
-                if (char.IsLetterOrDigit(ch) || char.IsWhiteSpace(ch) || ",.!?;:-()".IndexOf(ch) >= 0)
-                    output.Append(ch);
+                var ch = result[i];
+                if (char.IsHighSurrogate(ch) && i + 1 < result.Length && char.IsLowSurrogate(result[i + 1]))
+                {
+                    output.Append(" эмодзи ");
+                    i++;
+                }
                 else if (char.IsSurrogate(ch))
+                {
                     continue;
+                }
+                else if (char.IsLetterOrDigit(ch) || char.IsWhiteSpace(ch) || ",.!?;:-()".IndexOf(ch) >= 0)
+                {
+                    output.Append(ch);
+                }
                 else
-                    output.Append(' ');
+                {
+                    output.Append(" эмодзи ");
+                }
             }
             return Regex.Replace(output.ToString(), @"\s+", " ").Trim();
         }
