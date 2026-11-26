@@ -74,6 +74,13 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             return _scenarioAnalyzer == null ? 0 : _scenarioAnalyzer.RuleCount;
         }
 
+        public IList<ScenarioVariableDiagnostic> GetScenarioDiagnostics()
+        {
+            return _scenarioAnalyzer == null
+                ? new List<ScenarioVariableDiagnostic>()
+                : _scenarioAnalyzer.ValidateReferences(_devices);
+        }
+
         public ScenarioPlan BuildPlan(string command)
         {
             var plan = new ScenarioPlan();
