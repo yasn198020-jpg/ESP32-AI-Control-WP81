@@ -175,7 +175,7 @@ namespace ESP32AIControl.WP81
             _settingsStore = new AppSettingsStore();
             _appSettings = new AppSettings();
 
-            _settings = new MqttSettings();
+            RefreshGraphSetPicker();\n            _settings = new MqttSettings();
             _devices = new DeviceRepository();
             _mqtt = new Esp32MqttService(_settings, _devices);
             _localScenarioStore = new LocalScenarioStore();
@@ -2970,6 +2970,65 @@ namespace ESP32AIControl.WP81
                 Log("GRAPH ERROR: " + ex.Message);
             }
         }
+
+        private void RemoveCompareWidgetButton_Click(object sender, RoutedEventArgs e)
+        {
+            var key = GraphCompareList.SelectedItem as string;
+            if (string.IsNullOrWhiteSpace(key)) { GraphSummary.Text = "Выберите датчик в списке."; return; }
+            _graphCompareKeys.Remove(key);
+            GraphCompareList.Items.Remove(key);
+            GraphCanvas.Children.Clear();
+            GraphSummary.Text = "Удалён из сравнения: " + key;
+        }
+
+        private async void SaveGraphSetButton_Click(object sender, RoutedEventArgs e)
+        {
+            var name = (GraphSetNameBox.Text ?? string.Empty).Trim();
+            if (name.Length == 0 || _graphCompareKeys.Count == 0) { GraphSummary.Text = "Введите название и добавьте датчики."; return; }
+            if (_appSettings.SavedGraphSets == null) _appSettings.SavedGraphSets = new List<SavedGraphSet>();
+            var existing = _appSettings.SavedGraphSets.FirstOrDefault(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (existing == null) { existing = new SavedGraphSet { Name = name }; _appSettings.SavedGraphSets.Add(existing); }
+            existing.WidgetKeys = _graphCompareKeys.ToList();
+            await _settingsStore.SaveAsync(_appSettings);
+            RefreshGraphSetPicker();
+            GraphSavedSetsBox.SelectedItem = name;
+            GraphSummary.Text = "Набор сохранён: " + name;
+        }
+
+        private void RefreshGraphSetPicker()
+        {
+            if (GraphSavedSetsBox == null) return;
+            GraphSavedSetsBox.Items.Clear();
+            foreach (var set in (_appSettings.SavedGraphSets ?? new List<SavedGraphSet>()).OrderBy(s => s.Name))
+                GraphSavedSetsBox.Items.Add(set.Name);
+        }
+
+        private async void LoadGraphSetButton_Click(object sender, RoutedEventArgs e)
+        {
+            var name = GraphSavedSetsBox.SelectedItem as string;
+            var set = (_appSettings.SavedGraphSets ?? new List<SavedGraphSet>()).FirstOrDefault(s => s.Name == name);
+            if (set == null) { GraphSummary.Text = "Выберите сохранённый набор."; return; }
+            _graphCompareKeys.Clear(); GraphCompareList.Items.Clear();
+            foreach (var key in set.WidgetKeys ?? new List<string>())
+                if (_widgetIndex.ContainsKey(key)) { _graphCompareKeys.Add(key); GraphCompareList.Items.Add(key); }
+            GraphSetNameBox.Text = set.Name;
+            GraphSummary.Text = "Загружен набор: " + set.Name;
+        }
+
+        private async void DeleteGraphSetButton_Click(object sender, RoutedEventArgs e)
+        {
+            var name = GraphSavedSetsBox.SelectedItem as string;
+            if (string.IsNullOrWhiteSpace(name)) { GraphSummary.Text = "Выберите набор для удаления."; return; }
+            var set = (_appSettings.SavedGraphSets ?? new List<SavedGraphSet>()).FirstOrDefault(s => s.Name == name);
+            if (set != null) _appSettings.SavedGraphSets.Remove(set);
+            await _settingsStore.SaveAsync(_appSettings);
+            RefreshGraphSetPicker();
+            GraphSummary.Text = "Удалён набор: " + name;
+        }
+
+        private void GraphPresetDayButton_Click(object sender, RoutedEventArgs e) { GraphTo.Date = DateTime.Now.Date; GraphFrom.Date = DateTime.Now.Date.AddDays(-1); }
+        private void GraphPresetWeekButton_Click(object sender, RoutedEventArgs e) { GraphTo.Date = DateTime.Now.Date; GraphFrom.Date = DateTime.Now.Date.AddDays(-7); }
+        private void GraphPresetMonthButton_Click(object sender, RoutedEventArgs e) { GraphTo.Date = DateTime.Now.Date; GraphFrom.Date = DateTime.Now.Date.AddDays(-30); }
 
         private void AddCompareWidgetButton_Click(object sender, RoutedEventArgs e)
         {
