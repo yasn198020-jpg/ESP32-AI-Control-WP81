@@ -360,7 +360,11 @@ namespace ESP32AIControl.WP81.Core.Protocol
             }
 
             message.Retained = e.Retained;
-            _devices.Apply(message);
+            // Unknown topics and STATUS/EVENT messages without a registered
+            // CONFIG widget are discarded completely: no history, scenarios,
+            // diagnostics log, or orphan widget record.
+            if (!_devices.Apply(message))
+                return;
 
             var handler = MessageReceived;
             if (handler != null)
