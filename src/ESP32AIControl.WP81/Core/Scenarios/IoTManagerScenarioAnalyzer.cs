@@ -153,7 +153,7 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                         Variable = "Синтаксис сценария",
                         Usage = "проверка языка сценариев",
                         Status = "Ошибка разбора",
-                        Description = string.Join("; ", LanguageModel.ParserErrors.ToArray())
+                        Description = string.Join("; ", LanguageModel.ParserErrors)
                     });
                 }
             }
