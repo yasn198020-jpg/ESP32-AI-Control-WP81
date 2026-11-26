@@ -109,7 +109,52 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             if (plan.Actions.Count == 0)
                 throw new ArgumentException("Пустой сценарий.", "command");
 
+            ValidatePlanConflicts(plan);
             return plan;
+        }
+
+        /// <summary>
+        /// Refuse plans that would write different values to the same widget.
+        /// This check runs after scenario prerequisites have been expanded, so it
+        /// also catches conflicts between a requested command and an inferred
+        /// manual-mode/interlock dependency.
+        /// </summary>
+        private static void ValidatePlanConflicts(ScenarioPlan plan)
+        {
+            var valuesByTarget = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var uniqueActions = new List<ScenarioAction>();
+
+            for (var i = 0; i < plan.Actions.Count; i++)
+            {
+                var action = plan.Actions[i];
+                if (action == null || string.IsNullOrWhiteSpace(action.DeviceId) ||
+                    string.IsNullOrWhiteSpace(action.WidgetId))
+                    throw new InvalidOperationException("План содержит действие без однозначного устройства или виджета.");
+
+                var key = action.DeviceId.Trim() + "/" + action.WidgetId.Trim();
+                string previous;
+                if (valuesByTarget.TryGetValue(key, out previous))
+                {
+                    if (!string.Equals((previous ?? string.Empty).Trim(),
+                        (action.Value ?? string.Empty).Trim(), StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new InvalidOperationException(
+                            "Конфликт команд для " + key + ": одновременно требуются значения '" +
+                            previous + "' и '" + action.Value + "'. Команда не отправлена.");
+                    }
+
+                    // Repeated identical writes are unnecessary. Preserve the
+                    // first action and its ordering/reason.
+                    continue;
+                }
+
+                valuesByTarget[key] = action.Value ?? string.Empty;
+                uniqueActions.Add(action);
+            }
+
+            plan.Actions.Clear();
+            for (var i = 0; i < uniqueActions.Count; i++)
+                plan.Actions.Add(uniqueActions[i]);
         }
 
         private bool TryAddReverseScenarioPlan(ScenarioPlan plan, ScenarioAction target)
