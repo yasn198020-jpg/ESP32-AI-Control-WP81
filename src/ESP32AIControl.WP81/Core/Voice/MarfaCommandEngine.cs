@@ -569,15 +569,74 @@ namespace ESP32AIControl.WP81.Core.Voice
 
         private static long ParseDelay(string text)
         {
-            var m = Regex.Match(text, @"(?:через|спустя)\s+(\d+)\s*(секунда|секунд|сек|минута|минут|мин|час|день|дней)");
-            if (!m.Success) return 0;
-            long amount;
-            if (!long.TryParse(m.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out amount)) return 0;
-            var unit = m.Groups[2].Value;
-            var multiplier = unit.StartsWith("сек") ? 1000L : unit.StartsWith("мин") ? 60000L :
-                unit.StartsWith("час") ? 3600000L : 86400000L;
-            if (amount > long.MaxValue / multiplier) return 0;
-            return amount * multiplier;
+            var numeric = Regex.Match(text, @"(?:через|спустя)\s+(\d+(?:[.,]\d+)?)\s*(секунда|секунд|сек|минута|минут|мин|час|день|дней)");
+            if (numeric.Success)
+            {
+                double amount;
+                if (double.TryParse(numeric.Groups[1].Value.Replace(',', '.'), NumberStyles.Float,
+                    CultureInfo.InvariantCulture, out amount))
+                {
+                    var unit = numeric.Groups[2].Value;
+                    var multiplier = unit.StartsWith("сек") ? 1000.0 : unit.StartsWith("мин") ? 60000.0 :
+                        unit.StartsWith("час") ? 3600000.0 : 86400000.0;
+                    var milliseconds = amount * multiplier;
+                    if (milliseconds > 0 && milliseconds < long.MaxValue)
+                        return (long)Math.Round(milliseconds);
+                }
+            }
+
+            var words = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+            {
+                { "один", 1 }, { "одну", 1 }, { "одна", 1 }, { "два", 2 }, { "две", 2 },
+                { "три", 3 }, { "четыре", 4 }, { "пять", 5 }, { "десять", 10 },
+                { "двадцать", 20 }, { "тридцать", 30 }, { "сорок", 40 },
+                { "пятьдесят", 50 }, { "шестьдесят", 60 }
+            };
+            var word = Regex.Match(text, @"(?:через|спустя)\s+(один|одну|одна|два|две|три|четыре|пять|десять|двадцать|тридцать|сорок|пятьдесят|шестьдесят)\s*(секунд(?:у|ы)?|сек|минут(?:у|ы)?|мин|час(?:а|ов)?|дн(?:я|ей)?)");
+            if (word.Success)
+            {
+                var amount = words[word.Groups[1].Value];
+                var unit = word.Groups[2].Value;
+                var multiplier = unit.StartsWith("сек") ? 1000L : unit.StartsWith("мин") ? 60000L :
+                    unit.StartsWith("час") ? 3600000L : 86400000L;
+                return (long)amount * multiplier;
+            }
+
+            var clock = Regex.Match(text, @"\b(?:в|к)\s+(\d{1,2})(?::(\d{2}))?(?:\s*(?:час(?:а|ов)?|ч))?\b");
+            int hour, minute;
+            if (clock.Success &&
+                int.TryParse(clock.Groups[1].Value, out hour) &&
+                int.TryParse(string.IsNullOrWhiteSpace(clock.Groups[2].Value) ? "0" : clock.Groups[2].Value, out minute) &&
+                hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59)
+            {
+                var now = DateTimeOffset.Now;
+                var due = new DateTimeOffset(now.Year, now.Month, now.Day, hour, minute, 0, now.Offset);
+                if (due <= now) due = due.AddDays(1);
+                return (long)(due - now).TotalMilliseconds;
+            }
+
+            var wordClock = Regex.Match(text, @"\b(?:в|к)\s+(один|два|три|четыре|пять|шесть|семь|восемь|девять|десять|одиннадцать|двенадцать|тринадцать|четырнадцать|пятнадцать|шестнадцать|семнадцать|восемнадцать|девятнадцать|двадцать|двадцать один|двадцать два|двадцать три)\s*(?:час(?:а|ов)?|ч)\b");
+            if (wordClock.Success)
+            {
+                var hourWords = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+                {
+                    { "один", 1 }, { "два", 2 }, { "три", 3 }, { "четыре", 4 }, { "пять", 5 },
+                    { "шесть", 6 }, { "семь", 7 }, { "восемь", 8 }, { "девять", 9 }, { "десять", 10 },
+                    { "одиннадцать", 11 }, { "двенадцать", 12 }, { "тринадцать", 13 }, { "четырнадцать", 14 },
+                    { "пятнадцать", 15 }, { "шестнадцать", 16 }, { "семнадцать", 17 }, { "восемнадцать", 18 },
+                    { "девятнадцать", 19 }, { "двадцать", 20 }, { "двадцать один", 21 },
+                    { "двадцать два", 22 }, { "двадцать три", 23 }
+                };
+                var key = Regex.Replace(wordClock.Groups[1].Value, @"\s+", " ").Trim();
+                if (hourWords.ContainsKey(key))
+                {
+                    var now = DateTimeOffset.Now;
+                    var due = new DateTimeOffset(now.Year, now.Month, now.Day, hourWords[key], 0, 0, now.Offset);
+                    if (due <= now) due = due.AddDays(1);
+                    return (long)(due - now).TotalMilliseconds;
+                }
+            }
+            return 0;
         }
 
         private static List<string> SplitCommands(string text, IList<WidgetState> widgets)
