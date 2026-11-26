@@ -130,7 +130,9 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             }, current.UpdatedAt);
         }
 
-        private async Task ExecuteActionAsync(ScenarioAction action)
+        private async Task ExecuteActionAsync(
+            ScenarioAction action,
+            DateTimeOffset baselineUpdatedAt)
         {
             var before = _devices.Get(action.DeviceId, action.WidgetId);
             if (before == null)
@@ -138,7 +140,8 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                     "Виджет " + action.DeviceId + "/" + action.WidgetId +
                     " исчез до отправки команды.");
 
-            var baselineUpdatedAt = before.UpdatedAt;
+            if (before.UpdatedAt > baselineUpdatedAt)
+                baselineUpdatedAt = before.UpdatedAt;
 
             // Esp32MqttService selects MQTT or its local WebSocket fallback.
             // Do not reject a command solely because the broker is disconnected.
