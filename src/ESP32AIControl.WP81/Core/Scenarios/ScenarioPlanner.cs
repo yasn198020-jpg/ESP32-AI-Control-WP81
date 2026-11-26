@@ -165,7 +165,9 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                     var targetKey = targetMatches[0].DeviceId + "/" + targetMatches[0].Id;
                     if (!byTarget.ContainsKey(targetKey)) continue;
 
-                    foreach (var prerequisiteId in rule.Condition.Identifiers)
+                    var requiredPrerequisites = new List<string>();
+                    CollectRequiredConditionIdentifiers(rule.Condition.Expression, requiredPrerequisites);
+                    foreach (var prerequisiteId in requiredPrerequisites.Distinct(StringComparer.OrdinalIgnoreCase))
                     {
                         var prerequisiteMatches = _devices.GetWidgetsById(prerequisiteId);
                         if (prerequisiteMatches.Count != 1) continue;
@@ -905,45 +907,47 @@ namespace ESP32AIControl.WP81.Core.Scenarios
 
             var model = _scenarioAnalyzer.LanguageModel;
             var variables = BuildScenarioVariableContext(model);
+            var candidates = new List<Tuple<int, IList<ScenarioAction>>>();
 
-            var candidates = new List<IList<ScenarioAction>>();
             foreach (var rule in model.Rules)
             {
-                var matchingAction = rule.Actions.FirstOrDefault(a =>
-                    string.Equals(a.TargetId, target.WidgetId, StringComparison.OrdinalIgnoreCase));
-                if (matchingAction == null)
-                    continue;
+                var matchingActions = rule.Actions.Where(a =>
+                    string.Equals(a.TargetId, target.WidgetId, StringComparison.OrdinalIgnoreCase)).ToList();
+                if (matchingActions.Count == 0) continue;
 
-                var context = new IoTScenarioEvaluationContext(variables);
-                var actionValue = IoTScenarioEvaluator.Evaluate(matchingAction.Expression, context);
-                if (!ScenarioValueMatches(actionValue, target.Value))
-                    continue;
-
-                if (IoTScenarioEvaluator.IsTruthy(IoTScenarioEvaluator.Evaluate(rule.Condition.Expression, context)))
+                var initialContext = new IoTScenarioEvaluationContext(variables);
+                bool targetValueMatches = true;
+                foreach (var matchingAction in matchingActions)
                 {
-                    candidates.Add(new List<ScenarioAction>());
-                    continue;
+                    if (!ScenarioValueMatches(
+                        IoTScenarioEvaluator.Evaluate(matchingAction.Expression, initialContext), target.Value))
+                    {
+                        targetValueMatches = false;
+                        break;
+                    }
                 }
+                if (!targetValueMatches) continue;
 
                 var controllable = new List<WidgetState>();
                 foreach (var id in rule.Condition.Identifiers)
                 {
                     var matches = _devices.GetWidgetsById(id);
-                    if (matches.Count != 1 || !IsUserControl(matches[0]))
-                        continue;
-                    if (!variables.ContainsKey(id))
+                    if (matches.Count != 1 || !IsUserControl(matches[0]) ||
+                        !variables.ContainsKey(id))
                         continue;
                     controllable.Add(matches[0]);
                 }
 
-                // Bound the search: scenario expressions with many controls are
-                // not guessed or exhaustively enumerated on the Lumia.
-                if (controllable.Count == 0 || controllable.Count > 8)
+                // A rule that is already active needs no prerequisite search.
+                // Otherwise enumerate only a small, bounded set of user controls.
+                var alreadyActive = IoTScenarioEvaluator.IsTruthy(
+                    IoTScenarioEvaluator.Evaluate(rule.Condition.Expression, initialContext));
+                if (!alreadyActive && (controllable.Count == 0 || controllable.Count > 8))
                     continue;
 
-                var bestCount = int.MaxValue;
+                var combinations = alreadyActive ? 1 : (1 << controllable.Count);
+                var bestDependencyCount = int.MaxValue;
                 var bestPlans = new List<IList<ScenarioAction>>();
-                var combinations = 1 << controllable.Count;
                 for (var mask = 0; mask < combinations; mask++)
                 {
                     var simulated = new Dictionary<string, string>(variables, StringComparer.OrdinalIgnoreCase);
@@ -969,43 +973,86 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                     }
 
                     var simulatedContext = new IoTScenarioEvaluationContext(simulated);
-                    if (!IoTScenarioEvaluator.IsTruthy(IoTScenarioEvaluator.Evaluate(rule.Condition.Expression, simulatedContext)))
+                    if (!IoTScenarioEvaluator.IsTruthy(
+                        IoTScenarioEvaluator.Evaluate(rule.Condition.Expression, simulatedContext)))
                         continue;
 
-                    if (proposed.Count < bestCount)
+                    var completePlan = new List<ScenarioAction>(proposed);
+                    bool actionsResolved = true;
+                    foreach (var ruleAction in rule.Actions)
                     {
-                        bestCount = proposed.Count;
+                        var matches = _devices.GetWidgetsById(ruleAction.TargetId);
+                        if (matches.Count == 0) continue; // Internal IoTManager variable.
+                        if (matches.Count != 1)
+                        {
+                            actionsResolved = false;
+                            break;
+                        }
+
+                        var value = IoTScenarioEvaluator.Evaluate(ruleAction.Expression, simulatedContext);
+                        string formatted;
+                        if (!TryFormatScenarioValue(value, out formatted))
+                        {
+                            actionsResolved = false;
+                            break;
+                        }
+
+                        var widget = matches[0];
+                        if (string.Equals(widget.Id, target.WidgetId, StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (!string.Equals(widget.DeviceId, target.DeviceId, StringComparison.OrdinalIgnoreCase) ||
+                                !ScenarioValuesEquivalent(formatted, target.Value))
+                            {
+                                actionsResolved = false;
+                                break;
+                            }
+                            continue;
+                        }
+
+                        completePlan.Add(new ScenarioAction
+                        {
+                            Command = widget.DeviceId + "/" + widget.Id + "=" + formatted,
+                            DeviceId = widget.DeviceId,
+                            WidgetId = widget.Id,
+                            Value = formatted,
+                            Reason = "Совместное действие активированной ветки сценария",
+                            IsDependency = true
+                        });
+                    }
+                    if (!actionsResolved) continue;
+
+                    completePlan.Add(target);
+                    if (proposed.Count < bestDependencyCount)
+                    {
+                        bestDependencyCount = proposed.Count;
                         bestPlans.Clear();
                     }
-                    if (proposed.Count == bestCount)
-                        bestPlans.Add(proposed);
+                    if (proposed.Count == bestDependencyCount)
+                        bestPlans.Add(completePlan);
                 }
 
-                if (bestPlans.Count == 1)
-                    candidates.Add(bestPlans[0]);
-                else if (bestPlans.Count > 1)
-                    continue;
+                foreach (var candidate in bestPlans)
+                    candidates.Add(Tuple.Create(bestDependencyCount, candidate));
             }
 
-            if (candidates.Count == 0)
-                return false;
+            if (candidates.Count == 0) return false;
 
-            var minimum = candidates.Min(x => x.Count);
-            var best = candidates.Where(x => x.Count == minimum)
-                .GroupBy(x => string.Join("|", x.OrderBy(a => a.DeviceId).ThenBy(a => a.WidgetId)
-                    .Select(a => a.DeviceId + "/" + a.WidgetId + "=" + a.Value).ToArray()))
-                .Select(x => x.First()).ToList();
+            var minimum = candidates.Min(x => x.Item1);
+            var best = candidates.Where(x => x.Item1 == minimum)
+                .GroupBy(x => string.Join("|", x.Item2
+                    .OrderBy(a => a.DeviceId, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(a => a.WidgetId, StringComparer.OrdinalIgnoreCase)
+                    .Select(a => a.DeviceId + "/" + a.WidgetId + "=" + a.Value).ToArray()),
+                    StringComparer.OrdinalIgnoreCase)
+                .Select(x => x.First().Item2).ToList();
 
-            if (best.Count != 1)
-                return false;
+            if (best.Count != 1) return false;
 
-            foreach (var dependency in best[0])
+            foreach (var action in best[0])
             {
-                if (!ContainsAction(plan, dependency.DeviceId, dependency.WidgetId, dependency.Value))
-                    plan.Actions.Add(dependency);
+                if (!ContainsAction(plan, action.DeviceId, action.WidgetId, action.Value))
+                    plan.Actions.Add(action);
             }
-            if (!ContainsAction(plan, target.DeviceId, target.WidgetId, target.Value))
-                plan.Actions.Add(target);
             return true;
         }
 
