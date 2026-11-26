@@ -3514,6 +3514,31 @@ namespace ESP32AIControl.WP81
             catch (Exception ex) { WidgetIntervalStatus.Text = "Ошибка сохранения: " + ex.Message; Log("HISTORY INTERVAL ERROR: " + ex.Message); }
         }
 
+        private Tuple<DateTimeOffset, DateTimeOffset> GetSelectedGraphRange()
+        {
+            var now = DateTimeOffset.Now;
+            var selected = GraphPeriodBox == null ? null : GraphPeriodBox.SelectedItem as ComboBoxItem;
+            var tag = selected == null ? "today" : (selected.Tag as string ?? "today");
+            DateTimeOffset from;
+            switch (tag)
+            {
+                case "1h": from = now.AddHours(-1); break;
+                case "6h": from = now.AddHours(-6); break;
+                case "12h": from = now.AddHours(-12); break;
+                case "3d": from = now.AddDays(-3); break;
+                case "7d": from = now.AddDays(-7); break;
+                case "30d": from = now.AddDays(-30); break;
+                case "all": from = DateTimeOffset.MinValue; break;
+                case "custom":
+                    from = new DateTimeOffset(GraphFrom.Date.Date);
+                    now = new DateTimeOffset(GraphTo.Date.Date.AddDays(1).AddTicks(-1));
+                    if (now < from) now = from.AddDays(1).AddTicks(-1);
+                    break;
+                default: from = now.Date; break;
+            }
+            return Tuple.Create(from, now);
+        }
+
         private async void BuildGraphButton_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -3526,8 +3551,9 @@ namespace ESP32AIControl.WP81
                 }
 
                 var state = _widgetIndex[key];
-                var from = new DateTimeOffset(GraphFrom.Date.Date);
-                var to = new DateTimeOffset(GraphTo.Date.Date.AddDays(1).AddTicks(-1));
+                var range = GetSelectedGraphRange();
+                var from = range.Item1;
+                var to = range.Item2;
 
                 var points = await _measurementStore.ReadAsync(state.DeviceId, state.Id, from, to);
                 _lastGraphPoints.Clear();
@@ -3678,8 +3704,9 @@ namespace ESP32AIControl.WP81
                     GraphSummary.Text = "Добавьте датчики в список сравнения.";
                     return;
                 }
-                var from = new DateTimeOffset(GraphFrom.Date.Date);
-                var to = new DateTimeOffset(GraphTo.Date.Date.AddDays(1).AddTicks(-1));
+                var range = GetSelectedGraphRange();
+                var from = range.Item1;
+                var to = range.Item2;
                 var traces = new List<Tuple<string, IList<MeasurementPoint>>>();
                 foreach (var key in _graphCompareKeys.ToList())
                 {
@@ -4029,8 +4056,9 @@ namespace ESP32AIControl.WP81
                     return;
                 }
 
-                var from = new DateTimeOffset(GraphFrom.Date.Date);
-                var to = new DateTimeOffset(GraphTo.Date.Date.AddDays(1).AddTicks(-1));
+                var range = GetSelectedGraphRange();
+                var from = range.Item1;
+                var to = range.Item2;
                 var traces = new List<Tuple<string, IList<MeasurementPoint>>>();
                 foreach (var key in _graphCompareKeys.ToList())
                 {
@@ -4069,8 +4097,9 @@ namespace ESP32AIControl.WP81
                     return;
                 }
 
-                var from = new DateTimeOffset(GraphFrom.Date.Date);
-                var to = new DateTimeOffset(GraphTo.Date.Date.AddDays(1).AddTicks(-1));
+                var range = GetSelectedGraphRange();
+                var from = range.Item1;
+                var to = range.Item2;
                 var rows = new SortedDictionary<DateTimeOffset, Dictionary<string, string>>();
                 var exportKeys = new List<string>();
 
@@ -4158,8 +4187,9 @@ namespace ESP32AIControl.WP81
                 var key = GraphWidgetBox.SelectedItem as string;
                 if (string.IsNullOrEmpty(key)) return;
 
-                var from = new DateTimeOffset(GraphFrom.Date.Date);
-                var to = new DateTimeOffset(GraphTo.Date.Date.AddDays(1).AddTicks(-1));
+                var range = GetSelectedGraphRange();
+                var from = range.Item1;
+                var to = range.Item2;
                 var points = await _measurementStore.ReadAsync(
                     _widgetIndex[key].DeviceId, _widgetIndex[key].Id, from, to);
 
