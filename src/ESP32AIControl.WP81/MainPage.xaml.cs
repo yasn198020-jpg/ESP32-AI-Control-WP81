@@ -3589,6 +3589,9 @@ namespace ESP32AIControl.WP81
                 var points = await _measurementStore.ReadAsync(state.DeviceId, state.Id, from, to);
                 _lastGraphPoints.Clear();
                 foreach (var p in points) _lastGraphPoints.Add(p);
+                _graphSelectedIndex = -1;
+                _graphZoom = 1.0;
+                if (GraphHorizontalScroll != null) GraphHorizontalScroll.ScrollToHorizontalOffset(0);
 
                 DrawGraph(_lastGraphPoints);
                 GraphSummary.Text = points.Count < 2
@@ -4023,16 +4026,33 @@ namespace ESP32AIControl.WP81
                 var x1 = padding + (previous.Item1 / timeSpan) * (width - padding * 2);
                 var y1 = padding + (1 - (previous.Item2 - minValue) / (maxValue - minValue)) * (height - padding * 2);
                 var y2 = padding + (1 - (current.Item2 - minValue) / (maxValue - minValue)) * (height - padding * 2);
-                GraphCanvas.Children.Add(new Line
+                var selectedKey = GraphWidgetBox.SelectedItem as string;
+                WidgetState selectedWidget;
+                var stepLine = !string.IsNullOrEmpty(selectedKey) &&
+                    _widgetIndex.TryGetValue(selectedKey, out selectedWidget) &&
+                    (NormalizeType(selectedWidget.WidgetType) == "status" ||
+                     NormalizeType(selectedWidget.DefinitionName) == "status");
+                if (stepLine)
                 {
-                    X1 = x1, Y1 = y1, X2 = x, Y2 = y1,
-                    Stroke = new SolidColorBrush(Windows.UI.Colors.DodgerBlue), StrokeThickness = 2
-                });
-                GraphCanvas.Children.Add(new Line
+                    GraphCanvas.Children.Add(new Line
+                    {
+                        X1 = x1, Y1 = y1, X2 = x, Y2 = y1,
+                        Stroke = new SolidColorBrush(Windows.UI.Colors.DodgerBlue), StrokeThickness = 2
+                    });
+                    GraphCanvas.Children.Add(new Line
+                    {
+                        X1 = x, Y1 = y1, X2 = x, Y2 = y2,
+                        Stroke = new SolidColorBrush(Windows.UI.Colors.DodgerBlue), StrokeThickness = 2
+                    });
+                }
+                else
                 {
-                    X1 = x, Y1 = y1, X2 = x, Y2 = y2,
-                    Stroke = new SolidColorBrush(Windows.UI.Colors.DodgerBlue), StrokeThickness = 2
-                });
+                    GraphCanvas.Children.Add(new Line
+                    {
+                        X1 = x1, Y1 = y1, X2 = x, Y2 = y2,
+                        Stroke = new SolidColorBrush(Windows.UI.Colors.DodgerBlue), StrokeThickness = 2
+                    });
+                }
             }
 
             var high = new TextBlock { Text = maxValue.ToString("0.##", CultureInfo.InvariantCulture) };
