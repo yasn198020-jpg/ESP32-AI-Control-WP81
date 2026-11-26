@@ -319,10 +319,22 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                 }
             }
 
-            var unique = candidates
+            var groupedCandidates = candidates
                 .GroupBy(x => x.Item1.DeviceId + "/" + x.Item1.WidgetId + "=" + x.Item1.Value,
-                    StringComparer.OrdinalIgnoreCase)
-                .Select(g => g.First()).ToList();
+                    StringComparer.OrdinalIgnoreCase).ToList();
+
+            // The same logical widget inferred from different, non-equivalent
+            // scenario branches is not automatically a unique mapping. Keep
+            // duplicates only when their effective conditions are identical.
+            if (groupedCandidates.Any(group => group
+                .Select(x => x.Item2.Condition == null ? string.Empty : x.Item2.Condition.Rendered)
+                .Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1))
+            {
+                ambiguous = true;
+                return false;
+            }
+
+            var unique = groupedCandidates.Select(g => g.First()).ToList();
             if (unique.Count > 1)
             {
                 ambiguous = true;
