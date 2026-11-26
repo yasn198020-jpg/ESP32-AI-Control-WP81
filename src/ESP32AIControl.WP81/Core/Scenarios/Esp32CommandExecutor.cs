@@ -52,16 +52,56 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                 throw new ArgumentException("Пустая команда.", "command");
 
             var plan = _planner.BuildPlan(command);
+            ValidateExecutionPlan(plan);
 
             for (var i = 0; i < plan.Actions.Count; i++)
             {
                 var action = plan.Actions[i];
                 var current = _devices.Get(action.DeviceId, action.WidgetId);
 
+                // Dependencies execute sequentially. A failed or unconfirmed
+                // step throws and prevents every later action from being sent.
                 if (current != null && AreValuesEqual(current.Value, action.Value))
                     continue;
 
-                await ExecuteActionAsync(action);
+                await ExecuteActionAsync(action, current == null
+                    ? DateTimeOffset.MinValue
+                    : current.UpdatedAt);
+            }
+        }
+
+        private void ValidateExecutionPlan(ScenarioPlan plan)
+        {
+            if (plan == null || plan.Actions == null || plan.Actions.Count == 0)
+                throw new InvalidOperationException("План команд пуст или не сформирован.");
+
+            if (plan.Actions.Count > 64)
+                throw new InvalidOperationException(
+                    "План содержит более 64 действий. Команды не отправлены.");
+
+            var targets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (var i = 0; i < plan.Actions.Count; i++)
+            {
+                var action = plan.Actions[i];
+                if (action == null || string.IsNullOrWhiteSpace(action.DeviceId) ||
+                    string.IsNullOrWhiteSpace(action.WidgetId) ||
+                    string.IsNullOrWhiteSpace(action.Value))
+                    throw new InvalidOperationException(
+                        "План содержит неполное действие. Команды не отправлены.");
+
+                var key = action.DeviceId.Trim() + "/" + action.WidgetId.Trim();
+                if (!targets.Add(key))
+                    throw new InvalidOperationException(
+                        "План содержит повторное действие для " + key + ". Команды не отправлены.");
+
+                var matches = _devices.GetWidgetsById(action.WidgetId);
+                if (matches.Count != 1 ||
+                    !string.Equals(matches[0].DeviceId, action.DeviceId,
+                        StringComparison.OrdinalIgnoreCase) ||
+                    _devices.Get(action.DeviceId, action.WidgetId) == null)
+                    throw new InvalidOperationException(
+                        "Нельзя однозначно найти устройство и виджет " + key +
+                        ". Команды не отправлены.");
             }
         }
 
@@ -83,6 +123,14 @@ namespace ESP32AIControl.WP81.Core.Scenarios
 
         private async Task ExecuteActionAsync(ScenarioAction action)
         {
+            var before = _devices.Get(action.DeviceId, action.WidgetId);
+            if (before == null)
+                throw new InvalidOperationException(
+                    "Виджет " + action.DeviceId + "/" + action.WidgetId +
+                    " исчез до отправки команды.");
+
+            var baselineUpdatedAt = before.UpdatedAt;
+
             // Esp32MqttService selects MQTT or its local WebSocket fallback.
             // Do not reject a command solely because the broker is disconnected.
             await _mqtt.PublishControlAsync(
@@ -98,6 +146,7 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                 action.DeviceId,
                 action.WidgetId,
                 action.Value,
+                baselineUpdatedAt,
                 confirmationTimeout);
 
             if (!confirmed)
@@ -116,6 +165,7 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             string deviceId,
             string widgetId,
             string expectedValue,
+            DateTimeOffset baselineUpdatedAt,
             int timeoutMilliseconds)
         {
             var elapsed = 0;
@@ -124,7 +174,11 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             {
                 var state = _devices.Get(deviceId, widgetId);
 
-                if (state != null && AreValuesEqual(state.Value, expectedValue))
+                // The cached value before Publish is not an acknowledgement.
+                // Require a newer device status/event carrying the requested value.
+                if (state != null &&
+                    state.UpdatedAt > baselineUpdatedAt &&
+                    AreValuesEqual(state.Value, expectedValue))
                     return true;
 
                 await Task.Delay(100);
