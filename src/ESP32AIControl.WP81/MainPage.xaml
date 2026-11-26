@@ -334,30 +334,61 @@
                 <PivotItem Header="Хранение">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel Margin="10,4,10,12">
-                            <TextBlock Text="Хранение измерений" FontSize="17" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,14,0,6"/>
-                        <TextBox x:Name="MeasurementIntervalBox" Header="Интервал записи, секунд" Text="60"/>
-                        <TextBox x:Name="RetentionDaysBox" Header="Период хранения, дней" Text="30"/>
-                        <ComboBox x:Name="AutoExportBox" Header="Автоэкспорт Word">
-                            <ComboBoxItem Content="Никогда" Tag="Never"/>
-                            <ComboBoxItem Content="1 день" Tag="Day"/>
-                            <ComboBoxItem Content="Неделя" Tag="Week"/>
-                            <ComboBoxItem Content="Месяц" Tag="Month"/>
-                        </ComboBox>
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1"
+                                    CornerRadius="14" Padding="12" Margin="0,8,0,8">
+                                <StackPanel>
+                                    <TextBlock Text="ХРАНЕНИЕ ИЗМЕРЕНИЙ" FontSize="14" FontWeight="SemiBold"
+                                               Foreground="#FFD0BCFF" Margin="0,0,0,4"/>
+                                    <TextBlock Text="Настройте частоту записи показаний и срок их хранения." FontSize="12"
+                                               Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                                    <TextBox x:Name="MeasurementIntervalBox" Header="Интервал записи, секунд" Text="60"/>
+                                    <TextBox x:Name="RetentionDaysBox" Header="Период хранения, дней" Text="30"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1"
+                                    CornerRadius="14" Padding="12" Margin="0,4,0,8">
+                                <StackPanel>
+                                    <TextBlock Text="АВТОЭКСПОРТ" FontSize="14" FontWeight="SemiBold"
+                                               Foreground="#FFD0BCFF" Margin="0,0,0,4"/>
+                                    <TextBlock Text="Периодичность автоматического формирования отчёта Word." FontSize="12"
+                                               Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                                    <ComboBox x:Name="AutoExportBox" Header="Автоэкспорт Word">
+                                        <ComboBoxItem Content="Никогда" Tag="Never"/>
+                                        <ComboBoxItem Content="1 день" Tag="Day"/>
+                                        <ComboBoxItem Content="Неделя" Tag="Week"/>
+                                        <ComboBoxItem Content="Месяц" Tag="Month"/>
+                                    </ComboBox>
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
                     </ScrollViewer>
                 </PivotItem>
                 <PivotItem Header="Сохранённые">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel Margin="10,4,10,12">
-                            <TextBlock Text="Профили подключения" FontSize="17" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,14,0,6"/>
-                            <TextBlock Text="Храните подключения к разным серверам или теплицам. Пароль сохраняется вместе с профилем." TextWrapping="Wrap" Foreground="#FFACADB8" Margin="0,0,0,8"/>
-                            <TextBox x:Name="SavedProfileNameBox" Header="Название профиля" PlaceholderText="Например, Основная теплица"/>
-                            <ListView x:Name="SavedProfilesList" Height="190" SelectionMode="Single" SelectionChanged="SavedProfilesList_SelectionChanged"/>
-                            <Button Content="Сохранить текущие параметры" Click="SaveMqttProfileButton_Click" Margin="0,8,0,4"/>
-                            <Button Content="Загрузить выбранный профиль" Click="LoadMqttProfileButton_Click" Margin="0,4"/>
-                            <Button Content="Сделать профилем по умолчанию" Click="SetDefaultMqttProfileButton_Click" Margin="0,4"/>
-                            <Button Content="Удалить выбранный профиль" Click="DeleteMqttProfileButton_Click" Margin="0,4"/>
-                            <TextBlock x:Name="SavedProfilesStatus" Text="" TextWrapping="Wrap" Margin="0,8,0,4"/>
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1"
+                                    CornerRadius="14" Padding="12" Margin="0,8,0,8">
+                                <StackPanel>
+                                    <TextBlock Text="ПРОФИЛИ ПОДКЛЮЧЕНИЯ" FontSize="14" FontWeight="SemiBold"
+                                               Foreground="#FFD0BCFF" Margin="0,0,0,4"/>
+                                    <TextBlock Text="Храните подключения к разным серверам или теплицам. Пароль сохраняется вместе с профилем."
+                                               TextWrapping="Wrap" Foreground="#FFACADB8" FontSize="12"/>
+                                    <TextBox x:Name="SavedProfileNameBox" Header="Название профиля" PlaceholderText="Например, Основная теплица"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1"
+                                    CornerRadius="14" Padding="12" Margin="0,4,0,8">
+                                <StackPanel>
+                                    <TextBlock Text="СОХРАНЁННЫЕ ПРОФИЛИ" FontSize="14" FontWeight="SemiBold"
+                                               Foreground="#FFD0BCFF" Margin="0,0,0,6"/>
+                                    <ListView x:Name="SavedProfilesList" Height="190" SelectionMode="Single" SelectionChanged="SavedProfilesList_SelectionChanged"/>
+                                    <Button Content="Сохранить текущие параметры" Click="SaveMqttProfileButton_Click" Margin="0,8,0,4"/>
+                                    <Button Content="Загрузить выбранный профиль" Click="LoadMqttProfileButton_Click" Margin="0,4"/>
+                                    <Button Content="Сделать профилем по умолчанию" Click="SetDefaultMqttProfileButton_Click" Margin="0,4"/>
+                                    <Button Content="Удалить выбранный профиль" Click="DeleteMqttProfileButton_Click" Margin="0,4"/>
+                                    <TextBlock x:Name="SavedProfilesStatus" Text="" TextWrapping="Wrap" Margin="0,8,0,4"/>
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
                     </ScrollViewer>
                 </PivotItem>
