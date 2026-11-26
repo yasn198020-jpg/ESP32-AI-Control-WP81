@@ -15,6 +15,10 @@ namespace ESP32AIControl.WP81.Core.Voice
             if (string.IsNullOrWhiteSpace(text) || engine == null) return null;
             var normalized = Regex.Replace(EmojiSemanticText.ForSpeech(text).ToLowerInvariant().Replace('ё', 'е'), @"\s+", " ").Trim();
             if (!Regex.IsMatch(normalized, @"\b(если|когда|при температуре|как только|при условии)\b")) return null;
+
+            var durationScenario = TryParseDurationRule(normalized, engine, widgets);
+            if (durationScenario != null) return durationScenario;
+
             if (!Regex.IsMatch(normalized, @"температур|темп|градус|жарк|холод")) return null;
 
             var upper = Regex.Match(normalized, @"(?:стала?\s+|поднялась?\s+|станет?\s+)?(?:выше|больше|превысит|достигнет)\s*(-?\d+(?:[.,]\d+)?)");
@@ -65,6 +69,77 @@ namespace ESP32AIControl.WP81.Core.Voice
                 Value = value
             });
             return scenario;
+        }
+
+        private static LocalScenarioDefinition TryParseDurationRule(
+            string text,
+            MarfaAnalyticalEngine engine,
+            System.Collections.Generic.IList<WidgetState> widgets)
+        {
+            if (!Regex.IsMatch(text, @"\b(автомат|управлен)")) return null;
+            if (!Regex.IsMatch(text, @"\b(включен|включена|включено|включены|работает|активен|активна)")) return null;
+
+            var duration = Regex.Match(text,
+                @"(?:больше|дольше|свыше|более)\s+(\d+(?:[.,]\d+)?)\s*(минут(?:а|ы)?|мин|час(?:а|ов)?|ч)");
+            if (!duration.Success) return null;
+
+            double amount;
+            if (!double.TryParse(duration.Groups[1].Value.Replace(',', '.'), NumberStyles.Float,
+                CultureInfo.InvariantCulture, out amount) || amount <= 0) return null;
+            var unit = duration.Groups[2].Value;
+            var durationMs = amount * (unit.StartsWith("час") || unit == "ч" ? 3600000.0 : 60000.0);
+            if (durationMs <= 0 || durationMs > long.MaxValue) return null;
+
+            var action = DetectActionValue(text);
+            if (action == null) return null;
+            var resolution = engine.ResolveControl(text, widgets, action);
+            var candidates = resolution.Candidates.Where(candidate =>
+                IsToggle(candidate.Widget) && IsAutomationWidget(candidate.Widget)).ToList();
+            var chosen = resolution.Candidate != null &&
+                IsToggle(resolution.Candidate.Widget) && IsAutomationWidget(resolution.Candidate.Widget)
+                ? resolution.Candidate : candidates.Count == 1 ? candidates[0] : null;
+            if (chosen == null) return null;
+
+            var widget = chosen.Widget;
+            var title = "Если " + (widget.Description ?? widget.Id) + " включён дольше " +
+                amount.ToString(CultureInfo.InvariantCulture) + (unit.StartsWith("час") || unit == "ч" ? " ч" : " мин") +
+                " — " + (action == "1" ? "включить" : "выключить");
+            var scenario = new LocalScenarioDefinition
+            {
+                Title = title,
+                Message = "Автомат включён дольше заданного времени",
+                Enabled = true,
+                NotificationEnabled = true
+            };
+            scenario.Conditions.Add(new LocalScenarioCondition
+            {
+                WidgetId = widget.Id,
+                Operator = "ON_FOR_GT",
+                Threshold = 0,
+                DurationMs = (long)Math.Round(durationMs),
+                Connector = "AND"
+            });
+            scenario.Actions.Add(new LocalScenarioAction
+            {
+                DeviceId = widget.DeviceId,
+                WidgetId = widget.Id,
+                Value = action
+            });
+            return scenario;
+        }
+
+        private static bool IsToggle(WidgetState widget)
+        {
+            var type = ((widget == null ? string.Empty : widget.WidgetType) ?? string.Empty).ToLowerInvariant();
+            return type.Contains("toggle") || type.Contains("switch");
+        }
+
+        private static bool IsAutomationWidget(WidgetState widget)
+        {
+            var text = ((widget == null ? string.Empty : widget.Description) ?? string.Empty) + " " +
+                ((widget == null ? string.Empty : widget.DefinitionName) ?? string.Empty);
+            return text.IndexOf("автомат", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                text.IndexOf("управлен", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private static string DetectActionValue(string text)
