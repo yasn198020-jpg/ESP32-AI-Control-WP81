@@ -66,6 +66,14 @@ namespace ESP32AIControl.WP81.Models
     }
 
     [DataContract]
+    public sealed class SavedGraphSet
+    {
+        [DataMember] public string Name { get; set; }
+        [DataMember] public List<string> WidgetKeys { get; set; }
+        public SavedGraphSet() { Name = string.Empty; WidgetKeys = new List<string>(); }
+    }
+
+    [DataContract]
     public sealed class SavedMqttProfile
     {
         [DataMember] public string Name { get; set; }
