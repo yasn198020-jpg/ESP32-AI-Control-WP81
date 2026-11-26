@@ -6610,7 +6610,8 @@ namespace ESP32AIControl.WP81
                 var pitchPercent = (int)Math.Round((pitch - 1.0f) * 100.0f);
                 var rateText = (ratePercent >= 0 ? "+" : string.Empty) + ratePercent.ToString(CultureInfo.InvariantCulture) + "%";
                 var pitchText = (pitchPercent >= 0 ? "+" : string.Empty) + pitchPercent.ToString(CultureInfo.InvariantCulture) + "%";
-                var safeText = (text ?? string.Empty).Replace("&", "&amp;").Replace("<", "&lt;")
+                var speechText = EmojiSemanticText.ForSpeech(text ?? string.Empty);
+                var safeText = speechText.Replace("&", "&amp;").Replace("<", "&lt;")
                     .Replace(">", "&gt;").Replace("\"", "&quot;").Replace("'", "&apos;");
                 var language = selectedVoice == null || string.IsNullOrWhiteSpace(selectedVoice.Language)
                     ? "ru-RU" : selectedVoice.Language.Replace("&", "&amp;").Replace("\"", "&quot;");
