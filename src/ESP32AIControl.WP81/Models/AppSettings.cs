@@ -19,6 +19,7 @@ namespace ESP32AIControl.WP81.Models
         [DataMember] public float UiFontScale { get; set; }
         [DataMember] public int MeasurementIntervalSeconds { get; set; }
         [DataMember] public Dictionary<string, int> WidgetMeasurementIntervals { get; set; }
+        [DataMember] public List<SavedGraphSet> SavedGraphSets { get; set; }
         [DataMember] public int RetentionDays { get; set; }
         [DataMember] public string AutoExportPeriod { get; set; }
         [DataMember] public string VoiceOpenCommand { get; set; }
@@ -40,6 +41,7 @@ namespace ESP32AIControl.WP81.Models
             UiFontScale = 0.85f;
             MeasurementIntervalSeconds = 60;
             WidgetMeasurementIntervals = new Dictionary<string, int>();
+            SavedGraphSets = new List<SavedGraphSet>();
             RetentionDays = 30;
             AutoExportPeriod = "Never";
             VoiceOpenCommand = string.Empty;
