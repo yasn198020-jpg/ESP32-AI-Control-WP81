@@ -4650,6 +4650,20 @@ namespace ESP32AIControl.WP81
                         return;
 
                     var marfa = _marfaEngine.Parse(text);
+                    if (marfa.Kind == MarfaCommandKind.SmartRule && marfa.Scenario != null)
+                    {
+                        var savedScenarios = _localScenarioStore.Load().ToList();
+                        savedScenarios.Add(marfa.Scenario);
+                        _localScenarioStore.Save(savedScenarios);
+                        _localScenarioEngine.ResetScenario(marfa.Scenario.Id);
+                        _localScenarioEngine.Reload();
+                        RefreshLocalScenariosList();
+                        VoiceResultText.Text = marfa.Reply;
+                        Log("MARFA SMART RULE: " + marfa.Scenario.Title);
+                        await SpeakTextAsync(marfa.Reply);
+                        return;
+                    }
+
                     if (marfa.Kind == MarfaCommandKind.Clarify ||
                         marfa.Kind == MarfaCommandKind.Stop ||
                         marfa.Kind == MarfaCommandKind.ReadValue)
