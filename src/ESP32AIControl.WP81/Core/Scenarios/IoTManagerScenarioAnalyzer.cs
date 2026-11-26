@@ -93,6 +93,10 @@ namespace ESP32AIControl.WP81.Core.Scenarios
 
         private readonly List<ScenarioRule> _rules = new List<ScenarioRule>();
 
+        // Full expression-tree representation is retained alongside the legacy
+        // actuator-path index while the dependency planner is migrated.
+        public DeviceScenarioModel LanguageModel { get; private set; }
+
         public IoTManagerScenarioAnalyzer(string script)
         {
             Load(script);
@@ -213,6 +217,8 @@ namespace ESP32AIControl.WP81.Core.Scenarios
         public void Load(string script)
         {
             _rules.Clear();
+            var parsedLanguage = IoTScenarioParser.Parse(script ?? string.Empty);
+            LanguageModel = IoTScenarioSemanticAnalyzer.Analyze(parsedLanguage);
 
             if (string.IsNullOrWhiteSpace(script))
                 return;
