@@ -76,8 +76,8 @@ namespace ESP32AIControl.WP81.Core.Voice
             MarfaAnalyticalEngine engine,
             System.Collections.Generic.IList<WidgetState> widgets)
         {
-            if (!Regex.IsMatch(text, @"\b(автомат|управлен)")) return null;
-            if (!Regex.IsMatch(text, @"\b(включен|включена|включено|включены|работает|активен|активна)")) return null;
+            if (!Regex.IsMatch(text, @"автомат|управлен")) return null;
+            if (!Regex.IsMatch(text, @"включен|включена|включено|включены|работает|активен|активна")) return null;
 
             var duration = Regex.Match(text,
                 @"(?:больше|дольше|свыше|более)\s+(\d+(?:[.,]\d+)?)\s*(минут(?:а|ы)?|мин|час(?:а|ов)?|ч)");
