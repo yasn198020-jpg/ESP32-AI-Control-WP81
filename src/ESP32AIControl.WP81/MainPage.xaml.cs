@@ -3537,6 +3537,14 @@ namespace ESP32AIControl.WP81
             catch (Exception ex) { WidgetIntervalStatus.Text = "Ошибка сохранения: " + ex.Message; Log("HISTORY INTERVAL ERROR: " + ex.Message); }
         }
 
+        private void GraphPeriodBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (GraphCustomDatePanel == null || GraphPeriodBox == null) return;
+            var item = GraphPeriodBox.SelectedItem as ComboBoxItem;
+            GraphCustomDatePanel.Visibility = item != null && string.Equals(item.Tag as string, "custom", StringComparison.Ordinal)
+                ? Visibility.Visible : Visibility.Collapsed;
+        }
+
         private Tuple<DateTimeOffset, DateTimeOffset> GetSelectedGraphRange()
         {
             var now = DateTimeOffset.Now;
