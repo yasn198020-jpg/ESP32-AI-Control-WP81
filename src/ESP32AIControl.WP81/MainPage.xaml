@@ -573,8 +573,6 @@
                                 </StackPanel>
                             </Border>
                          </StackPanel>
-                            <TextBlock x:Name="LocalScenariosStatus" Text="" TextWrapping="Wrap"
-                                       FontSize="12" Foreground="#FFACADB8" Margin="0,6,0,8"/>
                         </StackPanel>
                     </ScrollViewer>
                 </PivotItem>
