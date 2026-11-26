@@ -13,7 +13,7 @@ namespace ESP32AIControl.WP81.Core.Voice
         public static LocalScenarioDefinition TryParse(string text, MarfaAnalyticalEngine engine, System.Collections.Generic.IList<WidgetState> widgets)
         {
             if (string.IsNullOrWhiteSpace(text) || engine == null) return null;
-            var normalized = EmojiSemanticText.Normalize(text);
+            var normalized = Regex.Replace(EmojiSemanticText.ForSpeech(text).ToLowerInvariant().Replace('ё', 'е'), @"\\s+", " ").Trim();
             if (!Regex.IsMatch(normalized, @"\b(если|когда|при температуре|как только|при условии)\b")) return null;
             if (!Regex.IsMatch(normalized, @"температур|темп|градус|жарк|холод")) return null;
 
