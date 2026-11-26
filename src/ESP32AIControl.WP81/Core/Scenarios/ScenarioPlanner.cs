@@ -133,8 +133,8 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             if (plan.Actions.Count == 0)
                 throw new ArgumentException("Пустой сценарий.", "command");
 
-            OrderPlanByScenarioDependencies(plan);
             ValidatePlanConflicts(plan);
+            OrderPlanByScenarioDependencies(plan);
             return plan;
         }
 
