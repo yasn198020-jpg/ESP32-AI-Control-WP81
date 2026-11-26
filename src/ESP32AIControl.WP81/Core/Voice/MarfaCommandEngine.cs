@@ -84,18 +84,6 @@ namespace ESP32AIControl.WP81.Core.Voice
             return Parse(command, _devices == null ? new List<WidgetState>() : _devices.GetWidgetsSnapshot());
         }
 
-        public DialogTargetContext DialogSnapshot()
-        {
-            return _dialogContext.Snapshot();
-        }
-
-        public void ClearDialogContext()
-        {
-            _dialogContext.Clear();
-            ClearPending();
-            _lastTarget = null;
-        }
-
         public MarfaCommandResult Parse(string command, IList<WidgetState> widgets)
         {
             _dialogContext.BeginTurn(command);
