@@ -280,18 +280,34 @@
                 <PivotItem Header="Подключение">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel Margin="10,4,10,12">
-                            <TextBlock Text="Подключение к MQTT" FontSize="18" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,12,0,8"/>
-                        <TextBox x:Name="HostBox" Header="MQTT сервер или адрес" Text="m4.wqtt.ru" LostFocus="MqttSetting_LostFocus"/>
-                        <TextBox x:Name="PortBox" Header="Порт подключения" Text="2815" LostFocus="MqttSetting_LostFocus"/>
-                        <TextBox x:Name="PrefixBox" Header="Префикс MQTT" Text="dghjko" LostFocus="MqttSetting_LostFocus"/>
-                        <TextBox x:Name="UserNameBox" Header="Имя пользователя" LostFocus="MqttSetting_LostFocus"/>
-                        <TextBox x:Name="ClientIdBox" Header="Идентификатор клиента" Text="ESP32-AI-Control-WP81" LostFocus="MqttSetting_LostFocus"/>
-                        <PasswordBox x:Name="PasswordBox" Header="Пароль MQTT" LostFocus="MqttSetting_LostFocus"/>
-                        <CheckBox x:Name="MqttTlsCheckBox" Content="Использовать защищённое TLS-соединение" Margin="0,8,0,4" Checked="MqttTlsCheckBox_Changed" Unchecked="MqttTlsCheckBox_Changed"/>
-
-                        <TextBlock Text="МАСШТАБ ИНТЕРФЕЙСА" FontSize="17" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,18,0,6"/>
-                        <TextBlock Text="Размер текста и элементов интерфейса" Foreground="#FFACADB8" TextWrapping="Wrap"/>
-                        <Slider x:Name="UiFontScaleSlider" Minimum="0.7" Maximum="1.1" Value="0.85" StepFrequency="0.05" />
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1"
+                                    CornerRadius="14" Padding="12" Margin="0,8,0,8">
+                                <StackPanel>
+                                    <TextBlock Text="ПОДКЛЮЧЕНИЕ К MQTT" FontSize="14" FontWeight="SemiBold"
+                                               Foreground="#FFD0BCFF" Margin="0,0,0,6"/>
+                                    <TextBlock Text="Параметры сервера и учётной записи" FontSize="12"
+                                               Foreground="#FFACADB8" Margin="0,0,0,4"/>
+                                    <TextBox x:Name="HostBox" Header="MQTT сервер или адрес" Text="m4.wqtt.ru" LostFocus="MqttSetting_LostFocus"/>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                        <TextBox x:Name="PortBox" Header="Порт подключения" Text="2815" LostFocus="MqttSetting_LostFocus" Margin="0,7,5,7"/>
+                                        <TextBox x:Name="PrefixBox" Grid.Column="1" Header="Префикс MQTT" Text="dghjko" LostFocus="MqttSetting_LostFocus" Margin="5,7,0,7"/>
+                                    </Grid>
+                                    <TextBox x:Name="UserNameBox" Header="Имя пользователя" LostFocus="MqttSetting_LostFocus"/>
+                                    <TextBox x:Name="ClientIdBox" Header="Идентификатор клиента" Text="ESP32-AI-Control-WP81" LostFocus="MqttSetting_LostFocus"/>
+                                    <PasswordBox x:Name="PasswordBox" Header="Пароль MQTT" LostFocus="MqttSetting_LostFocus"/>
+                                    <CheckBox x:Name="MqttTlsCheckBox" Content="Использовать защищённое TLS-соединение" Margin="0,8,0,2" Checked="MqttTlsCheckBox_Changed" Unchecked="MqttTlsCheckBox_Changed"/>
+                                </StackPanel>
+                            </Border>
+                            
+                        <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1"
+                                CornerRadius="14" Padding="12" Margin="0,4,0,8">
+                            <StackPanel>
+                                <TextBlock Text="МАСШТАБ ИНТЕРФЕЙСА" FontSize="14" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,0,0,4"/>
+                                <TextBlock Text="Размер текста и элементов интерфейса" FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap"/>
+                                <Slider x:Name="UiFontScaleSlider" Minimum="0.7" Maximum="1.1" Value="0.85" StepFrequency="0.05"/>
+                            </StackPanel>
+                        </Border>
 
                         <Border Background="#FF2B2C34" BorderBrush="#FF41434D"
                                 BorderThickness="1" CornerRadius="14" Padding="14" Margin="0,10,0,10">
@@ -349,16 +365,26 @@
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel Margin="10,4,10,12">
                             <TextBlock Text="Голосовое управление" FontSize="17" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,14,0,6"/>
-                        <TextBlock Text="СИНТЕЗ РЕЧИ" FontSize="14" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,14,0,2"/>
-                        <TextBlock Text="Голос используется для ответа Марфы после выполнения обученной команды." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,0,0,6"/>
-                        <ComboBox x:Name="TtsVoiceBox" Header="Системный голос" MinHeight="48"/>
-                        <Button Content="Проверить голос" Click="TtsTestButton_Click" Margin="0,4,0,0"/>
-                        <TextBlock x:Name="TtsVoiceStatus" Text="Выберите голос и запустите проверку." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,4,0,10"/>
-                        <TextBlock Text="КОМАНДЫ ПО УМОЛЧАНИЮ" FontSize="14" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,14,0,2"/>
-                        <TextBox x:Name="VoiceOpenCommandBox" Header="Команда «открой теплицу»" PlaceholderText="device/widget=1"/>
-                        <TextBox x:Name="VoiceCloseCommandBox" Header="Команда «закрой теплицу»" PlaceholderText="device/widget=0"/>
-                        <TextBlock Text="Сохранённые обученные фразы и их варианты находятся в отдельном разделе «Команды»." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,4,0,8"/>
-                        </StackPanel>
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1"
+                                    CornerRadius="14" Padding="12" Margin="0,4,0,8">
+                                <StackPanel>
+                                    <TextBlock Text="СИНТЕЗ РЕЧИ" FontSize="14" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,0,0,4"/>
+                                    <TextBlock Text="Голос используется для ответа Марфы после выполнения обученной команды." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                                    <ComboBox x:Name="TtsVoiceBox" Header="Системный голос" MinHeight="48"/>
+                                    <Button Content="Проверить голос" Click="TtsTestButton_Click" Margin="0,4,0,0"/>
+                                    <TextBlock x:Name="TtsVoiceStatus" Text="Выберите голос и запустите проверку." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1"
+                                    CornerRadius="14" Padding="12" Margin="0,4,0,8">
+                                <StackPanel>
+                                    <TextBlock Text="КОМАНДЫ ПО УМОЛЧАНИЮ" FontSize="14" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,0,0,4"/>
+                                    <TextBlock Text="Действия для стандартных голосовых команд открытия и закрытия." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                                    <TextBox x:Name="VoiceOpenCommandBox" Header="Команда «открой теплицу»" PlaceholderText="device/widget=1"/>
+                                    <TextBox x:Name="VoiceCloseCommandBox" Header="Команда «закрой теплицу»" PlaceholderText="device/widget=0"/>
+                                    <TextBlock Text="Сохранённые обученные фразы и их варианты находятся в отдельном разделе «Команды»." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                </StackPanel>
+                            </Border></StackPanel>
                     </ScrollViewer>
                 </PivotItem>
                 <PivotItem Header="Сценарии">
