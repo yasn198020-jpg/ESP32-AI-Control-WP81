@@ -4759,6 +4759,19 @@ namespace ESP32AIControl.WP81
             public List<string> Variants { get; set; }
         }
 
+        private sealed class TrainedCommandRepositorySnapshot : ESP32AIControl.WP81.Core.Voice.ITrainedCommandRepository
+        {
+            private readonly IList<ESP32AIControl.WP81.Core.Voice.TrainedVoiceCommand> _commands;
+            public TrainedCommandRepositorySnapshot(IList<ESP32AIControl.WP81.Core.Voice.TrainedVoiceCommand> commands)
+            {
+                _commands = commands ?? new List<ESP32AIControl.WP81.Core.Voice.TrainedVoiceCommand>();
+            }
+            public IList<ESP32AIControl.WP81.Core.Voice.TrainedVoiceCommand> Load()
+            {
+                return _commands;
+            }
+        }
+
         private const string TrainedReadValue = "__READ_VALUE__";
         private const string TrainedCommandsStorageKey = "trained_voice_commands";
 
@@ -6252,98 +6265,30 @@ namespace ESP32AIControl.WP81
 
         private List<TrainedVoiceCommand> MatchTrainedCommands(string spokenText)
         {
-            var text = NormalizeTrainedPhrase(spokenText);
-            if (text.Length == 0) return new List<TrainedVoiceCommand>();
-
-            // Exact phrases and variants have priority. If two different
-            // learned phrases match the same utterance, do not guess.
-            var exactPhrases = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var command in _trainedCommands)
+            var coreCommands = _trainedCommands.Select(command =>
             {
-                var phrases = (command.Variants ?? new List<string>()).Concat(new[] { command.Phrase });
-                if (phrases.Any(p => NormalizeTrainedPhrase(p) == text))
-                    exactPhrases.Add(NormalizeTrainedPhrase(command.Phrase));
-            }
-            if (exactPhrases.Count == 1)
-            {
-                var exact = exactPhrases.First();
-                return _trainedCommands.Where(c =>
-                    string.Equals(NormalizeTrainedPhrase(c.Phrase), exact, StringComparison.OrdinalIgnoreCase)).ToList();
-            }
-            if (exactPhrases.Count > 1) return new List<TrainedVoiceCommand>();
-
-            // A longer matching variant is more specific than a short phrase
-            // contained in the same utterance. Equal winners are ambiguous.
-            var containedScores = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            foreach (var group in _trainedCommands.GroupBy(c => NormalizeTrainedPhrase(c.Phrase)))
-            {
-                var specificity = group.SelectMany(command =>
-                        (command.Variants ?? new List<string>()).Concat(new[] { command.Phrase }))
-                    .Select(NormalizeTrainedPhrase)
-                    .Where(candidate => candidate.Length > 0 &&
-                        (" " + text + " ").Contains(" " + candidate + " "))
-                    .Select(candidate => candidate.Length)
-                    .DefaultIfEmpty(0).Max();
-                if (specificity > 0) containedScores[group.Key] = specificity;
-            }
-            if (containedScores.Count > 0)
-            {
-                var best = containedScores.Values.Max();
-                var winners = containedScores.Where(pair => pair.Value == best)
-                    .Select(pair => pair.Key).ToList();
-                if (winners.Count != 1) return new List<TrainedVoiceCommand>();
-                return _trainedCommands.Where(c =>
-                    string.Equals(NormalizeTrainedPhrase(c.Phrase), winners[0], StringComparison.OrdinalIgnoreCase)).ToList();
-            }
-
-            // Partial phrase matching is useful when the spoken request omits
-            // a context word, but tied phrase groups must never trigger actions.
-            var spokenWords = text.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-            if (spokenWords.Length > 0 && spokenWords.All(w => w.Length >= 3))
-            {
-                var partialScores = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
-                foreach (var group in _trainedCommands.GroupBy(c => NormalizeTrainedPhrase(c.Phrase)))
+                var item = new ESP32AIControl.WP81.Core.Voice.TrainedVoiceCommand
                 {
-                    var score = group.SelectMany(command =>
-                            (command.Variants ?? new List<string>()).Concat(new[] { command.Phrase }))
-                        .Select(NormalizeTrainedPhrase)
-                        .Where(phrase => phrase.Length > 0 && PhraseWordsContainedInText(text, phrase))
-                        .Select(phrase => SimilarityAgainstTrainedText(text, phrase))
-                        .DefaultIfEmpty(0.0).Max();
-                    if (score > 0) partialScores[group.Key] = score;
-                }
-                if (partialScores.Count > 0)
-                {
-                    var best = partialScores.Values.Max();
-                    var winners = partialScores.Where(pair => pair.Value >= best - 0.04)
-                        .Select(pair => pair.Key).ToList();
-                    if (winners.Count != 1) return new List<TrainedVoiceCommand>();
-                    return _trainedCommands.Where(c =>
-                        string.Equals(NormalizeTrainedPhrase(c.Phrase), winners[0], StringComparison.OrdinalIgnoreCase)).ToList();
-                }
-            }
+                    Phrase = command.Phrase ?? string.Empty,
+                    DeviceId = command.DeviceId ?? string.Empty,
+                    WidgetId = command.WidgetId ?? string.Empty,
+                    Value = command.Value ?? "1"
+                };
+                if (command.Variants != null)
+                    foreach (var variant in command.Variants) item.Variants.Add(variant);
+                return item;
+            }).ToList();
 
-            // Last resort: fuzzy matching with a conservative threshold.
-            var candidates = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
-            foreach (var group in _trainedCommands.GroupBy(c => NormalizeTrainedPhrase(c.Phrase)))
+            var matcher = new ESP32AIControl.WP81.Core.Voice.TrainedCommandMatcher(
+                new TrainedCommandRepositorySnapshot(coreCommands));
+            return matcher.MatchAll(spokenText).Select(command => new TrainedVoiceCommand
             {
-                if (string.IsNullOrWhiteSpace(group.Key)) continue;
-                var best = group.SelectMany(command =>
-                        (command.Variants ?? new List<string>()).Concat(new[] { command.Phrase }))
-                    .Select(NormalizeTrainedPhrase)
-                    .Where(candidate => candidate.Length > 0)
-                    .Select(candidate => SimilarityAgainstTrainedText(text, candidate))
-                    .DefaultIfEmpty(0.0).Max();
-                if (best >= 0.78) candidates[group.Key] = best;
-            }
-
-            if (candidates.Count == 0) return new List<TrainedVoiceCommand>();
-            var bestScore = candidates.Values.Max();
-            var bestGroups = candidates.Where(pair => pair.Value >= bestScore - 0.04)
-                .Select(pair => pair.Key).ToList();
-            if (bestGroups.Count != 1) return new List<TrainedVoiceCommand>();
-            return _trainedCommands.Where(c =>
-                string.Equals(NormalizeTrainedPhrase(c.Phrase), bestGroups[0], StringComparison.OrdinalIgnoreCase)).ToList();
+                Phrase = command.Phrase,
+                DeviceId = command.DeviceId,
+                WidgetId = command.WidgetId,
+                Value = command.Value,
+                Variants = command.Variants.ToList()
+            }).ToList();
         }
 
         private static bool PhraseWordsContainedInText(string text, string phrase)
