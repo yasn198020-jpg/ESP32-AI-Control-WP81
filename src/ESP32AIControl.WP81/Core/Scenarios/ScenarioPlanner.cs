@@ -133,8 +133,80 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             if (plan.Actions.Count == 0)
                 throw new ArgumentException("Пустой сценарий.", "command");
 
+            OrderPlanByScenarioDependencies(plan);
             ValidatePlanConflicts(plan);
             return plan;
+        }
+
+        private void OrderPlanByScenarioDependencies(ScenarioPlan plan)
+        {
+            if (plan == null || plan.Actions.Count < 2 ||
+                _scenarioAnalyzer == null || _scenarioAnalyzer.LanguageModel == null)
+                return;
+
+            var model = _scenarioAnalyzer.LanguageModel;
+            var byTarget = plan.Actions.ToDictionary(
+                a => a.DeviceId + "/" + a.WidgetId, StringComparer.OrdinalIgnoreCase);
+            var outgoing = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+            var indegree = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (var action in plan.Actions)
+            {
+                var key = action.DeviceId + "/" + action.WidgetId;
+                outgoing[key] = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                indegree[key] = 0;
+            }
+
+            foreach (var rule in model.Rules)
+            {
+                foreach (var action in rule.Actions)
+                {
+                    var targetMatches = _devices.GetWidgetsById(action.TargetId);
+                    if (targetMatches.Count != 1) continue;
+                    var targetKey = targetMatches[0].DeviceId + "/" + targetMatches[0].Id;
+                    if (!byTarget.ContainsKey(targetKey)) continue;
+
+                    foreach (var prerequisiteId in rule.Condition.Identifiers)
+                    {
+                        var prerequisiteMatches = _devices.GetWidgetsById(prerequisiteId);
+                        if (prerequisiteMatches.Count != 1) continue;
+                        var prerequisiteKey = prerequisiteMatches[0].DeviceId + "/" + prerequisiteMatches[0].Id;
+                        if (string.Equals(prerequisiteKey, targetKey, StringComparison.OrdinalIgnoreCase) ||
+                            !byTarget.ContainsKey(prerequisiteKey))
+                            continue;
+
+                        if (outgoing[prerequisiteKey].Add(targetKey))
+                            indegree[targetKey]++;
+                    }
+                }
+            }
+
+            var ordered = new List<ScenarioAction>();
+            var emitted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            while (ordered.Count < plan.Actions.Count)
+            {
+                ScenarioAction next = null;
+                foreach (var action in plan.Actions)
+                {
+                    var key = action.DeviceId + "/" + action.WidgetId;
+                    if (!emitted.Contains(key) && indegree[key] == 0)
+                    {
+                        next = action;
+                        break;
+                    }
+                }
+                if (next == null)
+                    throw new InvalidOperationException(
+                        "В графе сценарных зависимостей обнаружен цикл. Команды не отправлены.");
+
+                var nextKey = next.DeviceId + "/" + next.WidgetId;
+                emitted.Add(nextKey);
+                ordered.Add(next);
+                foreach (var dependent in outgoing[nextKey])
+                    indegree[dependent]--;
+            }
+
+            plan.Actions.Clear();
+            foreach (var action in ordered) plan.Actions.Add(action);
         }
 
         /// <summary>
@@ -470,6 +542,90 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                 ExpressionHasEqualityThroughAliases(binary.Right, targetIdentifier, expectedValue, model);
         }
 
+        private sealed class ScenarioDependencyGraph
+        {
+            public readonly Dictionary<string, IList<IList<string>>> Definitions =
+                new Dictionary<string, IList<IList<string>>>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        private static ScenarioDependencyGraph BuildScenarioDependencyGraph(DeviceScenarioModel model)
+        {
+            var graph = new ScenarioDependencyGraph();
+            if (model == null || model.Rules == null) return graph;
+
+            foreach (var rule in model.Rules)
+            {
+                foreach (var action in rule.Actions)
+                {
+                    if (string.IsNullOrWhiteSpace(action.TargetId)) continue;
+                    IList<IList<string>> definitions;
+                    if (!graph.Definitions.TryGetValue(action.TargetId, out definitions))
+                    {
+                        definitions = new List<IList<string>>();
+                        graph.Definitions[action.TargetId] = definitions;
+                    }
+                    var identifiers = new List<string>();
+                    CollectExpressionIdentifiers(action.Expression, identifiers);
+                    definitions.Add(identifiers.Distinct(StringComparer.OrdinalIgnoreCase).ToList());
+                }
+            }
+            return graph;
+        }
+
+        private static void CollectExpressionIdentifiers(IoTExpr expression, IList<string> identifiers)
+        {
+            if (expression == null) return;
+            var variable = expression as IoTExpr.Variable;
+            if (variable != null) { identifiers.Add(variable.Name); return; }
+            var unary = expression as IoTExpr.Unary;
+            if (unary != null) { CollectExpressionIdentifiers(unary.Expression, identifiers); return; }
+            var binary = expression as IoTExpr.Binary;
+            if (binary != null)
+            {
+                CollectExpressionIdentifiers(binary.Left, identifiers);
+                CollectExpressionIdentifiers(binary.Right, identifiers);
+                return;
+            }
+            var call = expression as IoTExpr.Call;
+            if (call != null)
+                foreach (var argument in call.Arguments)
+                    CollectExpressionIdentifiers(argument, identifiers);
+        }
+
+        private static bool GraphVariableDependsOnIdentifier(
+            string variableName,
+            string targetIdentifier,
+            ScenarioDependencyGraph graph,
+            ISet<string> visiting,
+            int depth)
+        {
+            if (string.Equals(variableName, targetIdentifier, StringComparison.OrdinalIgnoreCase))
+                return true;
+            if (graph == null || depth >= 16 || !visiting.Add(variableName)) return false;
+
+            IList<IList<string>> definitions;
+            if (!graph.Definitions.TryGetValue(variableName, out definitions) || definitions.Count == 0)
+                return false;
+
+            // Every assignment definition must retain a path to the target.
+            // A single unrelated/unknown definition makes the link ambiguous.
+            foreach (var definition in definitions)
+            {
+                bool definitionDepends = false;
+                foreach (var identifier in definition)
+                {
+                    if (GraphVariableDependsOnIdentifier(identifier, targetIdentifier, graph,
+                        new HashSet<string>(visiting, StringComparer.OrdinalIgnoreCase), depth + 1))
+                    {
+                        definitionDepends = true;
+                        break;
+                    }
+                }
+                if (!definitionDepends) return false;
+            }
+            return true;
+        }
+
         private static bool VariableResolvesToIdentifier(
             string variableName,
             string targetIdentifier,
@@ -478,20 +634,14 @@ namespace ESP32AIControl.WP81.Core.Scenarios
         {
             if (string.Equals(variableName, targetIdentifier, StringComparison.OrdinalIgnoreCase))
                 return true;
-            if (model == null || !visiting.Add(variableName)) return false;
-
-            var assignments = model.Rules.SelectMany(r => r.Actions)
-                .Where(a => string.Equals(a.TargetId, variableName, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-            if (assignments.Count == 0) return false;
-            return assignments.All(a => ScenarioExpressionDependsOnIdentifier(
-                a.Expression, targetIdentifier, model,
-                new HashSet<string>(visiting, StringComparer.OrdinalIgnoreCase)));
+            if (visiting != null && visiting.Contains(variableName)) return false;
+            return GraphVariableDependsOnIdentifier(variableName, targetIdentifier,
+                BuildScenarioDependencyGraph(model),
+                visiting == null ? new HashSet<string>(StringComparer.OrdinalIgnoreCase) : visiting, 0);
         }
 
-        // Follow data-flow through intermediate variables in both conditions
-        // and action expressions. The bounded path set prevents assignment cycles
-        // from being interpreted as a valid link.
+        // Resolve data-flow links through a bounded graph. This answers only
+        // whether a dependency path exists; it does not infer boolean implication.
         private static bool ScenarioExpressionDependsOnIdentifier(
             IoTExpr expression,
             string targetIdentifier,
@@ -499,42 +649,13 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             ISet<string> visiting)
         {
             if (expression == null || model == null) return false;
-            var variable = expression as IoTExpr.Variable;
-            if (variable != null)
-            {
-                if (string.Equals(variable.Name, targetIdentifier, StringComparison.OrdinalIgnoreCase))
+            var identifiers = new List<string>();
+            CollectExpressionIdentifiers(expression, identifiers);
+            var graph = BuildScenarioDependencyGraph(model);
+            foreach (var identifier in identifiers)
+                if (GraphVariableDependsOnIdentifier(identifier, targetIdentifier, graph,
+                    new HashSet<string>(StringComparer.OrdinalIgnoreCase), 0))
                     return true;
-                if (!visiting.Add(variable.Name)) return false;
-
-                var assignments = model.Rules.SelectMany(r => r.Actions)
-                    .Where(a => string.Equals(a.TargetId, variable.Name, StringComparison.OrdinalIgnoreCase))
-                    .ToList();
-                if (assignments.Count == 0) return false;
-
-                // Every definition must preserve the dependency; otherwise the
-                // variable is not a reliable bridge to the requested target.
-                return assignments.All(a => ScenarioExpressionDependsOnIdentifier(
-                    a.Expression, targetIdentifier, model,
-                    new HashSet<string>(visiting, StringComparer.OrdinalIgnoreCase)));
-            }
-
-            var unary = expression as IoTExpr.Unary;
-            if (unary != null)
-                return ScenarioExpressionDependsOnIdentifier(unary.Expression, targetIdentifier, model, visiting);
-
-            var binary = expression as IoTExpr.Binary;
-            if (binary != null)
-                return ScenarioExpressionDependsOnIdentifier(binary.Left, targetIdentifier, model,
-                           new HashSet<string>(visiting, StringComparer.OrdinalIgnoreCase)) ||
-                       ScenarioExpressionDependsOnIdentifier(binary.Right, targetIdentifier, model,
-                           new HashSet<string>(visiting, StringComparer.OrdinalIgnoreCase));
-
-            var call = expression as IoTExpr.Call;
-            if (call != null)
-                return call.Arguments.Any(argument => ScenarioExpressionDependsOnIdentifier(
-                    argument, targetIdentifier, model,
-                    new HashSet<string>(visiting, StringComparer.OrdinalIgnoreCase)));
-
             return false;
         }
 
