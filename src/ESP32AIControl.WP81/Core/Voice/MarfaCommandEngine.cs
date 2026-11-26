@@ -213,7 +213,9 @@ namespace ESP32AIControl.WP81.Core.Voice
             var question = IsValueQuestion(text);
 
             // A time-only follow-up repeats the last resolved control command.
-            if (action == null && !question && _lastTarget != null && !string.IsNullOrWhiteSpace(_lastValue))
+            var previous = _dialogContext.Snapshot();
+            if (action == null && !question && _lastTarget != null &&
+                previous != null && !string.IsNullOrWhiteSpace(previous.ActionValue))
             {
                 var delay = ParseDelay(text);
                 if (delay > 0)
@@ -222,7 +224,7 @@ namespace ESP32AIControl.WP81.Core.Voice
                     {
                         DeviceId = _lastTarget.DeviceId,
                         WidgetId = _lastTarget.Id,
-                        Value = _lastValue
+                        Value = previous.ActionValue
                     };
                     return ControlResult(new[] { item }, delay,
                         "Запланировала повтор: " +
@@ -234,6 +236,7 @@ namespace ESP32AIControl.WP81.Core.Voice
             // "А какая там температура?" refers to the last sensor when the
             // current phrase contains no new explicit sensor target.
             if (action == null && question && _lastTarget != null && IsSensor(_lastTarget) &&
+                previous != null && previous.Intent == LocalCommandAction.ReadValue &&
                 (text.Contains("там") || text.Contains("здесь") || text.Contains("это")))
             {
                 var current = (widgets ?? new List<WidgetState>()).FirstOrDefault(w =>
@@ -342,7 +345,9 @@ namespace ESP32AIControl.WP81.Core.Voice
             else
                 candidates = RankCandidates(text, widgets, true);
 
-            if (candidates.Count == 0 && IsPronoun(text) && _lastTarget != null)
+            var dialogTarget = _dialogContext.Snapshot();
+            if (candidates.Count == 0 && IsPronoun(text) && _lastTarget != null &&
+                dialogTarget != null && !string.IsNullOrWhiteSpace(dialogTarget.ActionValue))
                 candidates.Add(new Candidate { Widget = _lastTarget, Score = 100 });
 
             if (candidates.Count == 0)
