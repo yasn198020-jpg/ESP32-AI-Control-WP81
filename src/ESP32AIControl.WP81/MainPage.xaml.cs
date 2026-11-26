@@ -3444,6 +3444,7 @@ namespace ESP32AIControl.WP81
                 Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 172, 173, 184))
             });
             HistoryWidgetList.Items.Add(new ListViewItem { Content = body, Tag = state.Key });
+            if (HistoryEmptyText != null) HistoryEmptyText.Visibility = Visibility.Collapsed;
         }
 
         private void ToggleGraphSettingsButton_Click(object sender, RoutedEventArgs e)
