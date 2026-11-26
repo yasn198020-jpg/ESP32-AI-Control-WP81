@@ -3143,6 +3143,7 @@ namespace ESP32AIControl.WP81
             var height = panelHeight * prepared.Count + 8.0;
             GraphCanvas.Width = width;
             GraphCanvas.Height = height;
+            GraphHorizontalScroll.Height = height + 12.0;
 
             for (var panel = 0; panel < prepared.Count; panel++)
             {
@@ -3288,6 +3289,7 @@ namespace ESP32AIControl.WP81
             var width = baseWidth * Math.Max(1.0, Math.Min(20.0, _graphZoom));
             GraphCanvas.Width = width;
             GraphCanvas.Height = 300;
+            GraphHorizontalScroll.Height = 320;
             var height = 300.0;
             var padding = 24.0;
 
