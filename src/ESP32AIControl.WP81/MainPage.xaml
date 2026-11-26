@@ -794,6 +794,15 @@
                                     <TextBlock Text="События MQTT, UDP, WebSocket и сетевые ошибки. Выберите категорию, чтобы быстрее найти нужную запись."
                                                FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap"
                                                Margin="0,0,0,8"/>
+                                    <ComboBox x:Name="LogModeBox" Header="Источник записей"
+                                              SelectedIndex="0"
+                                              SelectionChanged="LogModeBox_SelectionChanged">
+                                        <ComboBoxItem Content="Текущая сессия" Tag="SESSION"/>
+                                        <ComboBoxItem Content="Сохранённый сетевой журнал" Tag="SAVED"/>
+                                    </ComboBox>
+                                    <TextBlock Text="Windows Phone 8.1 не ведёт отдельные Android-журналы фоновой службы. Здесь доступны события текущей сессии и сохранённая сетевая диагностика."
+                                               FontSize="11" Foreground="#FFACADB8"
+                                               TextWrapping="Wrap" Margin="2,0,2,6"/>
                                     <ComboBox x:Name="LogFilterBox" Header="Фильтр событий"
                                               SelectedIndex="0"
                                               SelectionChanged="LogFilterBox_SelectionChanged">
@@ -809,6 +818,9 @@
                                     <Button Content="Копировать отображаемые записи"
                                             Click="CopyLogButton_Click"
                                             HorizontalAlignment="Stretch" Margin="0,2,0,4"/>
+                                    <Button Content="Очистить журнал"
+                                            Click="ClearLogButton_Click"
+                                            HorizontalAlignment="Stretch" Margin="0,0,0,4"/>
                                     <TextBlock x:Name="LogActionStatus" Text=""
                                                FontSize="11" Foreground="#FFACADB8"
                                                TextWrapping="Wrap" Margin="2,0,2,8"/>
