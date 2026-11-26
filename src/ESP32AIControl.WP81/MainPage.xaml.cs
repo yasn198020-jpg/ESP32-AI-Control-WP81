@@ -175,8 +175,8 @@ namespace ESP32AIControl.WP81
             MainSections.Children.Add(_speechPlayback);
             LocalScenarioEnabledCheckBox.IsChecked = true;
             LocalScenarioNotificationCheckBox.IsChecked = true;
-            if (DashboardEmptyState != null)
-                DashboardEmptyState.Visibility = WidgetPages.Items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            if (DashboardEmptyOverlay != null)
+                DashboardEmptyOverlay.Visibility = WidgetPages.Items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             UpdateNavigationState();
 
             _settingsStore = new AppSettingsStore();
@@ -3150,7 +3150,7 @@ namespace ESP32AIControl.WP81
             page.Item = item;
             _pages[pageName] = page;
             WidgetPages.Items.Add(item);
-            if (DashboardEmptyState != null) DashboardEmptyState.Visibility = Visibility.Collapsed;
+            if (DashboardEmptyOverlay != null) DashboardEmptyOverlay.Visibility = Visibility.Collapsed;
 
             // Adding a new device must not pull the user away from the page
             // they are currently viewing. The first page remains auto-selected.
@@ -3191,8 +3191,8 @@ namespace ESP32AIControl.WP81
                 _restoringWidgetPageSelection = false;
             }
 
-            if (DashboardEmptyState != null)
-                DashboardEmptyState.Visibility = WidgetPages.Items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            if (DashboardEmptyOverlay != null)
+                DashboardEmptyOverlay.Visibility = WidgetPages.Items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
             RestoreWidgetPageSelection(preferredPageName);
         }
