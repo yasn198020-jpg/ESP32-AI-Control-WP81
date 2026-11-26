@@ -445,39 +445,87 @@
                 <PivotItem Header="Голос">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel Margin="10,4,10,12">
-                            <TextBlock Text="Голосовое управление" FontSize="17" FontWeight="SemiBold"
-                                       Foreground="#FFD0BCFF" Margin="0,14,0,6"/>
-                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1"
-                                    CornerRadius="14" Padding="12" Margin="0,4,0,8">
+                            <StackPanel Margin="4,8,4,8">
+                                <TextBlock Text="Голосовое управление" FontSize="22"
+                                           FontWeight="SemiBold" Foreground="#FFEAF1F7"/>
+                                <TextBlock Text="Настройте голосовой ответ Марфы и стандартные команды. Обученные фразы и управление микрофоном находятся в соответствующих разделах приложения."
+                                           FontSize="13" Foreground="#FFACADB8"
+                                           TextWrapping="Wrap" Margin="0,5,0,0"/>
+                            </StackPanel>
+
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D"
+                                    BorderThickness="1" CornerRadius="14"
+                                    Padding="12" Margin="0,4,0,8">
                                 <StackPanel>
-                                    <TextBlock Text="СИНТЕЗ РЕЧИ" FontSize="14" FontWeight="SemiBold"
+                                    <TextBlock Text="КАК РАБОТАЕТ ГОЛОСОВОЕ УПРАВЛЕНИЕ"
+                                               FontSize="13" FontWeight="SemiBold"
+                                               Foreground="#FFD0BCFF" Margin="0,0,0,6"/>
+                                    <TextBlock Text="Нажмите кнопку «Марфа» на нижней панели, чтобы произнести команду. Для привязки новых фраз к виджетам откройте раздел «Команды». Результат распознавания и ответ отображаются на главном экране."
+                                               FontSize="12" Foreground="#FFACADB8"
+                                               TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D"
+                                    BorderThickness="1" CornerRadius="14"
+                                    Padding="12" Margin="0,4,0,8">
+                                <StackPanel>
+                                    <TextBlock Text="1. СИНТЕЗ РЕЧИ"
+                                               FontSize="14" FontWeight="SemiBold"
                                                Foreground="#FFD0BCFF" Margin="0,0,0,4"/>
-                                    <TextBlock Text="Голос используется для ответа Марфы после выполнения обученной команды."
-                                               FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,0,0,6"/>
-                                    <ComboBox x:Name="TtsVoiceBox" Header="Системный голос" MinHeight="48"/>
-                                    <Button Content="Проверить голос" Click="TtsTestButton_Click" Margin="0,4,0,0"/>
-                                    <TextBlock x:Name="TtsVoiceStatus" Text="Выберите голос и запустите проверку."
-                                               FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                                    <TextBlock Text="Выберите установленный в Windows системный голос. Марфа использует его для озвучивания ответов после выполнения команды."
+                                               FontSize="12" Foreground="#FFACADB8"
+                                               TextWrapping="Wrap" Margin="0,0,0,8"/>
+                                    <ComboBox x:Name="TtsVoiceBox" Header="Системный голос"
+                                              MinHeight="48"/>
+                                    <Button Content="Проверить голос" Click="TtsTestButton_Click"
+                                            HorizontalAlignment="Stretch" MinHeight="46"
+                                            Margin="0,6,0,0"/>
+                                    <TextBlock x:Name="TtsVoiceStatus"
+                                               Text="Выберите голос и запустите проверку."
+                                               FontSize="12" Foreground="#FFACADB8"
+                                               TextWrapping="Wrap" Margin="0,8,0,0"/>
                                 </StackPanel>
                             </Border>
-                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1"
-                                    CornerRadius="14" Padding="12" Margin="0,4,0,8">
+
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D"
+                                    BorderThickness="1" CornerRadius="14"
+                                    Padding="12" Margin="0,4,0,8">
                                 <StackPanel>
-                                    <TextBlock Text="ПРОВЕРКА МАРФЫ" FontSize="14" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,0,0,4"/>
-                                    <TextBlock Text="Откройте центр диагностики, чтобы проверить разбор команды и план действий без отправки команд на ESP32." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,0,0,8"/>
-                                    <Button Content="Открыть проверку Марфы" Click="OpenMarfaDiagnostics_Click" MinHeight="44"/>
+                                    <TextBlock Text="2. СТАНДАРТНЫЕ КОМАНДЫ"
+                                               FontSize="14" FontWeight="SemiBold"
+                                               Foreground="#FFD0BCFF" Margin="0,0,0,4"/>
+                                    <TextBlock Text="Укажите MQTT-действия, которые используются для стандартных фраз открытия и закрытия теплицы. Формат команды: device/widget=значение."
+                                               FontSize="12" Foreground="#FFACADB8"
+                                               TextWrapping="Wrap" Margin="0,0,0,6"/>
+                                    <TextBox x:Name="VoiceOpenCommandBox"
+                                             Header="Команда «открой теплицу»"
+                                             PlaceholderText="device/widget=1"/>
+                                    <TextBox x:Name="VoiceCloseCommandBox"
+                                             Header="Команда «закрой теплицу»"
+                                             PlaceholderText="device/widget=0"/>
+                                    <TextBlock Text="Эти поля задают действия по умолчанию. Остальные фразы, варианты произношения и привязки к отдельным виджетам настраиваются в разделе «Команды»."
+                                               FontSize="12" Foreground="#FFACADB8"
+                                               TextWrapping="Wrap" Margin="0,4,0,0"/>
                                 </StackPanel>
                             </Border>
-                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1"
-                                    CornerRadius="14" Padding="12" Margin="0,4,0,8">
+
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D"
+                                    BorderThickness="1" CornerRadius="14"
+                                    Padding="12" Margin="0,4,0,8">
                                 <StackPanel>
-                                    <TextBlock Text="КОМАНДЫ ПО УМОЛЧАНИЮ" FontSize="14" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,0,0,4"/>
-                                    <TextBlock Text="Действия для стандартных голосовых команд открытия и закрытия." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,0,0,4"/>
-                                    <TextBox x:Name="VoiceOpenCommandBox" Header="Команда «открой теплицу»" PlaceholderText="device/widget=1"/>
-                                    <TextBox x:Name="VoiceCloseCommandBox" Header="Команда «закрой теплицу»" PlaceholderText="device/widget=0"/>
-                                    <TextBlock Text="Сохранённые обученные фразы и их варианты находятся в отдельном разделе «Команды»." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                    <TextBlock Text="3. ДИАГНОСТИКА МАРФЫ"
+                                               FontSize="14" FontWeight="SemiBold"
+                                               Foreground="#FFD0BCFF" Margin="0,0,0,4"/>
+                                    <TextBlock Text="Откройте диагностический центр, чтобы проверить распознавание команды, её разбор и предварительный план действий. Проверка плана не отправляет команды на ESP32."
+                                               FontSize="12" Foreground="#FFACADB8"
+                                               TextWrapping="Wrap" Margin="0,0,0,8"/>
+                                    <Button Content="Открыть проверку Марфы"
+                                            Click="OpenMarfaDiagnostics_Click"
+                                            HorizontalAlignment="Stretch" MinHeight="46"/>
                                 </StackPanel>
-                            </Border></StackPanel>
+                            </Border>
+                        </StackPanel>
                     </ScrollViewer>
                 </PivotItem>
                 <PivotItem Header="Сценарии">
