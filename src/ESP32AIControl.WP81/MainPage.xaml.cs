@@ -389,7 +389,9 @@ namespace ESP32AIControl.WP81
                 var conditionText = string.Join("  ·  ", scenario.Conditions.Select((condition, index) =>
                     (index == 0 ? string.Empty : (condition.Connector == "OR" ? "ИЛИ " : "И ")) +
                     condition.WidgetId + " " + condition.Operator + " " +
-                    condition.Threshold.ToString(CultureInfo.InvariantCulture)));
+                    (condition.Operator == "ON_FOR_GT"
+                        ? (condition.DurationMs / 60000.0).ToString("0.##", CultureInfo.InvariantCulture)
+                        : condition.Threshold.ToString(CultureInfo.InvariantCulture))));
                 var actionText = scenario.Actions == null || scenario.Actions.Count == 0
                     ? "Действия не заданы"
                     : string.Join("  ·  ", scenario.Actions.Select(action =>
@@ -612,7 +614,7 @@ namespace ESP32AIControl.WP81
 
                 var op = tokens[1];
                 if (op != ">" && op != ">=" && op != "<" && op != "<=" &&
-                    op != "=" && op != "==" && op != "!=")
+                    op != "=" && op != "==" && op != "!=" && op != "ON_FOR_GT")
                 {
                     await ShowLocalScenarioErrorAsync("Неизвестный оператор в строке " + (i + 1) + ".");
                     return;
@@ -622,7 +624,8 @@ namespace ESP32AIControl.WP81
                 {
                     WidgetId = tokens[0],
                     Operator = op,
-                    Threshold = threshold,
+                    Threshold = op == "ON_FOR_GT" ? 0 : threshold,
+                    DurationMs = op == "ON_FOR_GT" ? (long)Math.Round(threshold * 60000.0) : 0,
                     Connector = scenario.Conditions.Count == 0 ? "AND" : connector
                 });
             }
