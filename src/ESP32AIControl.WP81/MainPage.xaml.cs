@@ -3412,6 +3412,98 @@ namespace ESP32AIControl.WP81
             if (GraphZoomLabel != null) GraphZoomLabel.Text = "×1,0";
         }
 
+        private async void ExportCompareCsvButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (_graphCompareKeys.Count == 0)
+                {
+                    GraphSummary.Text = "Сначала добавьте датчики в список сравнения.";
+                    return;
+                }
+
+                var from = new DateTimeOffset(GraphFrom.Date.Date);
+                var to = new DateTimeOffset(GraphTo.Date.Date.AddDays(1).AddTicks(-1));
+                var rows = new SortedDictionary<DateTimeOffset, Dictionary<string, string>>();
+                var exportKeys = new List<string>();
+
+                foreach (var key in _graphCompareKeys.ToList())
+                {
+                    WidgetState state;
+                    if (!_widgetIndex.TryGetValue(key, out state)) continue;
+                    exportKeys.Add(key);
+                    var points = await _measurementStore.ReadAsync(state.DeviceId, state.Id, from, to);
+                    foreach (var point in points)
+                    {
+                        Dictionary<string, string> values;
+                        if (!rows.TryGetValue(point.Timestamp, out values))
+                        {
+                            values = new Dictionary<string, string>();
+                            rows.Add(point.Timestamp, values);
+                        }
+                        values[key] = point.Value ?? string.Empty;
+                    }
+                }
+
+                if (exportKeys.Count == 0 || rows.Count == 0)
+                {
+                    GraphSummary.Text = "Нет данных для экспорта.";
+                    return;
+                }
+
+                var builder = new System.Text.StringBuilder();
+                builder.Append(EscapeCsvField("Дата и время"));
+                foreach (var key in exportKeys)
+                {
+                    builder.Append(';');
+                    builder.Append(EscapeCsvField(key));
+                }
+                builder.AppendLine();
+
+                foreach (var row in rows)
+                {
+                    builder.Append(EscapeCsvField(row.Key.ToLocalTime().ToString(
+                        "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)));
+                    foreach (var key in exportKeys)
+                    {
+                        string value;
+                        builder.Append(';');
+                        builder.Append(EscapeCsvField(row.Value.TryGetValue(key, out value) ? value : string.Empty));
+                    }
+                    builder.AppendLine();
+                }
+
+                var picker = new FileSavePicker
+                {
+                    SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
+                    SuggestedFileName = "ESP32-сравнение-" + DateTime.Now.ToString("yyyyMMdd-HHmm", CultureInfo.InvariantCulture)
+                };
+                picker.FileTypeChoices.Add("CSV", new List<string> { ".csv" });
+                var file = await picker.PickSaveFileAsync();
+                if (file == null)
+                {
+                    GraphSummary.Text = "Экспорт отменён.";
+                    return;
+                }
+
+                await FileIO.WriteTextAsync(file, builder.ToString(), Windows.Storage.Streams.UnicodeEncoding.Utf8);
+                GraphSummary.Text = "CSV сохранён: " + file.Name + " • датчиков: " +
+                    exportKeys.Count.ToString(CultureInfo.InvariantCulture) +
+                    " • строк: " + rows.Count.ToString(CultureInfo.InvariantCulture);
+                Log("COMPARE CSV EXPORTED: " + file.Name);
+            }
+            catch (Exception ex)
+            {
+                GraphSummary.Text = "Ошибка CSV-экспорта: " + ex.Message;
+                Log("COMPARE CSV EXPORT ERROR: " + ex.Message);
+            }
+        }
+
+        private static string EscapeCsvField(string value)
+        {
+            return "\"" + (value ?? string.Empty).Replace("\"", "\"\"") + "\"";
+        }
+
         private async void ExportGraphButton_Click(object sender, RoutedEventArgs e)
         {
             try
