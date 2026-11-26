@@ -3508,6 +3508,16 @@ namespace ESP32AIControl.WP81
             return false;
         }
 
+        private void WidgetIntervalPresetBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (WidgetIntervalBox == null || WidgetIntervalPresetBox == null) return;
+            var item = WidgetIntervalPresetBox.SelectedItem as ComboBoxItem;
+            if (item == null) return;
+            var seconds = item.Tag as string;
+            if (!string.IsNullOrWhiteSpace(seconds))
+                WidgetIntervalBox.Text = seconds;
+        }
+
         private async void SaveWidgetIntervalButton_Click(object sender, RoutedEventArgs e)
         {
             try
