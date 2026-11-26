@@ -41,6 +41,7 @@ namespace ESP32AIControl.WP81.Core.Voice
         }
 
         private readonly DeviceRepository _devices;
+        private readonly MarfaAnalyticalEngine _analyticalEngine = new MarfaAnalyticalEngine();
         private List<WidgetState> _pending = new List<WidgetState>();
         private string _pendingValue = "1";
         private long _pendingDelay;
@@ -111,7 +112,27 @@ namespace ESP32AIControl.WP81.Core.Voice
                     "Не поняла. Скажите, например: «включи свет», «закрой форточку» или «какая температура?»");
             }
 
-            var candidates = RankCandidates(text, widgets, true);
+            var analytical = _analyticalEngine.ResolveControl(text, widgets, action);
+            var candidates = new List<Candidate>();
+            if (analytical.Candidate != null)
+                candidates.Add(new Candidate { Widget = analytical.Candidate.Widget, Score = analytical.Candidate.Score });
+            else if (analytical.Candidates != null && analytical.Candidates.Count > 0)
+            {
+                _pending = analytical.Candidates.Select(c => c.Widget).ToList();
+                _pendingValue = action;
+                _pendingDelay = delay;
+                return Result(MarfaCommandKind.Clarify, analytical.Clarification ?? BuildClarification(_pending));
+            }
+            else if (!string.IsNullOrWhiteSpace(analytical.Clarification))
+            {
+                _pending = new List<WidgetState>();
+                _pendingValue = action;
+                _pendingDelay = delay;
+                return Result(MarfaCommandKind.Clarify, analytical.Clarification);
+            }
+            else
+                candidates = RankCandidates(text, widgets, true);
+
             if (candidates.Count == 0 && IsPronoun(text) && _lastTarget != null)
                 candidates.Add(new Candidate { Widget = _lastTarget, Score = 100 });
 
@@ -194,7 +215,20 @@ namespace ESP32AIControl.WP81.Core.Voice
         private MarfaCommandResult ResolveValueQuestion(string text, IList<WidgetState> widgets)
         {
             var sensors = widgets.Where(IsSensor).ToList();
-            var candidates = RankCandidates(text, sensors, false);
+            var analytical = _analyticalEngine.ResolveSensor(text, sensors);
+            var candidates = new List<Candidate>();
+            if (analytical.Candidate != null)
+                candidates.Add(new Candidate { Widget = analytical.Candidate.Widget, Score = analytical.Candidate.Score });
+            else if (analytical.Candidates != null && analytical.Candidates.Count > 0)
+            {
+                _pending = analytical.Candidates.Select(c => c.Widget).ToList();
+                return Result(MarfaCommandKind.Clarify, analytical.Clarification ?? BuildClarification(_pending));
+            }
+            else if (!string.IsNullOrWhiteSpace(analytical.Clarification))
+                return Result(MarfaCommandKind.Clarify, analytical.Clarification);
+            else
+                candidates = RankCandidates(text, sensors, false);
+
             if (candidates.Count == 0)
                 candidates = sensors.Select(w => new Candidate { Widget = w, Score = 0 }).ToList();
             if (candidates.Count == 0)
