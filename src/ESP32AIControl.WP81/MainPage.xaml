@@ -421,6 +421,14 @@
                             <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1"
                                     CornerRadius="14" Padding="12" Margin="0,4,0,8">
                                 <StackPanel>
+                                    <TextBlock Text="ПРОВЕРКА МАРФЫ" FontSize="14" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,0,0,4"/>
+                                    <TextBlock Text="Откройте центр диагностики, чтобы проверить разбор команды и план действий без отправки команд на ESP32." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                                    <Button Content="Открыть проверку Марфы" Click="OpenMarfaDiagnostics_Click" MinHeight="44"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1"
+                                    CornerRadius="14" Padding="12" Margin="0,4,0,8">
+                                <StackPanel>
                                     <TextBlock Text="КОМАНДЫ ПО УМОЛЧАНИЮ" FontSize="14" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,0,0,4"/>
                                     <TextBlock Text="Действия для стандартных голосовых команд открытия и закрытия." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,0,0,4"/>
                                     <TextBox x:Name="VoiceOpenCommandBox" Header="Команда «открой теплицу»" PlaceholderText="device/widget=1"/>
