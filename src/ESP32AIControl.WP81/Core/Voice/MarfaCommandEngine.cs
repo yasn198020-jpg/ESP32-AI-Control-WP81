@@ -79,7 +79,7 @@ namespace ESP32AIControl.WP81.Core.Voice
             if (_pending.Count > 0)
                 return ResolvePending(text);
 
-            var split = SplitCommands(text);
+            var split = SplitCommands(text, widgets);
             if (split.Count > 1)
             {
                 var combined = new List<MarfaActionItem>();
@@ -306,14 +306,71 @@ namespace ESP32AIControl.WP81.Core.Voice
             return amount * multiplier;
         }
 
-        private static List<string> SplitCommands(string text)
+        private static List<string> SplitCommands(string text, IList<WidgetState> widgets)
         {
             var parts = Regex.Split(text, @"\s*(?:;|,\s*а\s+также\s+|\s+и\s+)\s*");
-            if (parts.Length < 2) return new List<string>();
+            if (parts.Length > 1)
+            {
+                var explicitCommands = new List<string>();
+                foreach (var part in parts)
+                {
+                    var trimmed = part.Trim();
+                    if (DetectAction(trimmed) != null) explicitCommands.Add(trimmed);
+                }
+                if (explicitCommands.Count > 1) return explicitCommands;
+            }
+
+            // Android Marfa supports a shared verb with several targets:
+            // "открой дверь и форточку" and context-specific pairs such as
+            // "открой дверь огурцов и форточку помидоров".
+            var tokens = Tokens(text);
+            var actionIndex = tokens.FindIndex(t => DetectAction(t) != null);
+            if (actionIndex < 0) return new List<string>();
+            var entities = new HashSet<string>(new[]
+            {
+                "дверь", "форточка", "окно", "ворота", "насос", "вентилятор",
+                "обогрев", "кран", "клапан", "свет", "лампа", "полив",
+                "реле", "канал", "кнопка", "выход", "gpio"
+            }, StringComparer.OrdinalIgnoreCase);
+            var targetIndices = new List<int>();
+            for (var i = actionIndex + 1; i < tokens.Count; i++)
+                if (entities.Contains(tokens[i])) targetIndices.Add(i);
+            if (targetIndices.Count < 2) return new List<string>();
+
+            var pageWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (widgets != null)
+            {
+                foreach (var widget in widgets)
+                    foreach (var word in Tokens(widget.Page ?? string.Empty))
+                        if (word.Length > 1 && !IsCommandWord(word)) pageWords.Add(word);
+            }
+
+            var actionValue = DetectAction(tokens[actionIndex]);
             var result = new List<string>();
-            foreach (var part in parts)
-                if (DetectAction(part) != null) result.Add(part.Trim());
-            return result.Count > 1 ? result : new List<string>();
+            for (var n = 0; n < targetIndices.Count; n++)
+            {
+                var targetIndex = targetIndices[n];
+                var nextTarget = n + 1 < targetIndices.Count ? targetIndices[n + 1] : tokens.Count;
+                var context = new List<string>();
+                for (var i = targetIndex + 1; i < nextTarget; i++)
+                    if (pageWords.Contains(tokens[i])) context.Add(tokens[i]);
+                if (context.Count == 0)
+                {
+                    for (var i = 0; i < targetIndex; i++)
+                        if (pageWords.Contains(tokens[i])) context.Add(tokens[i]);
+                }
+
+                var command = actionValue == "1" ? "включить" : "выключить";
+                var verb = tokens[actionIndex];
+                if (verb == "открыть") command = "открыть";
+                else if (verb == "закрыть") command = "закрыть";
+                else if (verb == "запустить") command = "запустить";
+                else if (verb == "остановить") command = "остановить";
+                command += " " + tokens[targetIndex];
+                if (context.Count > 0) command += " " + string.Join(" ", context.Distinct().ToArray());
+                result.Add(command);
+            }
+            return result;
         }
 
         private static List<string> Tokens(string text)
