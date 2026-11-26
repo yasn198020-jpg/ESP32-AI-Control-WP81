@@ -48,6 +48,7 @@ namespace ESP32AIControl.WP81.Core.Voice
         private readonly DialogContext _dialogContext = new DialogContext();
         private List<WidgetState> _pending = new List<WidgetState>();
         private List<WidgetState> _lastControlCandidates = new List<WidgetState>();
+        private List<MarfaActionItem> _pendingResolvedActions = new List<MarfaActionItem>();
         private string _lastCommandText = string.Empty;
         private string _pendingValue = "1";
         private long _pendingDelay;
@@ -197,12 +198,20 @@ namespace ESP32AIControl.WP81.Core.Voice
                 foreach (var part in split)
                 {
                     var item = ParseSingle(part, widgets);
-                    if (item.Kind == MarfaCommandKind.Clarify) return item;
+                    if (item.Kind == MarfaCommandKind.Clarify)
+                    {
+                        _pendingResolvedActions = combined.ToList();
+                        return item;
+                    }
                     if (item.Kind != MarfaCommandKind.Control)
+                    {
+                        _pendingResolvedActions.Clear();
                         return Result(MarfaCommandKind.NotFound, "Не удалось однозначно разобрать составную команду.");
+                    }
                     combined.AddRange(item.Actions);
                     maxDelay = Math.Max(maxDelay, item.DelayMs);
                 }
+                _pendingResolvedActions.Clear();
                 return ControlResult(combined, maxDelay);
             }
 
@@ -517,13 +526,15 @@ namespace ESP32AIControl.WP81.Core.Voice
                 return read;
             }
 
-            var actions = selected.Select(w => new MarfaActionItem
+            var actions = new List<MarfaActionItem>(_pendingResolvedActions);
+            actions.AddRange(selected.Select(w => new MarfaActionItem
             {
                 DeviceId = w.DeviceId, WidgetId = w.Id, Value = _pendingValue
-            }).ToList();
+            }));
             var delay = _pendingDelay;
             _lastTarget = selected[0];
             _lastValue = _pendingValue;
+            _pendingResolvedActions.Clear();
             ClearPending();
             return ControlResult(actions, delay, "Поняла. " +
                 (_lastValue == "1" ? "Включаю " : "Выключаю ") +
@@ -859,6 +870,7 @@ namespace ESP32AIControl.WP81.Core.Voice
             _pendingDelay = 0;
             _pendingOriginalText = string.Empty;
             _pendingReadValue = false;
+            _pendingResolvedActions.Clear();
         }
     }
 }
