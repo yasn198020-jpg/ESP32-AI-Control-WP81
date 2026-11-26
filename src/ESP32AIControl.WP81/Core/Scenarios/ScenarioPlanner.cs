@@ -964,30 +964,14 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                         IoTScenarioEvaluator.Evaluate(rule.Condition.Expression, simulatedContext)))
                         continue;
 
-                    bool requestedValueMatches = true;
-                    foreach (var matchingAction in matchingActions)
-                    {
-                        if (!ScenarioValueMatches(
-                            IoTScenarioEvaluator.Evaluate(matchingAction.Expression, simulatedContext), target.Value))
-                        {
-                            requestedValueMatches = false;
-                            break;
-                        }
-                    }
-                    if (!requestedValueMatches) continue;
-
                     var completePlan = new List<ScenarioAction>(proposed);
                     bool actionsResolved = true;
+                    bool requestedValueMatches = false;
                     foreach (var ruleAction in rule.Actions)
                     {
-                        var matches = _devices.GetWidgetsById(ruleAction.TargetId);
-                        if (matches.Count == 0) continue; // Internal IoTManager variable.
-                        if (matches.Count != 1)
-                        {
-                            actionsResolved = false;
-                            break;
-                        }
-
+                        // IoTManager assignments are evaluated in source order.
+                        // Internal variables written by an earlier action become
+                        // visible to expressions of subsequent actions.
                         var value = IoTScenarioEvaluator.Evaluate(ruleAction.Expression, simulatedContext);
                         string formatted;
                         if (!TryFormatScenarioValue(value, out formatted))
@@ -996,18 +980,33 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                             break;
                         }
 
-                        var widget = matches[0];
-                        if (string.Equals(widget.Id, target.WidgetId, StringComparison.OrdinalIgnoreCase))
+                        var matches = _devices.GetWidgetsById(ruleAction.TargetId);
+                        if (string.Equals(ruleAction.TargetId, target.WidgetId, StringComparison.OrdinalIgnoreCase))
                         {
-                            if (!string.Equals(widget.DeviceId, target.DeviceId, StringComparison.OrdinalIgnoreCase) ||
+                            if (matches.Count != 1 ||
+                                !string.Equals(matches[0].DeviceId, target.DeviceId, StringComparison.OrdinalIgnoreCase) ||
                                 !ScenarioValuesEquivalent(formatted, target.Value))
                             {
                                 actionsResolved = false;
                                 break;
                             }
+                            requestedValueMatches = true;
+                            simulated[ruleAction.TargetId] = formatted;
                             continue;
                         }
 
+                        if (matches.Count == 0)
+                        {
+                            simulated[ruleAction.TargetId] = formatted;
+                            continue;
+                        }
+                        if (matches.Count != 1)
+                        {
+                            actionsResolved = false;
+                            break;
+                        }
+
+                        var widget = matches[0];
                         completePlan.Add(new ScenarioAction
                         {
                             Command = widget.DeviceId + "/" + widget.Id + "=" + formatted,
@@ -1017,8 +1016,9 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                             Reason = "Совместное действие активированной ветки сценария",
                             IsDependency = true
                         });
+                        simulated[ruleAction.TargetId] = formatted;
                     }
-                    if (!actionsResolved) continue;
+                    if (!actionsResolved || !requestedValueMatches) continue;
 
                     completePlan.Add(target);
                     if (proposed.Count < bestDependencyCount)
