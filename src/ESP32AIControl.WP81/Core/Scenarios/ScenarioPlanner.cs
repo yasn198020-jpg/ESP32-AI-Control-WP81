@@ -304,7 +304,15 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                     var linked = manualRule.Actions.Any(a =>
                         string.Equals(a.TargetId, physicalAction.WidgetId, StringComparison.OrdinalIgnoreCase) ||
                         string.Equals(a.TargetId, logicalTarget.WidgetId, StringComparison.OrdinalIgnoreCase) ||
-                        rule.Condition.Identifiers.Contains(a.TargetId));
+                        rule.Condition.Identifiers.Contains(a.TargetId) ||
+                        ScenarioExpressionDependsOnIdentifier(a.Expression, physicalAction.WidgetId, model,
+                            new HashSet<string>(StringComparer.OrdinalIgnoreCase)) ||
+                        ScenarioExpressionDependsOnIdentifier(a.Expression, logicalTarget.WidgetId, model,
+                            new HashSet<string>(StringComparer.OrdinalIgnoreCase))) ||
+                        ScenarioExpressionDependsOnIdentifier(manualRule.Condition.Expression,
+                            physicalAction.WidgetId, model, new HashSet<string>(StringComparer.OrdinalIgnoreCase)) ||
+                        ScenarioExpressionDependsOnIdentifier(manualRule.Condition.Expression,
+                            logicalTarget.WidgetId, model, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
                     if (!linked) continue;
 
                     var matches = _devices.GetWidgetsById(id);
@@ -481,6 +489,55 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                 }
             }
             return matches.Count > 0 && matches.All(x => x);
+        }
+
+        // Follow data-flow through intermediate variables in both conditions
+        // and action expressions. The bounded path set prevents assignment cycles
+        // from being interpreted as a valid link.
+        private static bool ScenarioExpressionDependsOnIdentifier(
+            IoTExpr expression,
+            string targetIdentifier,
+            DeviceScenarioModel model,
+            ISet<string> visiting)
+        {
+            if (expression == null || model == null) return false;
+            var variable = expression as IoTExpr.Variable;
+            if (variable != null)
+            {
+                if (string.Equals(variable.Name, targetIdentifier, StringComparison.OrdinalIgnoreCase))
+                    return true;
+                if (!visiting.Add(variable.Name)) return false;
+
+                var assignments = model.Rules.SelectMany(r => r.Actions)
+                    .Where(a => string.Equals(a.TargetId, variable.Name, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                if (assignments.Count == 0) return false;
+
+                // Every definition must preserve the dependency; otherwise the
+                // variable is not a reliable bridge to the requested target.
+                return assignments.All(a => ScenarioExpressionDependsOnIdentifier(
+                    a.Expression, targetIdentifier, model,
+                    new HashSet<string>(visiting, StringComparer.OrdinalIgnoreCase)));
+            }
+
+            var unary = expression as IoTExpr.Unary;
+            if (unary != null)
+                return ScenarioExpressionDependsOnIdentifier(unary.Expression, targetIdentifier, model, visiting);
+
+            var binary = expression as IoTExpr.Binary;
+            if (binary != null)
+                return ScenarioExpressionDependsOnIdentifier(binary.Left, targetIdentifier, model,
+                           new HashSet<string>(visiting, StringComparer.OrdinalIgnoreCase)) ||
+                       ScenarioExpressionDependsOnIdentifier(binary.Right, targetIdentifier, model,
+                           new HashSet<string>(visiting, StringComparer.OrdinalIgnoreCase));
+
+            var call = expression as IoTExpr.Call;
+            if (call != null)
+                return call.Arguments.Any(argument => ScenarioExpressionDependsOnIdentifier(
+                    argument, targetIdentifier, model,
+                    new HashSet<string>(visiting, StringComparer.OrdinalIgnoreCase)));
+
+            return false;
         }
 
         private static bool TryGetEqualityValue(IoTExpr expression, string identifier, out string value)
