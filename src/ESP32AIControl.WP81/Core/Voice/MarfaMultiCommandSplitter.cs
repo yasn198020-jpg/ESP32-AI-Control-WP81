@@ -74,7 +74,7 @@ namespace ESP32AIControl.WP81.Core.Voice
             var actionIndex = Array.FindIndex(tokens, t => Actions.ContainsKey(t));
             if (actionIndex < 0) return new List<string> { clause };
             var objects = Enumerable.Range(actionIndex + 1, Math.Max(0, tokens.Length - actionIndex - 1))
-                .Where(i => Entities.Contains(RussianSemanticNormalizer.NormalizeToken(tokens[i]))).ToList();
+                .Where(i => IsEntityToken(RussianSemanticNormalizer.NormalizeToken(tokens[i]))).ToList();
             if (objects.Count < 2) return new List<string> { clause };
 
             var action = Actions[tokens[actionIndex]];
@@ -95,6 +95,17 @@ namespace ESP32AIControl.WP81.Core.Voice
                 output.Add(command);
             }
             return output;
+        }
+
+        private static bool IsEntityToken(string token)
+        {
+            var stems = new[]
+            {
+                "двер", "форточк", "фрамуг", "окн", "ворот", "насос", "помп",
+                "вентилят", "вент", "обогрев", "отоп", "нагрев", "клапан", "кран",
+                "свет", "ламп", "полив", "орош", "рел", "выход", "кнопк", "gpio", "канал"
+            };
+            return stems.Any(stem => token.StartsWith(stem, StringComparison.OrdinalIgnoreCase));
         }
 
         private static string Stem(string word)
