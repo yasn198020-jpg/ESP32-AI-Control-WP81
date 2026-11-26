@@ -38,6 +38,11 @@ namespace ESP32AIControl.WP81.Core.Voice
         {
             var normalized = RussianSemanticNormalizer.Normalize(text);
             var page = ExplicitPage(normalized, widgets);
+            if (HasExplicitPageMarker(normalized) && page == null)
+                return new MarfaAnalyticalResolution
+                {
+                    Clarification = "Не нашла указанную вкладку. Доступные вкладки: " + AvailablePages(widgets) + "."
+                };
             var exactId = ExplicitElementId(normalized, widgets);
             var all = new List<MarfaAnalyticalCandidate>();
 
@@ -127,6 +132,11 @@ namespace ESP32AIControl.WP81.Core.Voice
         {
             var normalized = RussianSemanticNormalizer.Normalize(text);
             var page = ExplicitPage(normalized, widgets);
+            if (HasExplicitPageMarker(normalized) && page == null)
+                return new MarfaAnalyticalResolution
+                {
+                    Clarification = "Не нашла указанную вкладку. Доступные вкладки: " + AvailablePages(widgets) + "."
+                };
             var kind = DetectSensorKind(normalized);
             var all = new List<MarfaAnalyticalCandidate>();
             foreach (var widget in widgets ?? new List<WidgetState>())
@@ -378,6 +388,21 @@ namespace ESP32AIControl.WP81.Core.Voice
             if (!string.IsNullOrWhiteSpace(desiredValue)) reasons.Add("значение " + desiredValue);
             if (!string.IsNullOrWhiteSpace(widget.Description)) reasons.Add("название " + widget.Description);
             return reasons;
+        }
+
+        private static bool HasExplicitPageMarker(string text)
+        {
+            return Regex.IsMatch(text, @"(?:на\s+страниц(?:е|у)|на\s+вкладк(?:е|у)|во\s+вкладк(?:е|у)|в\s+вкладк(?:е|у)|страниц(?:а|у)|вкладк(?:а|у))\s+");
+        }
+
+        private static string AvailablePages(IList<WidgetState> widgets)
+        {
+            var pages = (widgets ?? new List<WidgetState>())
+                .Select(w => w.Page)
+                .Where(p => !string.IsNullOrWhiteSpace(p))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(8).ToList();
+            return pages.Count == 0 ? "нет переданных вкладок" : string.Join(", ", pages.ToArray());
         }
 
         private static string ExplicitPage(string text, IList<WidgetState> widgets)
