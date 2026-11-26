@@ -1930,9 +1930,9 @@ namespace ESP32AIControl.WP81
             for (var i = 0; i < diagnostics.Count; i++)
             {
                 var item = diagnostics[i];
-                if (item.Status != null && item.Status.StartsWith("Неоднознач", StringComparison.OrdinalIgnoreCase))
+                if (item.Status != null && item.Status.IndexOf("Неоднознач", StringComparison.OrdinalIgnoreCase) >= 0)
                     ambiguous++;
-                else if (item.Status != null && item.Status.StartsWith("Не найден", StringComparison.OrdinalIgnoreCase))
+                if (item.Status != null && item.Status.StartsWith("Не найден", StringComparison.OrdinalIgnoreCase))
                     unresolved++;
 
                 var device = string.IsNullOrWhiteSpace(item.DeviceId)
