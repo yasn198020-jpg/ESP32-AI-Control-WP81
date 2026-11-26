@@ -121,6 +121,8 @@ namespace ESP32AIControl.WP81
         public MainPage()
         {
             InitializeComponent();
+            // Android parity: keep the default "Основная" dashboard tab available even before widgets arrive.
+            GetOrCreatePageVisual("Основная");
             WidgetPages.SelectionChanged += WidgetPages_SelectionChanged;
             GraphCanvas.Tapped += GraphCanvas_Tapped;
             _trainedCommands.AddRange(LoadTrainedCommands());
@@ -3174,7 +3176,9 @@ namespace ESP32AIControl.WP81
 
             var empty = new List<string>();
             foreach (var pair in _pages)
-                if (pair.Value.Content.Children.Count == 0) empty.Add(pair.Key);
+                if (pair.Value.Content.Children.Count == 0 &&
+                    !string.Equals(pair.Key, "Основная", StringComparison.Ordinal))
+                    empty.Add(pair.Key);
 
             _restoringWidgetPageSelection = true;
             try
