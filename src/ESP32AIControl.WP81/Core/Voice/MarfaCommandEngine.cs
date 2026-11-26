@@ -379,7 +379,7 @@ namespace ESP32AIControl.WP81.Core.Voice
                 WidgetId = best.Widget.Id,
                 Value = action
             };
-            var verb = action == "1" ? "Включаю" : "Выключаю";
+            var verb = action == "1" ? "Включаю" : action == "0" ? "Выключаю" : "Устанавливаю значение " + action + " для";
             var title = string.IsNullOrWhiteSpace(best.Widget.Description) ? best.Widget.Id : best.Widget.Description;
             return ControlResult(new[] { actionItem }, delay,
                 verb + " " + title + (delay > 0 ? " через " + FormatDelay(delay) : string.Empty) + ".");
@@ -533,10 +533,13 @@ namespace ESP32AIControl.WP81.Core.Voice
 
         private static string DetectAction(string text)
         {
+            var setValue = Regex.Match(text,
+                @"(?:установи|установить|поставь|поставить|задай|задать|назначь|назначить)\s+(-?\d+(?:[.,]\d+)?)");
+            if (setValue.Success) return setValue.Groups[1].Value.Replace(',', '.');
             if (HasAny(text, "включи", "включить", "запусти", "запустить", "открой", "открыть",
-                "подними", "поднять", "активируй", "активировать", "on")) return "1";
+                "подними", "поднять", "активируй", "активировать", "зажги", "распахни", "on")) return "1";
             if (HasAny(text, "выключи", "выключить", "останови", "остановить", "закрой", "закрыть",
-                "опусти", "опустить", "отключи", "отключить", "off")) return "0";
+                "опусти", "опустить", "отключи", "отключить", "погаси", "запечатай", "off")) return "0";
             return null;
         }
 
