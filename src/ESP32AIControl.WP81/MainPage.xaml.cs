@@ -1982,7 +1982,7 @@ namespace ESP32AIControl.WP81
                 {
                     Minimum = sliderMin,
                     Maximum = sliderMax,
-                    StepFrequency = 1,
+                    StepFrequency = Math.Max(0.01, GetWidgetConfigNumber(state, "step", 1)),
                     HorizontalAlignment = HorizontalAlignment.Stretch,
                     Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255)),
                     Margin = new Thickness(34, 2, 8, 0)
@@ -2772,6 +2772,17 @@ namespace ESP32AIControl.WP81
                 visual.ValueText.Foreground = new SolidColorBrush(GetWidgetValueColor(visual.State, value));
             }
 
+            // Android widget definitions can provide either a fixed color or
+            // threshold entries in "color". Apply the same resolved color to
+            // numeric controls as well as the value text.
+            var valueColor = GetWidgetValueColor(visual.State, value);
+            var sliderColorTarget = visual.Control as Slider;
+            if (sliderColorTarget != null)
+                sliderColorTarget.Foreground = new SolidColorBrush(valueColor);
+            var progressColorTarget = visual.Control as ProgressBar;
+            if (progressColorTarget != null)
+                progressColorTarget.Foreground = new SolidColorBrush(valueColor);
+
             var toggle = visual.Control as ToggleSwitch;
             if (toggle != null)
             {
@@ -2807,8 +2818,25 @@ namespace ESP32AIControl.WP81
             if (combo != null)
             {
                 int selected;
-                if (int.TryParse(value, out selected) && selected >= 0 && selected < combo.Items.Count)
-                    combo.SelectedIndex = selected;
+                if (int.TryParse((value ?? string.Empty).Trim(), NumberStyles.Integer,
+                    CultureInfo.InvariantCulture, out selected))
+                {
+                    if (selected >= 0 && selected < combo.Items.Count)
+                        combo.SelectedIndex = selected;
+                }
+                else
+                {
+                    var incoming = (value ?? string.Empty).Trim();
+                    for (var i = 0; i < combo.Items.Count; i++)
+                    {
+                        var option = combo.Items[i] as string;
+                        if (string.Equals(option, incoming, StringComparison.OrdinalIgnoreCase))
+                        {
+                            combo.SelectedIndex = i;
+                            break;
+                        }
+                    }
+                }
                 return;
             }
 
