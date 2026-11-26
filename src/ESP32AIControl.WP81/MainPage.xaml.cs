@@ -4681,19 +4681,18 @@ namespace ESP32AIControl.WP81
                 Content = "Очистить старые измерения",
                 MinHeight = 44,
                 Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255)),
-                Foreground = new SolidColorBrush(Windows.UI.Colors.White)
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 32, 32, 32)),
+                FontWeight = Windows.UI.Text.FontWeights.SemiBold
             };
             historyButton.Click += async delegate
             {
                 var days = _appSettings == null ? 7 : Math.Max(1, _appSettings.RetentionDays);
-                var dialog = new Windows.UI.Popups.MessageDialog(
+                var confirmed = await ShowAppConfirmationAsync(
+                    "Очистка истории",
                     "Удалить записи истории старше " + days.ToString(CultureInfo.InvariantCulture) +
                     " дн.? Более новые измерения сохранятся.",
-                    "Очистка истории");
-                dialog.Commands.Add(new Windows.UI.Popups.UICommand("Удалить старые записи"));
-                dialog.Commands.Add(new Windows.UI.Popups.UICommand("Отмена"));
-                var result = await dialog.ShowAsync();
-                if (result == null || result.Label != "Удалить старые записи") return;
+                    "Удалить");
+                if (!confirmed) return;
 
                 try
                 {
@@ -4743,13 +4742,11 @@ namespace ESP32AIControl.WP81
             };
             logButton.Click += async delegate
             {
-                var dialog = new Windows.UI.Popups.MessageDialog(
-                    "Удалить сохранённый диагностический журнал?",
-                    "Очистка журнала");
-                dialog.Commands.Add(new Windows.UI.Popups.UICommand("Очистить"));
-                dialog.Commands.Add(new Windows.UI.Popups.UICommand("Отмена"));
-                var result = await dialog.ShowAsync();
-                if (result == null || result.Label != "Очистить") return;
+                var confirmed = await ShowAppConfirmationAsync(
+                    "Очистка журнала",
+                    "Удалить сохранённые записи подключения, UDP и сетевых ошибок? История измерений и обученные команды останутся.",
+                    "Очистить");
+                if (!confirmed) return;
 
                 _connectionJournal.Clear();
                 if (LogText != null) LogText.Text = string.Empty;
@@ -5606,6 +5603,65 @@ namespace ESP32AIControl.WP81
             body.Children.Add(actions);
 
             _trainingPopup = CreateAppPopup(body, 330, 520);
+        }
+
+        private async Task<bool> ShowAppConfirmationAsync(string title, string message, string confirmText)
+        {
+            var body = new StackPanel();
+            body.Children.Add(new TextBlock
+            {
+                Text = title,
+                FontSize = 18,
+                FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255)),
+                Margin = new Thickness(12, 12, 12, 6)
+            });
+            body.Children.Add(new TextBlock
+            {
+                Text = message,
+                FontSize = 13,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 190, 192, 201)),
+                Margin = new Thickness(12, 0, 12, 12)
+            });
+
+            var actions = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(8, 4, 8, 8)
+            };
+            Popup popup = null;
+            var completion = new TaskCompletionSource<bool>();
+            var cancel = new Button
+            {
+                Content = "Отмена",
+                MinHeight = 44,
+                Margin = new Thickness(0, 0, 6, 0)
+            };
+            cancel.Click += delegate
+            {
+                if (popup != null) popup.IsOpen = false;
+                completion.TrySetResult(false);
+            };
+            var confirm = new Button
+            {
+                Content = confirmText,
+                MinHeight = 44,
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 208, 188, 255)),
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 32, 32, 32)),
+                FontWeight = Windows.UI.Text.FontWeights.SemiBold
+            };
+            confirm.Click += delegate
+            {
+                if (popup != null) popup.IsOpen = false;
+                completion.TrySetResult(true);
+            };
+            actions.Children.Add(cancel);
+            actions.Children.Add(confirm);
+            body.Children.Add(actions);
+            popup = CreateAppPopup(body, 330, 280);
+            return await completion.Task;
         }
 
         private Popup CreateAppPopup(Panel content, double width, double maxHeight)
