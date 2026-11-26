@@ -297,7 +297,7 @@ namespace ESP32AIControl.WP81
             await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, delegate { Log(message); });
         }
 
-        private void WebSocketFallback_WidgetUpdated(object sender, WebSocketWidgetUpdateEventArgs e)
+        private async void WebSocketFallback_WidgetUpdated(object sender, WebSocketWidgetUpdateEventArgs e)
         {
             if (e == null) return;
             var message = new Esp32Message
@@ -310,7 +310,10 @@ namespace ESP32AIControl.WP81
             };
             _devices.Apply(message);
             _localScenarioEngine.OnMessage(message, !e.IsSnapshot);
-            RefreshLocalScenarioBuilderOptions();
+            await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, delegate
+            {
+                RefreshLocalScenarioBuilderOptions();
+            });
         }
 
         private async void LocalScenario_Triggered(LocalScenarioDefinition scenario, string rawValue)
