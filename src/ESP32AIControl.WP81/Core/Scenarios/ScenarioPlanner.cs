@@ -98,6 +98,30 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                 if (action == null)
                     throw new ArgumentException("Формат команды: device/widget=value", "command");
 
+                // A natural-language match can land on the physical relay.
+                // Resolve it through the scenario before planning the command.
+                DeviceScenarioRule actuatorRule;
+                ScenarioAction logicalTarget;
+                bool ambiguousLogicalTarget;
+                if (TryResolveLogicalTargetFromActuator(action, out logicalTarget,
+                    out actuatorRule, out ambiguousLogicalTarget))
+                {
+                    ScenarioAction modeAction;
+                    if (TryBuildManualModeActuatorPlan(action, logicalTarget, actuatorRule, out modeAction))
+                    {
+                        if (modeAction != null) plan.Actions.Add(modeAction);
+                        plan.Actions.Add(action);
+                        continue;
+                    }
+                    action = logicalTarget;
+                }
+                else if (ambiguousLogicalTarget)
+                {
+                    throw new InvalidOperationException(
+                        "Нельзя однозначно определить логическое состояние для исполнительного устройства " +
+                        action.DeviceId + "/" + action.WidgetId + ". Команда не отправлена.");
+                }
+
                 if (!TryAddReverseScenarioPlan(plan, action) && !TryAddExpressionDependencyPlan(plan, action))
                 {
                     AddAutomationDependency(plan, action);
@@ -155,6 +179,204 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             plan.Actions.Clear();
             for (var i = 0; i < uniqueActions.Count; i++)
                 plan.Actions.Add(uniqueActions[i]);
+        }
+
+        /// <summary>
+        /// Resolves a physical output back to the logical state written by the
+        /// same IoTManager rule. IDs must resolve to exactly one widget; no
+        /// fuzzy ID matching or cross-device binding is allowed.
+        /// </summary>
+        private bool TryResolveLogicalTargetFromActuator(
+            ScenarioAction physicalAction,
+            out ScenarioAction logicalTarget,
+            out DeviceScenarioRule matchedRule,
+            out bool ambiguous)
+        {
+            logicalTarget = null;
+            matchedRule = null;
+            ambiguous = false;
+            if (physicalAction == null || _scenarioAnalyzer == null ||
+                _scenarioAnalyzer.LanguageModel == null ||
+                (physicalAction.Value != "0" && physicalAction.Value != "1"))
+                return false;
+
+            var model = _scenarioAnalyzer.LanguageModel;
+            if (!model.Valid) return false;
+
+            var candidates = new List<Tuple<ScenarioAction, DeviceScenarioRule>>();
+            foreach (var rule in model.Rules)
+            {
+                var drivesRequestedOutput = rule.Actions.Any(a =>
+                    string.Equals(a.TargetId, physicalAction.WidgetId, StringComparison.OrdinalIgnoreCase) &&
+                    LiteralMatches(a.Expression, physicalAction.Value));
+                if (!drivesRequestedOutput) continue;
+
+                foreach (var stateAction in rule.Actions)
+                {
+                    if (string.Equals(stateAction.TargetId, physicalAction.WidgetId, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    string stateValue;
+                    if (!TryGetLiteral(stateAction.Expression, out stateValue) ||
+                        (stateValue != "0" && stateValue != "1"))
+                        continue;
+                    if (!ExpressionHasEquality(rule.Condition.Expression, stateAction.TargetId))
+                        continue;
+
+                    var matches = _devices.GetWidgetsById(stateAction.TargetId);
+                    if (matches.Count != 1 ||
+                        !string.Equals(matches[0].DeviceId, physicalAction.DeviceId, StringComparison.OrdinalIgnoreCase) ||
+                        !IsUserControl(matches[0]) || IsPhysicalActuator(matches[0]))
+                        continue;
+
+                    candidates.Add(Tuple.Create(new ScenarioAction
+                    {
+                        Command = matches[0].DeviceId + "/" + matches[0].Id + "=" + stateValue,
+                        DeviceId = matches[0].DeviceId,
+                        WidgetId = matches[0].Id,
+                        Value = stateValue,
+                        Reason = "Логическое состояние найдено по сценарию исполнительного устройства",
+                        IsDependency = false
+                    }, rule));
+                }
+            }
+
+            var unique = candidates
+                .GroupBy(x => x.Item1.DeviceId + "/" + x.Item1.WidgetId + "=" + x.Item1.Value,
+                    StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.First()).ToList();
+            if (unique.Count > 1)
+            {
+                ambiguous = true;
+                return false;
+            }
+            if (unique.Count == 0) return false;
+
+            logicalTarget = unique[0].Item1;
+            matchedRule = unique[0].Item2;
+            return true;
+        }
+
+        /// <summary>
+        /// If the matched actuator branch is guarded by automatic mode, switch
+        /// to manual mode first and then issue the requested physical action.
+        /// Only a unique, same-device mode control is accepted.
+        /// </summary>
+        private bool TryBuildManualModeActuatorPlan(
+            ScenarioAction physicalAction,
+            ScenarioAction logicalTarget,
+            DeviceScenarioRule rule,
+            out ScenarioAction modeAction)
+        {
+            modeAction = null;
+            if (rule == null || logicalTarget == null) return false;
+
+            var modeCandidates = new List<WidgetState>();
+            foreach (var id in rule.Condition.Identifiers)
+            {
+                var matches = _devices.GetWidgetsById(id);
+                if (matches.Count != 1 ||
+                    !string.Equals(matches[0].DeviceId, physicalAction.DeviceId, StringComparison.OrdinalIgnoreCase) ||
+                    !IsUserControl(matches[0]) || !IsModeWidget(matches[0]))
+                    continue;
+
+                string gateValue;
+                if (!TryGetEqualityValue(rule.Condition.Expression, id, out gateValue))
+                    continue;
+                if (gateValue == "0") modeCandidates.Add(matches[0]);
+            }
+
+            var distinct = modeCandidates.GroupBy(x => x.Id, StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.First()).ToList();
+            if (distinct.Count == 0) return false;
+            if (distinct.Count != 1)
+                throw new InvalidOperationException(
+                    "В сценарии найдено несколько переключателей режима для " +
+                    physicalAction.DeviceId + "/" + physicalAction.WidgetId +
+                    ". Команда не отправлена.");
+
+            var mode = distinct[0];
+            if (!ScenarioValuesEquivalent(mode.Value, "1"))
+            {
+                modeAction = new ScenarioAction
+                {
+                    Command = mode.DeviceId + "/" + mode.Id + "=1",
+                    DeviceId = mode.DeviceId,
+                    WidgetId = mode.Id,
+                    Value = "1",
+                    Reason = "Переключить управление в ручной режим перед прямым управлением исполнительным устройством",
+                    IsDependency = true
+                };
+            }
+            return true;
+        }
+
+        private static bool IsModeWidget(WidgetState state)
+        {
+            if (state == null) return false;
+            var description = (state.Description ?? string.Empty) + " " +
+                (state.DefinitionName ?? string.Empty) + " " + (state.WidgetType ?? string.Empty);
+            return HasAny(description, AutomationWords) || HasAny(description, ManualWords) ||
+                HasAny(description, new[] { "режим", "mode" });
+        }
+
+        private static bool IsPhysicalActuator(WidgetState state)
+        {
+            if (state == null) return false;
+            return string.Equals(state.WidgetType, "ButtonOut", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(state.DefinitionName, "ButtonOut", StringComparison.OrdinalIgnoreCase) ||
+                HasAny(state.Description, ActionWords);
+        }
+
+        private static bool TryGetLiteral(IoTExpr expression, out string value)
+        {
+            value = null;
+            var number = expression as IoTExpr.NumberLiteral;
+            if (number != null)
+            {
+                value = number.Value.ToString("0.################", System.Globalization.CultureInfo.InvariantCulture);
+                return true;
+            }
+            var text = expression as IoTExpr.StringLiteral;
+            if (text != null) { value = text.Value; return true; }
+            var variable = expression as IoTExpr.Variable;
+            if (variable != null && (variable.Name.Equals("true", StringComparison.OrdinalIgnoreCase) ||
+                variable.Name.Equals("false", StringComparison.OrdinalIgnoreCase)))
+            {
+                value = variable.Name.Equals("true", StringComparison.OrdinalIgnoreCase) ? "1" : "0";
+                return true;
+            }
+            return false;
+        }
+
+        private static bool LiteralMatches(IoTExpr expression, string expected)
+        {
+            string value;
+            return TryGetLiteral(expression, out value) && ScenarioValuesEquivalent(value, expected);
+        }
+
+        private static bool ExpressionHasEquality(IoTExpr expression, string identifier)
+        {
+            string ignored;
+            return TryGetEqualityValue(expression, identifier, out ignored);
+        }
+
+        private static bool TryGetEqualityValue(IoTExpr expression, string identifier, out string value)
+        {
+            value = null;
+            var binary = expression as IoTExpr.Binary;
+            if (binary == null) return false;
+            if (binary.Operator == "==")
+            {
+                var left = binary.Left as IoTExpr.Variable;
+                var right = binary.Right as IoTExpr.Variable;
+                string literal;
+                if (left != null && string.Equals(left.Name, identifier, StringComparison.OrdinalIgnoreCase) &&
+                    TryGetLiteral(binary.Right, out literal)) { value = literal; return true; }
+                if (right != null && string.Equals(right.Name, identifier, StringComparison.OrdinalIgnoreCase) &&
+                    TryGetLiteral(binary.Left, out literal)) { value = literal; return true; }
+            }
+            return TryGetEqualityValue(binary.Left, identifier, out value) ||
+                TryGetEqualityValue(binary.Right, identifier, out value);
         }
 
         private bool TryAddReverseScenarioPlan(ScenarioPlan plan, ScenarioAction target)
