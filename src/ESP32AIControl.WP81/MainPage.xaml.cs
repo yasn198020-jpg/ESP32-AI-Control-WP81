@@ -310,6 +310,7 @@ namespace ESP32AIControl.WP81
             };
             _devices.Apply(message);
             _localScenarioEngine.OnMessage(message, !e.IsSnapshot);
+            RefreshLocalScenarioBuilderOptions();
         }
 
         private async void LocalScenario_Triggered(LocalScenarioDefinition scenario, string rawValue)
@@ -365,6 +366,7 @@ namespace ESP32AIControl.WP81
         private void RefreshLocalScenariosList()
         {
             if (LocalScenariosList == null) return;
+            RefreshLocalScenarioBuilderOptions();
             LocalScenariosList.Items.Clear();
             var scenarios = _localScenarioStore.Load();
             foreach (var scenario in scenarios)
@@ -382,6 +384,121 @@ namespace ESP32AIControl.WP81
                 LocalScenariosList.Items.Add(item);
             }
             LocalScenariosStatus.Text = "Сценариев: " + scenarios.Count;
+        }
+
+        private void RefreshLocalScenarioBuilderOptions()
+        {
+            if (_devices == null || LocalScenarioConditionWidgetBox == null ||
+                LocalScenarioActionWidgetBox == null) return;
+
+            var selectedCondition = (LocalScenarioConditionWidgetBox.SelectedItem as ComboBoxItem)?.Tag as string;
+            var selectedAction = (LocalScenarioActionWidgetBox.SelectedItem as ComboBoxItem)?.Tag as string;
+            var widgets = _devices.GetWidgetsSnapshot()
+                .OrderBy(item => item.DeviceId)
+                .ThenBy(item => item.Page)
+                .ThenBy(item => item.Order)
+                .ToList();
+
+            LocalScenarioConditionWidgetBox.Items.Clear();
+            foreach (var state in widgets.Where(IsValueWidget))
+            {
+                LocalScenarioConditionWidgetBox.Items.Add(new ComboBoxItem
+                {
+                    Content = (string.IsNullOrWhiteSpace(state.Description) ? state.Id : state.Description) +
+                        "  ·  " + state.DeviceId + "/" + state.Id,
+                    Tag = state.Key
+                });
+            }
+
+            LocalScenarioActionWidgetBox.Items.Clear();
+            foreach (var state in widgets)
+            {
+                var type = NormalizeType(state.WidgetType);
+                var definition = NormalizeType(state.DefinitionName);
+                if (type != "toggle" && type != "button" && type != "slider" &&
+                    type != "select" && type != "dropdown" && definition != "button" &&
+                    definition != "vbtn" && definition != "btn") continue;
+
+                LocalScenarioActionWidgetBox.Items.Add(new ComboBoxItem
+                {
+                    Content = (string.IsNullOrWhiteSpace(state.Description) ? state.Id : state.Description) +
+                        "  ·  " + state.DeviceId + "/" + state.Id,
+                    Tag = state.Key
+                });
+            }
+
+            if (LocalScenarioConditionWidgetBox.Items.Count > 0)
+            {
+                var match = LocalScenarioConditionWidgetBox.Items.OfType<ComboBoxItem>()
+                    .FirstOrDefault(item => string.Equals(item.Tag as string, selectedCondition, StringComparison.Ordinal));
+                LocalScenarioConditionWidgetBox.SelectedItem = match ?? LocalScenarioConditionWidgetBox.Items[0];
+            }
+            if (LocalScenarioActionWidgetBox.Items.Count > 0)
+            {
+                var match = LocalScenarioActionWidgetBox.Items.OfType<ComboBoxItem>()
+                    .FirstOrDefault(item => string.Equals(item.Tag as string, selectedAction, StringComparison.Ordinal));
+                LocalScenarioActionWidgetBox.SelectedItem = match ?? LocalScenarioActionWidgetBox.Items[0];
+            }
+        }
+
+        private void LocalScenarioAddConditionButton_Click(object sender, RoutedEventArgs e)
+        {
+            var selected = LocalScenarioConditionWidgetBox.SelectedItem as ComboBoxItem;
+            var key = selected == null ? string.Empty : selected.Tag as string;
+            var state = _devices == null ? null : _devices.GetWidgetsSnapshot()
+                .FirstOrDefault(item => string.Equals(item.Key, key, StringComparison.Ordinal));
+            if (state == null)
+            {
+                LocalScenariosStatus.Text = "Сначала подключите ESP32 и выберите датчик.";
+                return;
+            }
+
+            double threshold;
+            if (!double.TryParse((LocalScenarioThresholdBox.Text ?? string.Empty).Trim().Replace(',', '.'),
+                NumberStyles.Float, CultureInfo.InvariantCulture, out threshold) ||
+                double.IsNaN(threshold) || double.IsInfinity(threshold))
+            {
+                LocalScenariosStatus.Text = "Введите числовой порог, например 25.";
+                return;
+            }
+
+            var operatorItem = LocalScenarioOperatorBox.SelectedItem as ComboBoxItem;
+            var connectorItem = LocalScenarioConnectorBox.SelectedItem as ComboBoxItem;
+            var op = operatorItem == null ? ">" : operatorItem.Tag as string;
+            var connector = connectorItem == null ? "AND" : connectorItem.Tag as string;
+            var existing = (LocalScenarioConditionsBox.Text ?? string.Empty).Trim();
+            var line = (existing.Length == 0 ? string.Empty : (connector ?? "AND") + " ") +
+                state.Id + " " + (op ?? ">") + " " + threshold.ToString(CultureInfo.InvariantCulture);
+            LocalScenarioConditionsBox.Text = existing.Length == 0 ? line :
+                existing + Environment.NewLine + line;
+            LocalScenarioThresholdBox.Text = string.Empty;
+            LocalScenariosStatus.Text = "Условие добавлено. Можно добавить ещё одно или сохранить правило.";
+        }
+
+        private void LocalScenarioAddActionButton_Click(object sender, RoutedEventArgs e)
+        {
+            var selected = LocalScenarioActionWidgetBox.SelectedItem as ComboBoxItem;
+            var key = selected == null ? string.Empty : selected.Tag as string;
+            var state = _devices == null ? null : _devices.GetWidgetsSnapshot()
+                .FirstOrDefault(item => string.Equals(item.Key, key, StringComparison.Ordinal));
+            if (state == null)
+            {
+                LocalScenariosStatus.Text = "Сначала подключите ESP32 и выберите исполнительный виджет.";
+                return;
+            }
+
+            var value = (LocalScenarioActionValueBox.Text ?? string.Empty).Trim();
+            if (value.Length == 0)
+            {
+                LocalScenariosStatus.Text = "Укажите значение, которое нужно отправить устройству.";
+                return;
+            }
+
+            var line = state.DeviceId + "/" + state.Id + "=" + value;
+            var existing = (LocalScenarioActionsBox.Text ?? string.Empty).Trim();
+            LocalScenarioActionsBox.Text = existing.Length == 0 ? line :
+                existing + Environment.NewLine + line;
+            LocalScenariosStatus.Text = "Действие добавлено. Можно добавить ещё одно или сохранить правило.";
         }
 
         private async void LocalScenarioSaveButton_Click(object sender, RoutedEventArgs e)
@@ -1772,6 +1889,7 @@ namespace ESP32AIControl.WP81
             {
                 UpdateWidgetVisual(e);
                 UpdateGraphWidget(e);
+                RefreshLocalScenarioBuilderOptions();
                 Log("WIDGET " + e.DeviceId + "/" + e.Id + " = " + e.Value);
             });
         }
