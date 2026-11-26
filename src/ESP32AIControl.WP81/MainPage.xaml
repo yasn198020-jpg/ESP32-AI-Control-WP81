@@ -159,9 +159,9 @@
                     <Grid Grid.Row="0">
                         <Pivot x:Name="WidgetPages" Margin="0"
                                HeaderTemplate="{StaticResource WidgetPageHeaderTemplate}"/>
-                        <Border Background="#FF2B2C34" BorderBrush="#FF41434D"
+                        <Border x:Name="DashboardEmptyOverlay" Background="#FF2B2C34" BorderBrush="#FF41434D"
                                 BorderThickness="1" CornerRadius="16" Padding="22"
-                                Margin="24" IsHitTestVisible="False">
+                                Margin="24" IsHitTestVisible="False" Visibility="Visible">
                             <StackPanel x:Name="DashboardEmptyState" VerticalAlignment="Center"
                                         HorizontalAlignment="Center">
                                 <TextBlock Text="Дашборд" FontSize="25" FontWeight="SemiBold"
