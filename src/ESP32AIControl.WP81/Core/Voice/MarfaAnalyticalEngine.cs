@@ -90,6 +90,27 @@ namespace ESP32AIControl.WP81.Core.Voice
             else if (contextPages.Count == 1)
                 all = all.Where(c => RussianSemanticNormalizer.Normalize(c.Widget.Page).Trim() == contextPages[0]).ToList();
 
+            var contextTokens = ContextTokens(normalized, widgets);
+            if (contextTokens.Count > 0)
+            {
+                var scoped = all.Where(candidate =>
+                {
+                    var corpus = RussianSemanticNormalizer.Normalize(
+                        (candidate.Widget.Description ?? string.Empty) + " " +
+                        (candidate.Widget.Page ?? string.Empty) + " " +
+                        (candidate.Widget.DeviceId ?? string.Empty) + " " +
+                        (candidate.Widget.Id ?? string.Empty));
+                    return contextTokens.All(token => ContainsSemanticToken(corpus, token));
+                }).ToList();
+                if (scoped.Count == 0)
+                    return new MarfaAnalyticalResolution
+                    {
+                        Clarification = "Не нашла совпадение контекста «" +
+                            string.Join(", ", contextTokens.ToArray()) + "». Уточните вкладку или объект."
+                    };
+                all = scoped;
+            }
+
             var entity = DetectEntity(normalized);
             if (entity != EntityKind.Generic)
             {
@@ -177,8 +198,32 @@ namespace ESP32AIControl.WP81.Core.Voice
                         Reasons = new List<string>()
                     });
             }
+            var contextPagesForSensor = page == null ? MatchingContextPages(normalized, widgets) : new List<string>();
             if (page != null)
                 all = all.Where(c => RussianSemanticNormalizer.Normalize(c.Widget.Page).Trim() == page).ToList();
+            else if (contextPagesForSensor.Count == 1)
+                all = all.Where(c => RussianSemanticNormalizer.Normalize(c.Widget.Page).Trim() == contextPagesForSensor[0]).ToList();
+
+            var sensorContextTokens = ContextTokens(normalized, widgets);
+            if (sensorContextTokens.Count > 0)
+            {
+                var scoped = all.Where(candidate =>
+                {
+                    var corpus = RussianSemanticNormalizer.Normalize(
+                        (candidate.Widget.Description ?? string.Empty) + " " +
+                        (candidate.Widget.Page ?? string.Empty) + " " +
+                        (candidate.Widget.DeviceId ?? string.Empty) + " " +
+                        (candidate.Widget.Id ?? string.Empty));
+                    return sensorContextTokens.All(token => ContainsSemanticToken(corpus, token));
+                }).ToList();
+                if (scoped.Count == 0)
+                    return new MarfaAnalyticalResolution
+                    {
+                        Clarification = "Я нашла датчик, но не нашла совпадение контекста «" +
+                            string.Join(", ", sensorContextTokens.ToArray()) + "». Уточните вкладку или объект."
+                    };
+                all = scoped;
+            }
 
             if (all.Count == 0)
                 return new MarfaAnalyticalResolution
@@ -208,6 +253,32 @@ namespace ESP32AIControl.WP81.Core.Voice
                     Clarification = BuildSensorClarification(all)
                 };
             return new MarfaAnalyticalResolution { Candidate = best, Candidates = all };
+        }
+
+        private static List<string> ContextTokens(string text, IList<WidgetState> widgets)
+        {
+            var ignored = new HashSet<string>(new[]
+            {
+                "включить", "выключить", "открыть", "закрыть", "запустить", "остановить",
+                "показать", "сказать", "узнать", "марфа", "пожалуйста", "через", "спустя",
+                "на", "в", "во", "по", "для", "из", "с", "со", "к", "у", "и", "а",
+                "двер", "форточк", "окн", "ворот", "насос", "вентилятор", "вент",
+                "обогрев", "отоп", "кран", "клапан", "свет", "ламп", "полив", "рел",
+                "кнопк", "канал", "выход", "gpio", "автомат", "управлен",
+                "температур", "темп", "влажност", "давлен", "датчик", "значен",
+                "какая", "какое", "какие", "какую", "какой", "сколько", "покажи",
+                "показать", "скажи", "сказать", "узнай", "узнать", "что", "там", "здесь",
+                "если", "когда", "при", "условии", "выше", "больше", "ниже", "меньше",
+                "градус", "градуса", "градусов", "номер", "состояние", "статус",
+                "час", "часа", "часов", "ч", "минут", "минута", "минуты", "мин",
+                "секунд", "секунда", "секунды", "сек"
+            }, StringComparer.OrdinalIgnoreCase);
+            var knownIds = new HashSet<string>((widgets ?? new List<WidgetState>())
+                .Select(w => RussianSemanticNormalizer.Normalize(w.Id)), StringComparer.OrdinalIgnoreCase);
+            return RussianSemanticNormalizer.Tokens(text)
+                .Where(token => token.Length >= 3 && !ignored.Contains(token) &&
+                    !knownIds.Contains(token) && !Regex.IsMatch(token, @"^\d+$"))
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         }
 
         private static bool HasNonLexicalPage(IList<WidgetState> widgets)
