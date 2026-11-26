@@ -53,6 +53,7 @@ namespace ESP32AIControl.WP81
         private readonly ScheduledCommandService _scheduler;
         private readonly Wp81VoiceCommandService _voice;
         private VoiceCommandParser _voiceParser;
+        private MarfaCommandEngine _marfaEngine;
         private readonly List<TrainedVoiceCommand> _trainedCommands = new List<TrainedVoiceCommand>();
         private Grid _trainedCommandsSection;
         private Grid _cleanupSection;
@@ -186,6 +187,7 @@ namespace ESP32AIControl.WP81
             RefreshGraphSetPicker();
             _settings = new MqttSettings();
             _devices = new DeviceRepository();
+            _marfaEngine = new MarfaCommandEngine(_devices);
             _mqtt = new Esp32MqttService(_settings, _devices);
             _localScenarioStore = new LocalScenarioStore();
             _localScenarioEngine = new LocalScenarioEngine(_localScenarioStore, LocalScenario_Triggered);
@@ -4647,15 +4649,61 @@ namespace ESP32AIControl.WP81
                     if (await ExecuteTrainedCommandsAsync(text))
                         return;
 
+                    var marfa = _marfaEngine.Parse(text);
+                    if (marfa.Kind == MarfaCommandKind.Clarify ||
+                        marfa.Kind == MarfaCommandKind.Stop ||
+                        marfa.Kind == MarfaCommandKind.ReadValue)
+                    {
+                        VoiceResultText.Text = marfa.Reply;
+                        Log("MARFA: " + marfa.Reply);
+                        await SpeakTextAsync(marfa.Reply);
+                        return;
+                    }
+
+                    if (marfa.Kind == MarfaCommandKind.Control && marfa.Actions != null && marfa.Actions.Count > 0)
+                    {
+                        var executeAt = marfa.DelayMs > 0
+                            ? DateTimeOffset.Now.AddMilliseconds(marfa.DelayMs)
+                            : DateTimeOffset.MinValue;
+                        for (var i = 0; i < marfa.Actions.Count; i++)
+                        {
+                            var command = marfa.Actions[i].Command;
+                            ValidateCommand(command);
+                            if (executeAt != DateTimeOffset.MinValue)
+                            {
+                                await _scheduler.ScheduleVoiceAsync(command, executeAt);
+                                Log("MARFA SCHEDULE: " + command + " @ " + executeAt);
+                            }
+                            else
+                            {
+                                var plan = _commandExecutor.BuildPlan(command);
+                                for (var p = 0; p < plan.Actions.Count; p++)
+                                {
+                                    var planned = plan.Actions[p];
+                                    Log("PLAN " + (planned.IsDependency ? "DEP " : "ACT ") + planned.Command +
+                                        (string.IsNullOrEmpty(planned.Reason) ? string.Empty : " | " + planned.Reason));
+                                }
+                                await _commandExecutor.ExecuteAsync(command);
+                                Log("MARFA EXECUTE: " + command);
+                            }
+                        }
+                        if (executeAt != DateTimeOffset.MinValue) await RefreshScheduleAsync();
+                        VoiceResultText.Text = marfa.Reply;
+                        await SpeakTextAsync(marfa.Reply);
+                        return;
+                    }
+
+                    // Keep the legacy explicit device/widget=value syntax as a
+                    // compatibility escape hatch for trained and diagnostic commands.
                     var parsed = _voiceParser.Parse(text);
                     if (parsed == null)
                     {
-                        Log("VOICE: команда не распознана.");
+                        VoiceResultText.Text = marfa.Reply;
+                        Log("VOICE: команда не распознана. " + marfa.Reply);
                         return;
                     }
 
                     ValidateCommand(parsed.Command);
-
                     if (parsed.ExecuteAt.HasValue)
                     {
                         await _scheduler.ScheduleVoiceAsync(parsed.Command, parsed.ExecuteAt.Value);
@@ -4671,7 +4719,6 @@ namespace ESP32AIControl.WP81
                             Log("PLAN " + (planned.IsDependency ? "DEP " : "ACT ") + planned.Command +
                                 (string.IsNullOrEmpty(planned.Reason) ? string.Empty : " | " + planned.Reason));
                         }
-
                         await _commandExecutor.ExecuteAsync(parsed.Command);
                         Log("VOICE EXECUTE: " + parsed.Command);
                     }
