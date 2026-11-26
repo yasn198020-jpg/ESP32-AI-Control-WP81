@@ -899,6 +899,11 @@ namespace ESP32AIControl.WP81
             }
         }
 
+        private void OpenMarfaDiagnostics_Click(object sender, RoutedEventArgs e)
+        {
+            ShowSection(9);
+        }
+
         private void ShowSection(int index)
         {
             _selectedSection = Math.Max(0, Math.Min(9, index));
