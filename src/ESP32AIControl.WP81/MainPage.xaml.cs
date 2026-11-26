@@ -3454,6 +3454,46 @@ namespace ESP32AIControl.WP81
             if (GraphZoomLabel != null) GraphZoomLabel.Text = "×1,0";
         }
 
+        private async void ExportCompareWordButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (_graphCompareKeys.Count == 0)
+                {
+                    GraphSummary.Text = "Сначала добавьте датчики в список сравнения.";
+                    return;
+                }
+
+                var from = new DateTimeOffset(GraphFrom.Date.Date);
+                var to = new DateTimeOffset(GraphTo.Date.Date.AddDays(1).AddTicks(-1));
+                var traces = new List<Tuple<string, IList<MeasurementPoint>>>();
+                foreach (var key in _graphCompareKeys.ToList())
+                {
+                    WidgetState state;
+                    if (!_widgetIndex.TryGetValue(key, out state)) continue;
+                    var points = await _measurementStore.ReadAsync(state.DeviceId, state.Id, from, to);
+                    traces.Add(Tuple.Create(key, (IList<MeasurementPoint>)points));
+                }
+
+                if (traces.Count == 0 || !traces.Any(t => t.Item2 != null && t.Item2.Count > 0))
+                {
+                    GraphSummary.Text = "Нет данных для экспорта.";
+                    return;
+                }
+
+                var name = "ESP32-сравнение-" + from.ToString("yyyyMMdd", CultureInfo.InvariantCulture) +
+                           "-" + to.ToString("yyyyMMdd", CultureInfo.InvariantCulture) + ".doc";
+                await _exporter.ExportComparisonAsync(traces, from, to, name);
+                GraphSummary.Text = "Сравнение экспортировано в Word: " + name;
+                Log("COMPARE WORD EXPORTED: " + name);
+            }
+            catch (Exception ex)
+            {
+                GraphSummary.Text = "Ошибка экспорта сравнения: " + ex.Message;
+                Log("COMPARE WORD EXPORT ERROR: " + ex.Message);
+            }
+        }
+
         private async void ExportCompareCsvButton_Click(object sender, RoutedEventArgs e)
         {
             try
