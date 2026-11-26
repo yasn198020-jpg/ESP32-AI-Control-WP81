@@ -207,6 +207,7 @@
                                 <TextBlock Text="Датчики с историей" FontSize="17" FontWeight="SemiBold" Margin="2,0,2,6"/>
                                 <TextBlock Text="Выберите числовой датчик, чтобы открыть его график и последние измерения." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="2,0,2,6"/>
                                 <ListView x:Name="HistoryWidgetList" Height="220" SelectionMode="Single" SelectionChanged="HistoryWidgetList_SelectionChanged"/>
+                                <TextBlock x:Name="HistoryEmptyText" Text="Нет числовых виджетов. Подключитесь к MQTT и дождитесь CONFIG/STATE." Foreground="#FFACADB8" FontSize="12" TextWrapping="Wrap" Margin="4,8,4,4" Visibility="Collapsed"/>
                             </StackPanel>
                         </Border>
                         <Button Content="⚙ Настройки истории и графиков" Click="ToggleGraphSettingsButton_Click" HorizontalAlignment="Stretch" Margin="0,0,0,8" MinHeight="44"/>
