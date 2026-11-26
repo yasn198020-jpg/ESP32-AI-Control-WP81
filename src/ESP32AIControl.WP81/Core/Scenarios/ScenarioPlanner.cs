@@ -916,18 +916,6 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                 if (matchingActions.Count == 0) continue;
 
                 var initialContext = new IoTScenarioEvaluationContext(variables);
-                bool targetValueMatches = true;
-                foreach (var matchingAction in matchingActions)
-                {
-                    if (!ScenarioValueMatches(
-                        IoTScenarioEvaluator.Evaluate(matchingAction.Expression, initialContext), target.Value))
-                    {
-                        targetValueMatches = false;
-                        break;
-                    }
-                }
-                if (!targetValueMatches) continue;
-
                 var controllable = new List<WidgetState>();
                 foreach (var id in rule.Condition.Identifiers)
                 {
@@ -938,14 +926,13 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                     controllable.Add(matches[0]);
                 }
 
-                // A rule that is already active needs no prerequisite search.
-                // Otherwise enumerate only a small, bounded set of user controls.
-                var alreadyActive = IoTScenarioEvaluator.IsTruthy(
-                    IoTScenarioEvaluator.Evaluate(rule.Condition.Expression, initialContext));
-                if (!alreadyActive && (controllable.Count == 0 || controllable.Count > 8))
+                // Evaluate the action result in each simulated state. The
+                // requested value may depend on controls or aliases whose values
+                // change together with the rule condition.
+                if (controllable.Count > 8)
                     continue;
 
-                var combinations = alreadyActive ? 1 : (1 << controllable.Count);
+                var combinations = 1 << controllable.Count;
                 var bestDependencyCount = int.MaxValue;
                 var bestPlans = new List<IList<ScenarioAction>>();
                 for (var mask = 0; mask < combinations; mask++)
@@ -976,6 +963,18 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                     if (!IoTScenarioEvaluator.IsTruthy(
                         IoTScenarioEvaluator.Evaluate(rule.Condition.Expression, simulatedContext)))
                         continue;
+
+                    bool requestedValueMatches = true;
+                    foreach (var matchingAction in matchingActions)
+                    {
+                        if (!ScenarioValueMatches(
+                            IoTScenarioEvaluator.Evaluate(matchingAction.Expression, simulatedContext), target.Value))
+                        {
+                            requestedValueMatches = false;
+                            break;
+                        }
+                    }
+                    if (!requestedValueMatches) continue;
 
                     var completePlan = new List<ScenarioAction>(proposed);
                     bool actionsResolved = true;
