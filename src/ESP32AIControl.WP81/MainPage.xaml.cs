@@ -1834,7 +1834,7 @@ namespace ESP32AIControl.WP81
             // small vertical rhythm, and no oversized fixed-width controls.
             visual.Container = new StackPanel
             {
-                Margin = new Thickness(0, 0, 0, 2),
+                Margin = new Thickness(0, 0, 0, 4),
                 Tag = state.Key
             };
 
@@ -1856,11 +1856,14 @@ namespace ESP32AIControl.WP81
 
             var shell = new Border
             {
-                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 43, 44, 52)),
-                CornerRadius = new CornerRadius(0),
-                Padding = new Thickness(16, 6, 16, 6),
-                BorderThickness = new Thickness(0)
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 43, 44, 52)),
+                BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 65, 67, 77)),
+                CornerRadius = new CornerRadius(14),
+                Padding = new Thickness(14, 10, 14, 10),
+                BorderThickness = new Thickness(1),
+                Margin = new Thickness(0, 0, 0, 6)
             };
+            var shellContent = new StackPanel();
 
             var row = new Grid();
             visual.Row = row;
@@ -1970,7 +1973,8 @@ namespace ESP32AIControl.WP81
                 };
             }
 
-            shell.Child = row;
+            shellContent.Children.Add(row);
+            shell.Child = shellContent;
             visual.Container.Children.Add(shell);
 
             if (isSlider)
@@ -1995,7 +1999,7 @@ namespace ESP32AIControl.WP81
                     await PublishControl(visual, (ev.NewValue / scale).ToString(CultureInfo.InvariantCulture));
                 };
                 visual.Control = slider;
-                visual.Container.Children.Add(slider);
+                shellContent.Children.Add(slider);
             }
             else if (isProgress)
             {
@@ -2009,7 +2013,7 @@ namespace ESP32AIControl.WP81
                     Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 65, 67, 77))
                 };
                 visual.Control = progress;
-                visual.Container.Children.Add(progress);
+                shellContent.Children.Add(progress);
             }
             else if (isSelect)
             {
@@ -2107,7 +2111,7 @@ namespace ESP32AIControl.WP81
                 };
                 Grid.SetColumn(sendButton, 1);
                 inputPanel.Children.Add(sendButton);
-                visual.Container.Children.Add(inputPanel);
+                shellContent.Children.Add(inputPanel);
             }
             else if (isRoundProgress || isFillGauge)
             {
@@ -2128,7 +2132,7 @@ namespace ESP32AIControl.WP81
                     Margin = new Thickness(34, 3, 8, 0),
                     TextWrapping = TextWrapping.Wrap
                 };
-                visual.Container.Children.Add(visual.ChartMeta);
+                shellContent.Children.Add(visual.ChartMeta);
                 visual.ChartCanvas = new Canvas
                 {
                     Width = 300,
@@ -2138,14 +2142,14 @@ namespace ESP32AIControl.WP81
                     Margin = new Thickness(34, 4, 8, 4),
                     Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 32, 32, 32))
                 };
-                visual.Container.Children.Add(visual.ChartCanvas);
+                shellContent.Children.Add(visual.ChartCanvas);
                 visual.ChartFooter = new TextBlock
                 {
                     FontSize = 11,
                     Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 172, 173, 184)),
                     Margin = new Thickness(34, 0, 8, 2)
                 };
-                visual.Container.Children.Add(visual.ChartFooter);
+                shellContent.Children.Add(visual.ChartFooter);
                 DrawWidgetChart(visual, state.Value);
             }
 
@@ -2157,7 +2161,7 @@ namespace ESP32AIControl.WP81
                 TextWrapping = TextWrapping.NoWrap,
                 Visibility = Visibility.Collapsed
             };
-            visual.Container.Children.Add(visual.UpdatedAtText);
+            shellContent.Children.Add(visual.UpdatedAtText);
             UpdateLastUpdatedLabel(visual);
 
             return visual;
