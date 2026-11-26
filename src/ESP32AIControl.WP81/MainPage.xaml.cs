@@ -89,7 +89,7 @@ namespace ESP32AIControl.WP81
             new Dictionary<string, WidgetState>();
         private readonly List<ScheduledCommand> _scheduleRows =
             new List<ScheduledCommand>();
-        private readonly List<MeasurementPoint> _lastGraphPoints =
+        private readonly List<string> _graphCompareKeys = new List<string>();\n        private readonly List<MeasurementPoint> _lastGraphPoints =
             new List<MeasurementPoint>();
         private readonly List<MeasurementPoint> _graphNumericPoints =
             new List<MeasurementPoint>();
@@ -2969,6 +2969,98 @@ namespace ESP32AIControl.WP81
                 GraphSummary.Text = "Ошибка: " + ex.Message;
                 Log("GRAPH ERROR: " + ex.Message);
             }
+        }
+
+        private void AddCompareWidgetButton_Click(object sender, RoutedEventArgs e)
+        {
+            var key = GraphWidgetBox.SelectedItem as string;
+            if (string.IsNullOrWhiteSpace(key)) return;
+            if (!_graphCompareKeys.Contains(key))
+            {
+                _graphCompareKeys.Add(key);
+                GraphCompareList.Items.Add(key);
+            }
+        }
+
+        private void ClearCompareWidgetsButton_Click(object sender, RoutedEventArgs e)
+        {
+            _graphCompareKeys.Clear();
+            GraphCompareList.Items.Clear();
+            GraphCanvas.Children.Clear();
+            GraphSummary.Text = "Список сравнения очищен.";
+        }
+
+        private async void BuildCompareGraphButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (_graphCompareKeys.Count == 0)
+                {
+                    GraphSummary.Text = "Добавьте датчики в список сравнения.";
+                    return;
+                }
+                var from = new DateTimeOffset(GraphFrom.Date.Date);
+                var to = new DateTimeOffset(GraphTo.Date.Date.AddDays(1).AddTicks(-1));
+                var traces = new List<Tuple<string, IList<MeasurementPoint>>>();
+                foreach (var key in _graphCompareKeys.ToList())
+                {
+                    WidgetState state;
+                    if (!_widgetIndex.TryGetValue(key, out state)) continue;
+                    var points = await _measurementStore.ReadAsync(state.DeviceId, state.Id, from, to);
+                    traces.Add(Tuple.Create(key, (IList<MeasurementPoint>)points));
+                }
+                DrawCompareGraph(traces);
+                GraphSummary.Text = "Сравнение: " + traces.Count.ToString(CultureInfo.InvariantCulture) +
+                    " датчиков • " + from.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture) +
+                    " — " + to.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture) +
+                    ". Каждая линия нормирована по собственному диапазону.";
+            }
+            catch (Exception ex)
+            {
+                GraphSummary.Text = "Ошибка сравнения: " + ex.Message;
+                Log("COMPARE GRAPH ERROR: " + ex.Message);
+            }
+        }
+
+        private void DrawCompareGraph(IList<Tuple<string, IList<MeasurementPoint>>> traces)
+        {
+            GraphCanvas.Children.Clear();
+            _graphNumericPoints.Clear();
+            _graphPointXPositions.Clear();
+            var palette = new Windows.UI.Color[] {
+                Windows.UI.Colors.DodgerBlue, Windows.UI.Colors.Orange,
+                Windows.UI.Colors.LimeGreen, Windows.UI.Colors.Magenta,
+                Windows.UI.Colors.Cyan, Windows.UI.Colors.Yellow
+            };
+            var allTimes = traces.SelectMany(t => t.Item2).Select(p => p.Timestamp).ToList();
+            if (allTimes.Count < 2) { GraphSummary.Text = "Недостаточно данных для графика."; return; }
+            var minTime = allTimes.Min(); var maxTime = allTimes.Max();
+            var span = Math.Max(1.0, (maxTime-minTime).TotalSeconds);
+            var width = Math.Max(280.0, ActualWidth > 0 ? ActualWidth-40.0 : 680.0) * Math.Max(1.0, Math.Min(20.0,_graphZoom));
+            const double height=300.0, pad=24.0;
+            GraphCanvas.Width=width; GraphCanvas.Height=height;
+            for(int gi=0;gi<=4;gi++){double y=pad+(height-pad*2)*gi/4.0;GraphCanvas.Children.Add(new Line{X1=pad,Y1=y,X2=width-pad,Y2=y,Stroke=new SolidColorBrush(Windows.UI.Color.FromArgb(255,58,60,70)),StrokeThickness=1});}
+            int colorIndex=0;
+            foreach(var trace in traces)
+            {
+                var vals=trace.Item2.Select(p=>{double v;return double.TryParse((p.Value??"").Replace(',','.'),NumberStyles.Float,CultureInfo.InvariantCulture,out v)?Tuple.Create(p.Timestamp,v):null;}).Where(v=>v!=null).OrderBy(v=>v.Item1).ToList();
+                if(vals.Count<2)continue;
+                var lo=vals.Min(v=>v.Item2);var hi=vals.Max(v=>v.Item2);if(Math.Abs(hi-lo)<1e-6)hi=lo+1;
+                var brush=new SolidColorBrush(palette[colorIndex%palette.Length]);
+                for(int i=1;i<vals.Count;i++)
+                {
+                    double x1=pad+((vals[i-1].Item1-minTime).TotalSeconds/span)*(width-pad*2);
+                    double x2=pad+((vals[i].Item1-minTime).TotalSeconds/span)*(width-pad*2);
+                    double y1=pad+(1-(vals[i-1].Item2-lo)/(hi-lo))*(height-pad*2);
+                    double y2=pad+(1-(vals[i].Item2-lo)/(hi-lo))*(height-pad*2);
+                    GraphCanvas.Children.Add(new Line{X1=x1,Y1=y1,X2=x2,Y2=y2,Stroke=brush,StrokeThickness=2});
+                }
+                var label=new TextBlock{Text=trace.Item1+" ("+lo.ToString("0.##",CultureInfo.InvariantCulture)+"–"+hi.ToString("0.##",CultureInfo.InvariantCulture)+")",Foreground=brush,FontSize=12};
+                Canvas.SetLeft(label,pad+colorIndex*130);Canvas.SetTop(label,2);GraphCanvas.Children.Add(label);
+                colorIndex++;
+            }
+            GraphSummary.Text += " • линии показаны в индивидуальных шкалах (диапазоны подписаны).";
+            if(GraphZoomLabel!=null)GraphZoomLabel.Text="×"+_graphZoom.ToString("0.0",CultureInfo.GetCultureInfo("ru-RU"));
         }
 
         private void DrawGraph(IList<MeasurementPoint> points)
