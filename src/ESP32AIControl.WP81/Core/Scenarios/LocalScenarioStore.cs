@@ -58,6 +58,7 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                                     WidgetId = widgetId,
                                     Operator = NormalizeOperator(ReadString(condition, "operator", ">")),
                                     Threshold = threshold,
+                                    DurationMs = ReadLong(condition, "durationMs", 0),
                                     Connector = c == 0 ? "AND" : NormalizeConnector(ReadString(condition, "connector", "AND"))
                                 });
                             }
@@ -113,6 +114,7 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                     value["widgetId"] = JsonValue.CreateStringValue(condition.WidgetId ?? string.Empty);
                     value["operator"] = JsonValue.CreateStringValue(condition.Operator ?? ">");
                     value["threshold"] = JsonValue.CreateNumberValue(condition.Threshold);
+                    value["durationMs"] = JsonValue.CreateStringValue(condition.DurationMs.ToString(System.Globalization.CultureInfo.InvariantCulture));
                     value["connector"] = JsonValue.CreateStringValue(condition.Connector ?? "AND");
                     conditions.Add(value);
                 }
@@ -225,6 +227,14 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             return fallback;
         }
 
+        private static long ReadLong(JsonObject item, string key, long fallback)
+        {
+            long value;
+            return long.TryParse(ReadString(item, key, fallback.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture, out value) ? value : fallback;
+        }
+
         private static bool ReadBoolean(JsonObject item, string key, bool fallback)
         {
             IJsonValue value;
@@ -237,7 +247,7 @@ namespace ESP32AIControl.WP81.Core.Scenarios
         {
             switch ((value ?? string.Empty).Trim())
             {
-                case ">": case ">=": case "<": case "<=": case "=": case "==": case "!=":
+                case ">": case ">=": case "<": case "<=": case "=": case "==": case "!=": case "ON_FOR_GT":
                     return value.Trim();
                 default: return ">";
             }
