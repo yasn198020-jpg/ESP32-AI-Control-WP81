@@ -159,10 +159,30 @@ namespace ESP32AIControl.UWP
                     body.Children.Add(Text(widget.Title + "   " + Format(value) + " / " + Format(max), 16, Primary, false));
                     body.Children.Add(new ProgressBar { Minimum = 0, Maximum = max, Value = Math.Max(0, Math.Min(max, value)), Height = 8 });
                 }
+                else if (definition == "progressround" || definition == "progress-round" || definition == "fillgauge")
+                {
+                    double value;
+                    Double.TryParse((widget.Value ?? "").Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out value);
+                    var max = definition == "fillgauge" ? 100 : Math.Max(0.0001, widget.ConfigNumber("max", 100));
+                    var gauge = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 5, 0, 5) };
+                    var gaugeValue = new StackPanel { Width = 76, VerticalAlignment = VerticalAlignment.Center };
+                    gaugeValue.Children.Add(Text(Format(value), 22, Accent, false));
+                    gaugeValue.Children.Add(new ProgressBar { Minimum = 0, Maximum = max, Value = Math.Max(0, Math.Min(max, value)), Height = 8 });
+                    gauge.Children.Add(gaugeValue);
+                    var details = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(14, 0, 0, 0) };
+                    details.Children.Add(Text(widget.Title, 17, Primary, false));
+                    details.Children.Add(Text(Format(value) + " / " + Format(max) + (definition == "fillgauge" ? " %" : ""), 16, Accent, false));
+                    gauge.Children.Add(details);
+                    body.Children.Add(gauge);
+                }
+                else if (definition.StartsWith("chart"))
+                {
+                    body.Children.Add(RenderChart(widget));
+                }
                 else
                 {
                     body.Children.Add(Text(widget.Title, 16, Primary, false));
-                    body.Children.Add(Text(String.IsNullOrWhiteSpace(widget.Value) ? "—" : widget.Value + widget.Unit, 21, Accent, false));
+                    body.Children.Add(Text(String.IsNullOrWhiteSpace(widget.Value) ? "—" : widget.Value + (String.IsNullOrWhiteSpace(widget.Unit) ? "" : " " + widget.Unit), 21, Accent, false));
                 }
 
                 if (widget.LastUpdatedUnixMs > 0)
