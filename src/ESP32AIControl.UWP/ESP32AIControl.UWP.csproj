@@ -17,7 +17,7 @@
     <AppxBundle>Always</AppxBundle>
     <AppxBundlePlatforms>ARM|x86</AppxBundlePlatforms>
     <GenerateAppInstallerFile>false</GenerateAppInstallerFile>
-    <AppxAutoIncrementPackageRevision>false</AppxAutoIncrementPackageRevision>
+    <AppxAutoIncrementPackageRevision>true</AppxAutoIncrementPackageRevision>
     <PackageCertificateThumbprint />
     <AppxManifest>Package.appxmanifest</AppxManifest>
     <LangVersion>7.3</LangVersion>
