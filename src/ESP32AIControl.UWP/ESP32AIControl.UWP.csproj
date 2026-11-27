@@ -65,4 +65,22 @@
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath)\Microsoft\WindowsXaml\v$(VisualStudioVersion)\Microsoft.Windows.UI.Xaml.CSharp.targets" />
+
+  <!--
+    VS2017's UWP packaging map can contain the deployment entrypoint under
+    PackageLayout\entrypoint even though the layout-copy phase only places the
+    executable at the layout root. Materialize that mapped payload after the
+    package layout is created and before MakeAppxPack consumes the map.
+  -->
+  <Target Name="EnsureUwpDeploymentEntryPointPayload"
+          AfterTargets="_CreatePackageLayout"
+          Condition="'$(TargetPlatformIdentifier)' == 'UAP'
+                     and '$(TargetFileName)' != ''
+                     and Exists('$(TargetDir)$(TargetFileName)')
+                     and '$(AppxLayoutDir)' != ''">
+    <MakeDir Directories="$(AppxLayoutDir)$(EntryPointDir)" />
+    <Copy SourceFiles="$(TargetDir)$(TargetFileName)"
+          DestinationFiles="$(AppxLayoutDir)$(EntryPointDir)$(DirectorySeparatorChar)$(TargetFileName)"
+          SkipUnchangedFiles="true" />
+  </Target>
 </Project>
