@@ -4,42 +4,63 @@
 
 - Android reference repository: `yasn198020-jpg/ESP32-AI-Control`
 - Android reference branch: `compat/android-5.1.1-api22-vosk`
-- Primary legacy UI source: `app-kitkat/src/main/java/com/yasn198020/aicontrol/LegacyMainActivity.kt`
-- Dedicated home-screen implementation: `HomeScreenActivity` and its related resources in the same Android branch.
+- Main Android application UI: `app-kitkat/src/main/java/com/yasn198020/aicontrol/LegacyMainActivity.kt`
 - Windows implementation branch: `feature/windows10-mobile-android-ui-port`
+- UWP project: `src/ESP32AIControl.UWP`
 
-The existing Windows Phone 8.1 project is retained as-is. The Windows 10 Mobile application is a separate UWP project under `src/ESP32AIControl.UWP`.
+The existing Windows Phone 8.1 project is retained unchanged. The Windows 10 Mobile application is a separate UWP project.
 
 ## Product requirements
 
-- Match the Android 5.1.1 application structure and visual behavior as closely as the platform allows.
-- Do not bind the UI or business logic to Lumia 830, RM-984, 720x1280, or any single DPI.
+- Reproduce the Android 5.1.1 application's complete main functionality and navigation as closely as Windows 10 Mobile allows.
+- Do not bind UI or business logic to Lumia 830, RM-984, 720x1280, or any single DPI.
 - Use responsive layouts and runtime size adaptation.
-- Keep MQTT/protocol, device state, history, scenarios, scheduling, voice and presentation as separate layers.
-- Preserve the Android dashboard's configurable pages and widgets, including the custom home-screen experience.
+- Separate presentation, application state, device communication, storage, scheduling and voice services.
+- Keep ESP32/MQTT/UDP behavior independent from phone model and screen size.
+- The custom photo-based personal home screen is explicitly deferred until the rest of the application has been ported and tested.
 - Do not modify the Android reference branch.
 
-## Android navigation reference
+## Main Android navigation reference
 
 Five primary navigation actions:
-1. Главная
-2. Марфа (persistent listening control)
-3. Команды
-4. История
-5. Отложенные
+1. Главная — standard application dashboard/overview for the first migration phase; custom photo home screen is deferred.
+2. Марфа — assistant screen and persistent listening control.
+3. Команды — trained commands.
+4. История — history and graphs.
+5. Отложенные — scheduled/delayed commands.
 
-Additional destinations are exposed from the menu: Сценарии, Журнал, Разрешения, Очистка, Рабочий стол, MQTT, UDP, Голос, Размер текста and application information/tools.
+Additional destinations exposed from the Android menu:
+- Сценарии
+- Журнал
+- Голос
+- MQTT подключение
+- UDP устройства
+- Настройки приложения
+- Управление/удаление элементов
+- Разрешения и аудит
+- Очистка приложения
+- Проверка и обновление приложения
+- Размер текста and other utility actions
 
-## Migration sequence
+## Complete application migration sequence
 
-1. UWP shell, adaptive navigation and screen routing.
-2. Dashboard and configurable widget/page model.
-3. Marfa, trained commands and voice settings.
-4. History, graphs and exports.
-5. Scenarios and delayed commands.
-6. MQTT, UDP discovery, protocol and device-state services.
-7. Device-size testing, accessibility, lifecycle and package validation.
+1. Finish UWP application shell, responsive navigation, routing and common visual components.
+2. Main application dashboard and device/widget list (not the custom photo home screen).
+3. Trained commands: list, add/edit/train, execute and result feedback.
+4. Marfa: text/voice input flow, command preview/confirmation, responses, listening state and service integration.
+5. Voice settings: speech engine/settings, presets, tuning controls and test/preview.
+6. History: event/measurement list, graph configuration, graph display, duration/interval controls and export.
+7. Delayed commands: scheduling, editing, cancellation and execution status.
+8. Scenarios: condition/action editor, ordering, validation, save/load and execution.
+9. MQTT settings and connection lifecycle; device state and command transport.
+10. UDP device discovery and device management.
+11. Journal/log, permissions audit, cleanup, update flow and application settings.
+12. Integration, persistence, lifecycle/background behavior, accessibility and package validation across screen sizes.
+
+## Deferred feature
+
+The Android `HomeScreenActivity` custom photo desktop, including background photo selection, transparent touch zones, sensor overlays, conditional text, bars, weather/date overlays and its editor, is not part of the initial port. It will be addressed only after the complete main application has been migrated.
 
 ## Current implementation status
 
-The first commit introduces only a UWP project skeleton and navigation shell. MQTT, voice recognition, TTS, history persistence, scenarios and ESP32 communication are not yet implemented in this UWP project.
+The first implementation commit provides only a UWP project skeleton and navigation shell. The main Android screens and services have not yet been ported. MQTT, voice recognition/TTS, history persistence, scenarios, scheduling and ESP32 communication are not yet implemented in this UWP project.
