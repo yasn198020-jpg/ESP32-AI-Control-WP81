@@ -82,7 +82,7 @@
 
             <Grid Grid.Column="1" x:Name="ContentHost" Margin="12,10">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                    <StackPanel x:Name="ContentStack" Spacing="8">
+                    <StackPanel x:Name="ContentStack">
                         <TextBlock x:Name="SectionHeading" Text="ESP32-AI-Control"
                                    FontSize="24" FontWeight="SemiBold"
                                    Foreground="{StaticResource PrimaryTextBrush}"/>
@@ -92,7 +92,7 @@
                                    TextWrapping="Wrap"/>
                         <TextBlock x:Name="StatusText" Text="Ожидание конфигурации устройств."
                                    Foreground="{StaticResource SecondaryTextBrush}" FontSize="13"/>
-                        <StackPanel x:Name="DashboardHost" Spacing="4"/>
+                        <StackPanel x:Name="DashboardHost"/>
                     </StackPanel>
                 </ScrollViewer>
             </Grid>
