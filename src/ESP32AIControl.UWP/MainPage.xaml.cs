@@ -157,7 +157,7 @@ namespace ESP32AIControl.UWP
             {
                 Title = "ESP32-AI-Control",
                 Content = "ESP32-AI-Control для Windows 10 Mobile. Перенос основных разделов выполняется поэтапно.",
-                CloseButtonText = "Закрыть"
+                PrimaryButtonText = "Закрыть"
             };
             await dialog.ShowAsync();
         }
