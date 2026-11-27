@@ -144,8 +144,27 @@ namespace ESP32AIControl.UWP
                     combo.SelectionChanged += (s, e) => { if (combo.SelectedIndex >= 0) _send(entry.Device, widget, combo.SelectedIndex.ToString(CultureInfo.InvariantCulture)); };
                     body.Children.Add(combo);
                 }
-                else if (definition == "input" || definition == "inputtxt" || definition == "inputdgt" ||
-                         definition == "inputdate" || definition == "inputtm")
+                else if (definition == "inputdate" || definition == "inputtm")
+                {
+                    var row = new StackPanel { Orientation = Orientation.Horizontal };
+                    if (definition == "inputdate")
+                    {
+                        var picker = new DatePicker { HorizontalAlignment = HorizontalAlignment.Stretch, MinWidth = 150 };
+                        var send = ActionButton("Отправить");
+                        send.Click += (s, e) => _send(entry.Device, widget, picker.Date.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture));
+                        row.Children.Add(picker); row.Children.Add(send);
+                    }
+                    else
+                    {
+                        var picker = new TimePicker { ClockIdentifier = "24HourClock", MinuteIncrement = 1, MinWidth = 130 };
+                        var send = ActionButton("Отправить");
+                        send.Click += (s, e) => _send(entry.Device, widget, picker.Time.ToString(@"hh\\:mm", CultureInfo.InvariantCulture));
+                        row.Children.Add(picker); row.Children.Add(send);
+                    }
+                    body.Children.Add(Text(widget.Title, 17, Primary, false));
+                    body.Children.Add(row);
+                }
+                else if (definition == "input" || definition == "inputtxt" || definition == "inputdgt")
                 {
                     var row = new Grid();
                     row.ColumnDefinitions.Add(new ColumnDefinition());
@@ -327,17 +346,20 @@ namespace ESP32AIControl.UWP
         private static UIElement RenderCircularGauge(double value, double max, bool fill, IDictionary<string, object> config)
         {
             var canvas = new Canvas { Width = 86, Height = 86 };
-            var track = new Ellipse { Width = 72, Height = 72, Stroke = new SolidColorBrush(Color.FromArgb(255, 75, 78, 88)), StrokeThickness = 7 };
+            var ringKey = fill ? "circleColor" : "color";
+            object ringRaw; var ringColor = config.TryGetValue(ringKey, out ringRaw) ? ParseColor(Convert.ToString(ringRaw)) : (fill ? Colors.Cyan : Color.FromArgb(255, 208, 188, 255));
+            var track = new Ellipse { Width = 72, Height = 72, Stroke = new SolidColorBrush(Color.FromArgb(255, 75, 78, 88)), StrokeThickness = fill ? 7 : (config.ContainsKey("stroke") ? Math.Max(4, Convert.ToDouble(config["stroke"], CultureInfo.InvariantCulture)) : 20) };
             Canvas.SetLeft(track, 7); Canvas.SetTop(track, 7); canvas.Children.Add(track);
             double fraction = Math.Max(0, Math.Min(1, value / Math.Max(0.0001, max)));
             double angle = fraction * 359.9;
             double cx = 43, cy = 43, radius = 36;
             double radians = (-90 + angle) * Math.PI / 180.0;
             var end = new Windows.Foundation.Point(cx + radius * Math.Cos(radians), cy + radius * Math.Sin(radians));
-            var figure = new PathFigure { StartPoint = new Windows.Foundation.Point(cx, cy - radius), IsClosed = false };
+            var startRadians = startAngle * Math.PI / 180.0;
+            var figure = new PathFigure { StartPoint = new Windows.Foundation.Point(cx + radius * Math.Cos(startRadians), cy + radius * Math.Sin(startRadians)), IsClosed = false };
             figure.Segments.Add(new ArcSegment { Point = end, Size = new Windows.Foundation.Size(radius, radius), IsLargeArc = angle > 180, SweepDirection = SweepDirection.Clockwise });
             var geometry = new PathGeometry(); geometry.Figures.Add(figure);
-            var arc = new Windows.UI.Xaml.Shapes.Path { Data = geometry, Stroke = Accent, StrokeThickness = 7, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round };
+            var arc = new Windows.UI.Xaml.Shapes.Path { Data = geometry, Stroke = new SolidColorBrush(ringColor), StrokeThickness = track.StrokeThickness, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round };
             canvas.Children.Add(arc);
             var valueText = Text(Format(value), 18, Primary, false);
             valueText.Width = 86; valueText.TextAlignment = TextAlignment.Center;
