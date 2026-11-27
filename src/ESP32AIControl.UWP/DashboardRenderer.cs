@@ -187,7 +187,11 @@ namespace ESP32AIControl.UWP
                 else
                 {
                     body.Children.Add(Text(widget.Title, 16, Primary, false));
-                    body.Children.Add(Text(String.IsNullOrWhiteSpace(widget.Value) ? "—" : widget.Value + (String.IsNullOrWhiteSpace(widget.Unit) ? "" : " " + widget.Unit), 21, Accent, false));
+                    double numericValue;
+                    var suffix = String.IsNullOrWhiteSpace(widget.Unit) ? Convert.ToString(config.ContainsKey("after") ? config["after"] : "") : widget.Unit;
+                    var valueBrush = Double.TryParse((widget.Value ?? "").Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out numericValue)
+                        ? WidgetValueBrush(config, numericValue) : Accent;
+                    body.Children.Add(Text(String.IsNullOrWhiteSpace(widget.Value) ? "—" : widget.Value + (String.IsNullOrWhiteSpace(suffix) ? "" : " " + suffix), 21, valueBrush, false));
                 }
 
                 if (_showLastUpdated && widget.LastUpdatedUnixMs > 0)
@@ -338,6 +342,38 @@ namespace ESP32AIControl.UWP
             valueText.Width = 86; valueText.TextAlignment = TextAlignment.Center;
             Canvas.SetTop(valueText, 32); canvas.Children.Add(valueText);
             return canvas;
+        }
+
+        private static Brush WidgetValueBrush(IDictionary<string, object> config, double value)
+        {
+            object raw;
+            string selected = null;
+            double selectedLevel = Double.NegativeInfinity;
+            if (config.TryGetValue("color", out raw))
+            {
+                var thresholds = raw as JArray;
+                if (thresholds != null)
+                {
+                    foreach (var item in thresholds.OfType<JObject>())
+                    {
+                        double level;
+                        if (Double.TryParse(Convert.ToString(item["level"], CultureInfo.InvariantCulture), NumberStyles.Any, CultureInfo.InvariantCulture, out level)
+                            && level <= value && level >= selectedLevel)
+                        { selectedLevel = level; selected = Convert.ToString(item["value"]); }
+                    }
+                }
+                else selected = Convert.ToString(raw);
+            }
+            if (!String.IsNullOrWhiteSpace(selected))
+            {
+                try
+                {
+                    var color = (Color)ColorConverter.ConvertFromString(selected);
+                    return new SolidColorBrush(color);
+                }
+                catch { }
+            }
+            return Accent;
         }
 
         private static TextBlock Text(string value, double size, Brush brush, bool wrap)
