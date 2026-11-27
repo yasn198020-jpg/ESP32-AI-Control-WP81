@@ -49,8 +49,23 @@ $nextVersion = '{0}.{1}.{2}.{3}' -f $latestVersion.Major, $latestVersion.Minor, 
 Write-Host "Package version: $nextVersion" -ForegroundColor Cyan
 
 Write-Host '=== WP10 ARM Debug build ===' -ForegroundColor Cyan
-& $msbuild $project /restore /t:Build /p:Configuration=Debug /p:Platform=ARM /p:PlatformTarget=ARM /p:VisualStudioVersion=15.0 /p:TargetPlatformVersion=10.0.14393.0 /p:RuntimeIdentifiers=win10-arm /p:RuntimeIdentifier=win10-arm /p:AppxPackageSigningEnabled=false /p:AppxPackageVersion=$nextVersion /p:AppxAutoIncrementPackageRevision=false /v:minimal
-if ($LASTEXITCODE -ne 0) { throw "MSBuild failed with exit code $LASTEXITCODE" }
+$originalManifestBytes = [System.IO.File]::ReadAllBytes($manifestPath)
+$manifestText = [System.IO.File]::ReadAllText($manifestPath)
+$identityVersionPattern = '(<Identity\b[^>]*\bVersion=")[^"]+(")'
+if (-not [regex]::IsMatch($manifestText, $identityVersionPattern)) {
+    throw "Could not locate Identity Version in $manifestPath"
+}
+$buildManifestText = [regex]::Replace($manifestText, $identityVersionPattern, ('$1' + $nextVersion + '$2'), 1)
+try {
+    [System.IO.File]::WriteAllText($manifestPath, $buildManifestText, (New-Object System.Text.UTF8Encoding($false)))
+    Write-Host "Temporarily setting manifest package version to $nextVersion" -ForegroundColor Cyan
+    & $msbuild $project /restore /t:Build /p:Configuration=Debug /p:Platform=ARM /p:PlatformTarget=ARM /p:VisualStudioVersion=15.0 /p:TargetPlatformVersion=10.0.14393.0 /p:RuntimeIdentifiers=win10-arm /p:RuntimeIdentifier=win10-arm /p:AppxPackageSigningEnabled=false /p:AppxAutoIncrementPackageRevision=false /v:minimal
+    if ($LASTEXITCODE -ne 0) { throw "MSBuild failed with exit code $LASTEXITCODE" }
+}
+finally {
+    [System.IO.File]::WriteAllBytes($manifestPath, $originalManifestBytes)
+    Write-Host 'Original Package.appxmanifest restored.' -ForegroundColor DarkGray
+}
 
 $packageDir = Get-ChildItem -LiteralPath $packagesRoot -Directory -Filter 'ESP32AIControl.UWP_*_Debug_Test' -ErrorAction SilentlyContinue |
     Sort-Object LastWriteTime -Descending |
