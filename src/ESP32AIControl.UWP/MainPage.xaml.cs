@@ -142,6 +142,15 @@ namespace ESP32AIControl.UWP
         private void UdpSettings_Click(object sender, RoutedEventArgs e) { SetSection("UDP", "UDP устройства", "Обнаружение устройств в локальной сети."); }
         private void AppSettings_Click(object sender, RoutedEventArgs e) { SetSection("Настройки", "Настройки приложения", "Общие параметры приложения."); }
         private void TextSize_Click(object sender, RoutedEventArgs e) { SetSection("Размер текста", "Размер текста", "Масштаб интерфейса и читаемость на разных экранах."); }
+        private void ToggleLastUpdated_Click(object sender, RoutedEventArgs e)
+        {
+            _dashboardRenderer.ShowLastUpdated = !_dashboardRenderer.ShowLastUpdated;
+            StatusText.Text = _dashboardRenderer.ShowLastUpdated
+                ? "Показано время последнего обновления элементов."
+                : "Время последнего обновления скрыто.";
+            if (PageTitle.Text == "Главная") _dashboardRenderer.Render();
+        }
+
         private async void InfoButton_Click(object sender, RoutedEventArgs e)
         {
             var dialog = new ContentDialog
