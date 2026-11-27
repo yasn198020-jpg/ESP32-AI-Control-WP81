@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using Windows.UI;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
@@ -8,12 +11,19 @@ namespace ESP32AIControl.UWP
     public sealed partial class MainPage : Page
     {
         private bool _menuOpen;
+        private readonly DashboardSnapshot _dashboardSnapshot = new DashboardSnapshot();
+        private DashboardRenderer _dashboardRenderer;
+
+        public event EventHandler<DeviceCommandRequestedEventArgs> DeviceCommandRequested;
 
         public MainPage()
         {
             InitializeComponent();
-            SetSection("Главная", "ESP32-AI-Control",
-                "Интерфейсный каркас Windows 10 Mobile. Содержимое Android-экранов будет перенесено следующим этапом.");
+            _dashboardRenderer = new DashboardRenderer(DashboardHost, _dashboardSnapshot,
+                page => { StatusText.Text = "Страница: " + page; },
+                (device, widget, value) => DeviceCommandRequested?.Invoke(this,
+                    new DeviceCommandRequestedEventArgs(device, widget, value)));
+            ShowDashboard();
             UpdateNavigation(HomeNav);
             SizeChanged += MainPage_SizeChanged;
         }
@@ -52,7 +62,8 @@ namespace ESP32AIControl.UWP
             PageTitle.Text = title;
             SectionHeading.Text = heading;
             SectionDescription.Text = description;
-            StatusText.Text = "Каркас раздела создан. Реальная функциональность будет перенесена из Android 5.1.1.";
+            StatusText.Text = "Раздел приложения";
+            DashboardHost.Visibility = Visibility.Collapsed;
             _menuOpen = false;
             if (ActualWidth < 720)
             {
@@ -69,9 +80,34 @@ namespace ESP32AIControl.UWP
             selected.Foreground = new SolidColorBrush(Color.FromArgb(255, 208, 188, 255));
         }
 
+        private void ShowDashboard()
+        {
+            PageTitle.Text = "Главная";
+            SectionHeading.Text = "Устройства";
+            SectionDescription.Text = "Устройства ESP32 и элементы управления";
+            StatusText.Text = "Нет конфигурации. Подключитесь к MQTT и нажмите HELLO.";
+            DashboardHost.Visibility = Visibility.Visible;
+            _dashboardRenderer.Render();
+            _menuOpen = false;
+            if (ActualWidth < 720)
+            {
+                MenuColumn.Width = new GridLength(0);
+                SideMenu.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        // Called by the future MQTT/device service when a fresh device snapshot arrives.
+        public void SetDeviceSnapshot(IEnumerable<DeviceModel> devices)
+        {
+            _dashboardSnapshot.Devices.Clear();
+            if (devices != null)
+                foreach (var device in devices) _dashboardSnapshot.Devices.Add(device);
+            if (PageTitle.Text == "Главная") _dashboardRenderer.Render();
+        }
+
         private void Home_Click(object sender, RoutedEventArgs e)
         {
-            SetSection("Главная", "Рабочий стол", "Здесь появятся страницы ESP32 и настраиваемые виджеты Android.");
+            ShowDashboard();
             UpdateNavigation(HomeNav);
         }
 
@@ -111,7 +147,7 @@ namespace ESP32AIControl.UWP
             var dialog = new ContentDialog
             {
                 Title = "ESP32-AI-Control",
-                Content = "Версия Windows 10 Mobile. Сейчас реализован только адаптивный интерфейсный каркас.",
+                Content = "ESP32-AI-Control для Windows 10 Mobile. Перенос основных разделов выполняется поэтапно.",
                 CloseButtonText = "Закрыть"
             };
             await dialog.ShowAsync();
