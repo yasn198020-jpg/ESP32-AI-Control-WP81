@@ -104,8 +104,8 @@ namespace ESP32AIControl.UWP
         private void Journal_Click(object sender, RoutedEventArgs e) { SetSection("Журнал", "Журнал", "Системные события и диагностика подключения."); }
         private void MqttSettings_Click(object sender, RoutedEventArgs e) { SetSection("MQTT", "Подключение MQTT", "Параметры MQTT и состояние соединения."); }
         private void UdpSettings_Click(object sender, RoutedEventArgs e) { SetSection("UDP", "UDP устройства", "Обнаружение устройств в локальной сети."); }
-        private void DashboardSettings_Click(object sender, RoutedEventArgs e) { SetSection("Рабочий стол", "Настройка рабочего стола", "Страницы, виджеты и их расположение."); }
         private void AppSettings_Click(object sender, RoutedEventArgs e) { SetSection("Настройки", "Настройки приложения", "Общие параметры приложения."); }
+        private void TextSize_Click(object sender, RoutedEventArgs e) { SetSection("Размер текста", "Размер текста", "Масштаб интерфейса и читаемость на разных экранах."); }
         private async void InfoButton_Click(object sender, RoutedEventArgs e)
         {
             var dialog = new ContentDialog
