@@ -59,7 +59,7 @@ namespace ESP32AIControl.UWP
                 var tabs = new ScrollViewer { HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
                     VerticalScrollBarVisibility = ScrollBarVisibility.Disabled, HorizontalScrollMode = ScrollMode.Enabled,
                     VerticalScrollMode = ScrollMode.Disabled, Margin = new Thickness(0, 0, 0, 10) };
-                var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+                var row = new StackPanel { Orientation = Orientation.Horizontal };
                 foreach (var page in pages)
                 {
                     var selected = page == _activePage;
@@ -68,7 +68,7 @@ namespace ESP32AIControl.UWP
                         Foreground = Primary, Padding = new Thickness(16, 10, 16, 10),
                         BorderThickness = new Thickness(0), MinWidth = 0 };
                     var pageCopy = page;
-                    button.Click += (s, e) => { _activePage = pageCopy; _selectPage(pageCopy); Render(); };
+                    button.Margin = new Thickness(0, 0, 6, 0);\n                    button.Click += (s, e) => { _activePage = pageCopy; _selectPage(pageCopy); Render(); };
                     row.Children.Add(button);
                 }
                 tabs.Content = row;
@@ -148,13 +148,13 @@ namespace ESP32AIControl.UWP
                     if (definition == "inputdgt") input.InputScope = new Windows.UI.Xaml.Input.InputScope { Names = { new Windows.UI.Xaml.Input.InputScopeName(Windows.UI.Xaml.Input.InputScopeNameValue.Number) } };
                     row.Children.Add(input);
                     var send = ActionButton("Отправить");
-                    send.Click += (s, e) => { if (String.IsNullOrWhiteSpace(input.Text)) input.Header = "Введите значение"; else _send(entry.Device, widget, input.Text.Trim()); };
+                    send.Click += (s, e) => { if (String.IsNullOrWhiteSpace(input.Text)) input.PlaceholderText = "Введите значение"; else _send(entry.Device, widget, input.Text.Trim()); };
                     Grid.SetColumn(send, 1); row.Children.Add(send); body.Children.Add(row);
                 }
                 else if (definition == "progressline" || definition == "progress-line")
                 {
                     double value; Double.TryParse((widget.Value ?? "").Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out value);
-                    var isFill = definition == "fillgauge";\n                    var max = isFill ? 100 : Math.Max(0.0001, widget.ConfigNumber("max", 100));
+                    var max = Math.Max(0.0001, widget.ConfigNumber("max", 100));
                     body.Children.Add(Text(widget.Title + "   " + Format(value) + " / " + Format(max), 16, Primary, false));
                     body.Children.Add(new ProgressBar { Minimum = 0, Maximum = max, Value = Math.Max(0, Math.Min(max, value)), Height = 8 });
                 }
