@@ -357,7 +357,7 @@ namespace ESP32AIControl.UWP
             var end = new Windows.Foundation.Point(cx + radius * Math.Cos(radians), cy + radius * Math.Sin(radians));
             var startRadians = startAngle * Math.PI / 180.0;
             var figure = new PathFigure { StartPoint = new Windows.Foundation.Point(cx + radius * Math.Cos(startRadians), cy + radius * Math.Sin(startRadians)), IsClosed = false };
-            figure.Segments.Add(new ArcSegment { Point = end, Size = new Windows.Foundation.Size(radius, radius), IsLargeArc = angle > 180, SweepDirection = SweepDirection.Clockwise });
+            figure.Segments.Add(new ArcSegment { Point = end, Size = new Windows.Foundation.Size(radius, radius), IsLargeArc = angle > 180, SweepDirection = semicircle ? SweepDirection.Counterclockwise : SweepDirection.Clockwise });
             var geometry = new PathGeometry(); geometry.Figures.Add(figure);
             var arc = new Windows.UI.Xaml.Shapes.Path { Data = geometry, Stroke = new SolidColorBrush(ringColor), StrokeThickness = track.StrokeThickness, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round };
             canvas.Children.Add(arc);
