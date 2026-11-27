@@ -207,6 +207,7 @@ namespace ESP32AIControl.UWP
                 else
                 {
                     body.Children.Add(Text(widget.Title, 16, Primary, false));
+                    var config = widget.ReadConfig();
                     double numericValue;
                     var suffix = String.IsNullOrWhiteSpace(widget.Unit) ? Convert.ToString(config.ContainsKey("after") ? config["after"] : "") : widget.Unit;
                     var valueBrush = Double.TryParse((widget.Value ?? "").Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out numericValue)
