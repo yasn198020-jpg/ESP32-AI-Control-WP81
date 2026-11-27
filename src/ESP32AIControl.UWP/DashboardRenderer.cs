@@ -170,7 +170,17 @@ namespace ESP32AIControl.UWP
                     string ageText = age < 60 ? age + " сек назад" : age < 3600 ? (age/60) + " мин назад" : age < 86400 ? (age/3600) + " ч назад" : (age/86400) + " дн назад";
                     body.Children.Add(Text("обновлено " + ageText, 10, Muted, false));
                 }
-                if (!entry.Device.Online) body.Children.Add(Text("Офлайн", 12, new SolidColorBrush(Color.FromArgb(255, 255, 138, 128)), true));\n                _host.Children.Add(card);
+                if (!entry.Device.Online) body.Children.Add(Text("Офлайн", 12, new SolidColorBrush(Color.FromArgb(255, 255, 138, 128)), true));
+                if (!String.IsNullOrWhiteSpace(widget.CommandState))
+                {
+                    string state = widget.CommandState.ToUpperInvariant();
+                    string message = state == "PENDING" ? "Ожидаю подтверждение ESP32: " + widget.ExpectedCommandValue :
+                        state == "CONFIRMED" ? "ESP32 подтвердил выполнение" :
+                        state == "TIMED_OUT" ? "Ответ ESP32 не получен" :
+                        state == "SEND_FAILED" ? "Команда не отправлена" : "";
+                    if (message.Length > 0) body.Children.Add(Text(message, 12, Muted, true));
+                }
+                _host.Children.Add(card);
             }
         }
 
