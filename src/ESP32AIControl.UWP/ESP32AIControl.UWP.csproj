@@ -56,6 +56,7 @@
     <Compile Include="DeviceCommandRequestedEventArgs.cs" />
     <ApplicationDefinition Include="App.xaml"><Generator>MSBuild:Compile</Generator><SubType>Designer</SubType></ApplicationDefinition>
     <Page Include="MainPage.xaml"><Generator>MSBuild:Compile</Generator><SubType>Designer</SubType></Page>
+    <AppxManifest Include="Package.appxmanifest"><SubType>Designer</SubType></AppxManifest>
     <Content Include="Assets\**\*.*" />
     <None Include="packages.config" />
   </ItemGroup>
