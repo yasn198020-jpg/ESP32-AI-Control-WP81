@@ -64,6 +64,6 @@ The Android `HomeScreenActivity` custom photo desktop, including background phot
 ## Current implementation status
 
 - Stage 1: UWP application shell and responsive navigation — initial implementation committed; not yet validated by a local Visual Studio build.
-- Stage 2: Main dashboard — Android-style page tabs, empty-configuration state, device/widget data model and first-pass renderers for toggle, button, input, range, select, progress and value widgets have been added. The renderer accepts device snapshots and emits command-request events, but no MQTT/device service is connected yet.
+- Stage 2: Main dashboard presentation — implemented page tabs (including gear-marked page names), empty-state handling, stable widget ordering, toggle/button/range/select/text/number/date/time inputs, progress bars, round/fill gauge-style indicators, chart payload rendering, update age labels, offline labels and command acknowledgement labels. Device/widget snapshots are accepted through `SetDeviceSnapshot`; UI actions are emitted as `DeviceCommandRequested`. The Android custom photo desktop remains deferred. The MQTT snapshot adapter and real command transport are intentionally left for stage 9; the dashboard has not yet been validated by a local Visual Studio build.
 - Stages 3–12: not yet implemented.
 - Deferred: custom photo-based home screen and its editor remain out of the initial migration sequence.
