@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using ESP32AIControl.WP81.Models;
 using ESP32AIControl.WP81.Core.State;
 
@@ -74,6 +75,18 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             return _scenarioAnalyzer == null ? 0 : _scenarioAnalyzer.RuleCount;
         }
 
+        public DeviceScenarioModel GetScenarioLanguageModel()
+        {
+            return _scenarioAnalyzer == null ? null : _scenarioAnalyzer.LanguageModel;
+        }
+
+        public IList<ScenarioVariableDiagnostic> GetScenarioDiagnostics()
+        {
+            return _scenarioAnalyzer == null
+                ? new List<ScenarioVariableDiagnostic>()
+                : _scenarioAnalyzer.ValidateReferences(_devices);
+        }
+
         public ScenarioPlan BuildPlan(string command)
         {
             var plan = new ScenarioPlan();
@@ -85,7 +98,31 @@ namespace ESP32AIControl.WP81.Core.Scenarios
                 if (action == null)
                     throw new ArgumentException("Формат команды: device/widget=value", "command");
 
-                if (!TryAddReverseScenarioPlan(plan, action))
+                // A natural-language match can land on the physical relay.
+                // Resolve it through the scenario before planning the command.
+                DeviceScenarioRule actuatorRule;
+                ScenarioAction logicalTarget;
+                bool ambiguousLogicalTarget;
+                if (TryResolveLogicalTargetFromActuator(action, out logicalTarget,
+                    out actuatorRule, out ambiguousLogicalTarget))
+                {
+                    ScenarioAction modeAction;
+                    if (TryBuildManualModeActuatorPlan(action, logicalTarget, actuatorRule, out modeAction))
+                    {
+                        if (modeAction != null) plan.Actions.Add(modeAction);
+                        plan.Actions.Add(action);
+                        continue;
+                    }
+                    action = logicalTarget;
+                }
+                else if (ambiguousLogicalTarget)
+                {
+                    throw new InvalidOperationException(
+                        "Нельзя однозначно определить логическое состояние для исполнительного устройства " +
+                        action.DeviceId + "/" + action.WidgetId + ". Команда не отправлена.");
+                }
+
+                if (!TryAddReverseScenarioPlan(plan, action) && !TryAddExpressionDependencyPlan(plan, action))
                 {
                     AddAutomationDependency(plan, action);
                     AddInterlockDependency(plan, action);
@@ -96,7 +133,747 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             if (plan.Actions.Count == 0)
                 throw new ArgumentException("Пустой сценарий.", "command");
 
+            ValidatePlanConflicts(plan);
+            OrderPlanByScenarioDependencies(plan);
             return plan;
+        }
+
+        private void OrderPlanByScenarioDependencies(ScenarioPlan plan)
+        {
+            if (plan == null || plan.Actions.Count < 2 ||
+                _scenarioAnalyzer == null || _scenarioAnalyzer.LanguageModel == null)
+                return;
+
+            var model = _scenarioAnalyzer.LanguageModel;
+            var byTarget = plan.Actions.ToDictionary(
+                a => a.DeviceId + "/" + a.WidgetId, StringComparer.OrdinalIgnoreCase);
+            var outgoing = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+            var indegree = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (var action in plan.Actions)
+            {
+                var key = action.DeviceId + "/" + action.WidgetId;
+                outgoing[key] = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                indegree[key] = 0;
+            }
+
+            foreach (var rule in model.Rules)
+            {
+                foreach (var action in rule.Actions)
+                {
+                    var targetMatches = _devices.GetWidgetsById(action.TargetId);
+                    if (targetMatches.Count != 1) continue;
+                    var targetKey = targetMatches[0].DeviceId + "/" + targetMatches[0].Id;
+                    if (!byTarget.ContainsKey(targetKey)) continue;
+
+                    var requiredPrerequisites = new List<string>();
+                    CollectRequiredConditionIdentifiers(rule.Condition.Expression, requiredPrerequisites);
+                    foreach (var prerequisiteId in requiredPrerequisites.Distinct(StringComparer.OrdinalIgnoreCase))
+                    {
+                        var prerequisiteMatches = _devices.GetWidgetsById(prerequisiteId);
+                        if (prerequisiteMatches.Count != 1) continue;
+                        var prerequisiteKey = prerequisiteMatches[0].DeviceId + "/" + prerequisiteMatches[0].Id;
+                        if (string.Equals(prerequisiteKey, targetKey, StringComparison.OrdinalIgnoreCase) ||
+                            !byTarget.ContainsKey(prerequisiteKey))
+                            continue;
+
+                        if (outgoing[prerequisiteKey].Add(targetKey))
+                            indegree[targetKey]++;
+                    }
+                }
+            }
+
+            var ordered = new List<ScenarioAction>();
+            var emitted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            while (ordered.Count < plan.Actions.Count)
+            {
+                ScenarioAction next = null;
+                foreach (var action in plan.Actions)
+                {
+                    var key = action.DeviceId + "/" + action.WidgetId;
+                    if (!emitted.Contains(key) && indegree[key] == 0)
+                    {
+                        next = action;
+                        break;
+                    }
+                }
+                if (next == null)
+                    throw new InvalidOperationException(
+                        "В графе сценарных зависимостей обнаружен цикл. Команды не отправлены.");
+
+                var nextKey = next.DeviceId + "/" + next.WidgetId;
+                emitted.Add(nextKey);
+                ordered.Add(next);
+                foreach (var dependent in outgoing[nextKey])
+                    indegree[dependent]--;
+            }
+
+            plan.Actions.Clear();
+            foreach (var action in ordered) plan.Actions.Add(action);
+        }
+
+        /// <summary>
+        /// Refuse plans that would write different values to the same widget.
+        /// This check runs after scenario prerequisites have been expanded, so it
+        /// also catches conflicts between a requested command and an inferred
+        /// manual-mode/interlock dependency.
+        /// </summary>
+        private static void ValidatePlanConflicts(ScenarioPlan plan)
+        {
+            var valuesByTarget = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var uniqueActions = new List<ScenarioAction>();
+
+            for (var i = 0; i < plan.Actions.Count; i++)
+            {
+                var action = plan.Actions[i];
+                if (action == null || string.IsNullOrWhiteSpace(action.DeviceId) ||
+                    string.IsNullOrWhiteSpace(action.WidgetId))
+                    throw new InvalidOperationException("План содержит действие без однозначного устройства или виджета.");
+
+                var key = action.DeviceId.Trim() + "/" + action.WidgetId.Trim();
+                string previous;
+                if (valuesByTarget.TryGetValue(key, out previous))
+                {
+                    if (!string.Equals((previous ?? string.Empty).Trim(),
+                        (action.Value ?? string.Empty).Trim(), StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new InvalidOperationException(
+                            "Конфликт команд для " + key + ": одновременно требуются значения '" +
+                            previous + "' и '" + action.Value + "'. Команда не отправлена.");
+                    }
+
+                    // Repeated identical writes are unnecessary. Preserve the
+                    // first action and its ordering/reason.
+                    continue;
+                }
+
+                valuesByTarget[key] = action.Value ?? string.Empty;
+                uniqueActions.Add(action);
+            }
+
+            plan.Actions.Clear();
+            for (var i = 0; i < uniqueActions.Count; i++)
+                plan.Actions.Add(uniqueActions[i]);
+        }
+
+        /// <summary>
+        /// Resolves a physical output back to the logical state written by the
+        /// same IoTManager rule. IDs must resolve to exactly one widget; no
+        /// fuzzy ID matching or cross-device binding is allowed.
+        /// </summary>
+        private bool TryResolveLogicalTargetFromActuator(
+            ScenarioAction physicalAction,
+            out ScenarioAction logicalTarget,
+            out DeviceScenarioRule matchedRule,
+            out bool ambiguous)
+        {
+            logicalTarget = null;
+            matchedRule = null;
+            ambiguous = false;
+            if (physicalAction == null || _scenarioAnalyzer == null ||
+                _scenarioAnalyzer.LanguageModel == null ||
+                (physicalAction.Value != "0" && physicalAction.Value != "1"))
+                return false;
+
+            var model = _scenarioAnalyzer.LanguageModel;
+            if (!model.Valid) return false;
+
+            var candidates = new List<Tuple<ScenarioAction, DeviceScenarioRule>>();
+            foreach (var rule in model.Rules)
+            {
+                var drivesRequestedOutput = rule.Actions.Any(a =>
+                {
+                    string resolvedValue;
+                    return string.Equals(a.TargetId, physicalAction.WidgetId, StringComparison.OrdinalIgnoreCase) &&
+                        TryResolveScenarioLiteral(a.Expression, model,
+                            new HashSet<string>(StringComparer.OrdinalIgnoreCase), out resolvedValue) &&
+                        ScenarioValuesEquivalent(resolvedValue, physicalAction.Value);
+                });
+                if (!drivesRequestedOutput) continue;
+
+                foreach (var stateAction in rule.Actions)
+                {
+                    if (string.Equals(stateAction.TargetId, physicalAction.WidgetId, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    string stateValue;
+                    if (!TryResolveScenarioLiteral(stateAction.Expression, model,
+                        new HashSet<string>(StringComparer.OrdinalIgnoreCase), out stateValue) ||
+                        (stateValue != "0" && stateValue != "1"))
+                        continue;
+                    if (!ExpressionHasEqualityThroughAliases(rule.Condition.Expression,
+                        stateAction.TargetId, stateValue, model))
+                        continue;
+
+                    var matches = _devices.GetWidgetsById(stateAction.TargetId);
+                    if (matches.Count != 1 ||
+                        !string.Equals(matches[0].DeviceId, physicalAction.DeviceId, StringComparison.OrdinalIgnoreCase) ||
+                        !IsUserControl(matches[0]) || IsPhysicalActuator(matches[0]))
+                        continue;
+
+                    candidates.Add(Tuple.Create(new ScenarioAction
+                    {
+                        Command = matches[0].DeviceId + "/" + matches[0].Id + "=" + stateValue,
+                        DeviceId = matches[0].DeviceId,
+                        WidgetId = matches[0].Id,
+                        Value = stateValue,
+                        Reason = "Логическое состояние найдено по сценарию исполнительного устройства",
+                        IsDependency = false
+                    }, rule));
+                }
+            }
+
+            var groupedCandidates = candidates
+                .GroupBy(x => x.Item1.DeviceId + "/" + x.Item1.WidgetId + "=" + x.Item1.Value,
+                    StringComparer.OrdinalIgnoreCase).ToList();
+
+            // The same logical widget inferred from different, non-equivalent
+            // scenario branches is not automatically a unique mapping. Keep
+            // duplicates only when their effective conditions are identical.
+            if (groupedCandidates.Any(group => group
+                .Select(x => x.Item2.Condition == null ? string.Empty : x.Item2.Condition.Rendered)
+                .Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1))
+            {
+                ambiguous = true;
+                return false;
+            }
+
+            var unique = groupedCandidates.Select(g => g.First()).ToList();
+            if (unique.Count > 1)
+            {
+                ambiguous = true;
+                return false;
+            }
+            if (unique.Count == 0) return false;
+
+            logicalTarget = unique[0].Item1;
+            matchedRule = unique[0].Item2;
+            return true;
+        }
+
+        /// <summary>
+        /// If the matched actuator branch is guarded by automatic mode, switch
+        /// to manual mode first and then issue the requested physical action.
+        /// Only a unique, same-device mode control is accepted.
+        /// </summary>
+        private bool TryBuildManualModeActuatorPlan(
+            ScenarioAction physicalAction,
+            ScenarioAction logicalTarget,
+            DeviceScenarioRule rule,
+            out ScenarioAction modeAction)
+        {
+            modeAction = null;
+            if (rule == null || logicalTarget == null) return false;
+
+            var model = _scenarioAnalyzer == null ? null : _scenarioAnalyzer.LanguageModel;
+            if (model == null) return false;
+
+            var modeCandidates = new List<WidgetState>();
+            foreach (var id in rule.Condition.Identifiers)
+            {
+                var matches = _devices.GetWidgetsById(id);
+                if (matches.Count != 1 ||
+                    !string.Equals(matches[0].DeviceId, physicalAction.DeviceId, StringComparison.OrdinalIgnoreCase) ||
+                    !IsUserControl(matches[0]) || !IsModeWidget(matches[0]))
+                    continue;
+
+                var gateValues = GetEqualityValuesThroughAliases(rule.Condition.Expression, id, model);
+                if (gateValues.Count == 1 && gateValues[0] == "0")
+                    modeCandidates.Add(matches[0]);
+            }
+
+            // IoTManager can split the manual branch into another rule. Link
+            // it only through an explicit shared action/condition identifier,
+            // never through a similar-looking widget title.
+            foreach (var manualRule in model.Rules)
+            {
+                foreach (var id in manualRule.Condition.Identifiers)
+                {
+                    var manualValues = GetEqualityValuesThroughAliases(
+                        manualRule.Condition.Expression, id, model);
+                    if (manualValues.Count != 1 || manualValues[0] != "1")
+                        continue;
+
+                    var linked = manualRule.Actions.Any(a =>
+                        string.Equals(a.TargetId, physicalAction.WidgetId, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(a.TargetId, logicalTarget.WidgetId, StringComparison.OrdinalIgnoreCase) ||
+                        rule.Condition.Identifiers.Contains(a.TargetId) ||
+                        ScenarioExpressionDependsOnIdentifier(a.Expression, physicalAction.WidgetId, model,
+                            new HashSet<string>(StringComparer.OrdinalIgnoreCase)) ||
+                        ScenarioExpressionDependsOnIdentifier(a.Expression, logicalTarget.WidgetId, model,
+                            new HashSet<string>(StringComparer.OrdinalIgnoreCase))) ||
+                        ScenarioExpressionDependsOnIdentifier(manualRule.Condition.Expression,
+                            physicalAction.WidgetId, model, new HashSet<string>(StringComparer.OrdinalIgnoreCase)) ||
+                        ScenarioExpressionDependsOnIdentifier(manualRule.Condition.Expression,
+                            logicalTarget.WidgetId, model, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+                    if (!linked) continue;
+
+                    var matches = _devices.GetWidgetsById(id);
+                    if (matches.Count == 1 &&
+                        string.Equals(matches[0].DeviceId, physicalAction.DeviceId, StringComparison.OrdinalIgnoreCase) &&
+                        IsUserControl(matches[0]) && IsModeWidget(matches[0]))
+                        modeCandidates.Add(matches[0]);
+                }
+            }
+
+            var distinct = modeCandidates.GroupBy(x => x.Id, StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.First()).ToList();
+            if (distinct.Count == 0) return false;
+            if (distinct.Count != 1)
+                throw new InvalidOperationException(
+                    "В сценарии найдено несколько переключателей режима для " +
+                    physicalAction.DeviceId + "/" + physicalAction.WidgetId +
+                    ". Команда не отправлена.");
+
+            var mode = distinct[0];
+            if (!ScenarioValuesEquivalent(mode.Value, "1"))
+            {
+                modeAction = new ScenarioAction
+                {
+                    Command = mode.DeviceId + "/" + mode.Id + "=1",
+                    DeviceId = mode.DeviceId,
+                    WidgetId = mode.Id,
+                    Value = "1",
+                    Reason = "Переключить управление в ручной режим перед прямым управлением исполнительным устройством",
+                    IsDependency = true
+                };
+            }
+            return true;
+        }
+
+        private static bool IsModeWidget(WidgetState state)
+        {
+            if (state == null) return false;
+            var description = (state.Description ?? string.Empty) + " " +
+                (state.DefinitionName ?? string.Empty) + " " + (state.WidgetType ?? string.Empty);
+            return HasAny(description, AutomationWords) || HasAny(description, ManualWords) ||
+                HasAny(description, new[] { "режим", "mode" });
+        }
+
+        private static bool IsPhysicalActuator(WidgetState state)
+        {
+            if (state == null) return false;
+            return string.Equals(state.WidgetType, "ButtonOut", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(state.DefinitionName, "ButtonOut", StringComparison.OrdinalIgnoreCase) ||
+                HasAny(state.Description, ActionWords);
+        }
+
+        private static bool TryGetLiteral(IoTExpr expression, out string value)
+        {
+            value = null;
+            var number = expression as IoTExpr.NumberLiteral;
+            if (number != null)
+            {
+                value = number.Value.ToString("0.################", System.Globalization.CultureInfo.InvariantCulture);
+                return true;
+            }
+            var text = expression as IoTExpr.StringLiteral;
+            if (text != null) { value = text.Value; return true; }
+            var variable = expression as IoTExpr.Variable;
+            if (variable != null && (variable.Name.Equals("true", StringComparison.OrdinalIgnoreCase) ||
+                variable.Name.Equals("false", StringComparison.OrdinalIgnoreCase)))
+            {
+                value = variable.Name.Equals("true", StringComparison.OrdinalIgnoreCase) ? "1" : "0";
+                return true;
+            }
+            return false;
+        }
+
+        private static bool LiteralMatches(IoTExpr expression, string expected)
+        {
+            string value;
+            return TryGetLiteral(expression, out value) && ScenarioValuesEquivalent(value, expected);
+        }
+
+        private static bool ExpressionHasEquality(IoTExpr expression, string identifier)
+        {
+            string ignored;
+            return TryGetEqualityValue(expression, identifier, out ignored);
+        }
+
+        // Resolve intermediate IoTManager variables without guessing. A variable
+        // is accepted only when every reachable assignment resolves to one value.
+        private static bool TryResolveScenarioLiteral(
+            IoTExpr expression,
+            DeviceScenarioModel model,
+            ISet<string> visiting,
+            out string value)
+        {
+            value = null;
+            if (TryGetLiteral(expression, out value)) return true;
+            var variable = expression as IoTExpr.Variable;
+            if (variable == null || model == null || !visiting.Add(variable.Name))
+                return false;
+
+            var definitions = model.Rules.SelectMany(r => r.Actions)
+                .Where(a => string.Equals(a.TargetId, variable.Name, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (definitions.Count == 0) return false;
+
+            var resolved = new List<string>();
+            foreach (var action in definitions)
+            {
+                string candidate;
+                if (!TryResolveScenarioLiteral(action.Expression, model,
+                    new HashSet<string>(visiting, StringComparer.OrdinalIgnoreCase), out candidate))
+                    return false;
+                resolved.Add(candidate);
+            }
+
+            var unique = resolved.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            if (unique.Count != 1) return false;
+            value = unique[0];
+            return true;
+        }
+
+        private static bool ExpressionHasEqualityThroughAliases(
+            IoTExpr expression,
+            string targetIdentifier,
+            string expectedValue,
+            DeviceScenarioModel model)
+        {
+            string resolved;
+            return TryGetRequiredEqualityValue(expression, targetIdentifier, model, out resolved) &&
+                ScenarioValuesEquivalent(resolved, expectedValue);
+        }
+
+        private sealed class ScenarioDependencyGraph
+        {
+            public readonly Dictionary<string, IList<IList<string>>> Definitions =
+                new Dictionary<string, IList<IList<string>>>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        private static ScenarioDependencyGraph BuildScenarioDependencyGraph(DeviceScenarioModel model)
+        {
+            var graph = new ScenarioDependencyGraph();
+            if (model == null || model.Rules == null) return graph;
+
+            foreach (var rule in model.Rules)
+            {
+                foreach (var action in rule.Actions)
+                {
+                    if (string.IsNullOrWhiteSpace(action.TargetId)) continue;
+                    IList<IList<string>> definitions;
+                    if (!graph.Definitions.TryGetValue(action.TargetId, out definitions))
+                    {
+                        definitions = new List<IList<string>>();
+                        graph.Definitions[action.TargetId] = definitions;
+                    }
+                    // A variable assignment depends both on its right-hand
+                    // expression and on the branch condition that makes the
+                    // assignment active. Include both in the same definition
+                    // edge set so aliases assigned constants inside IF blocks
+                    // still retain their upstream control dependencies.
+                    var identifiers = new List<string>();
+                    CollectRequiredExpressionIdentifiers(action.Expression, identifiers);
+                    if (rule.Condition != null)
+                        CollectRequiredConditionIdentifiers(rule.Condition.Expression, identifiers);
+                    definitions.Add(identifiers
+                        .Where(id => !string.IsNullOrWhiteSpace(id))
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList());
+                }
+            }
+            return graph;
+        }
+
+        // Preserve only dependencies that are guaranteed by a boolean
+        // expression. A variable present in just one OR alternative is not
+        // a required data-flow dependency; AND retains both sides.
+        private static void CollectRequiredExpressionIdentifiers(
+            IoTExpr expression,
+            IList<string> identifiers)
+        {
+            if (expression == null) return;
+            var variable = expression as IoTExpr.Variable;
+            if (variable != null) { identifiers.Add(variable.Name); return; }
+            var unary = expression as IoTExpr.Unary;
+            if (unary != null)
+            {
+                CollectRequiredExpressionIdentifiers(unary.Expression, identifiers);
+                return;
+            }
+            var binary = expression as IoTExpr.Binary;
+            if (binary == null)
+            {
+                var call = expression as IoTExpr.Call;
+                if (call != null)
+                    foreach (var argument in call.Arguments)
+                        CollectRequiredExpressionIdentifiers(argument, identifiers);
+                return;
+            }
+            if (binary.Operator == "|")
+            {
+                var left = new List<string>();
+                var right = new List<string>();
+                CollectRequiredExpressionIdentifiers(binary.Left, left);
+                CollectRequiredExpressionIdentifiers(binary.Right, right);
+                foreach (var id in left.Distinct(StringComparer.OrdinalIgnoreCase))
+                    if (right.Any(x => string.Equals(x, id, StringComparison.OrdinalIgnoreCase)))
+                        identifiers.Add(id);
+                return;
+            }
+            CollectRequiredExpressionIdentifiers(binary.Left, identifiers);
+            CollectRequiredExpressionIdentifiers(binary.Right, identifiers);
+        }
+
+        private static void CollectExpressionIdentifiers(IoTExpr expression, IList<string> identifiers)
+        {
+            if (expression == null) return;
+            var variable = expression as IoTExpr.Variable;
+            if (variable != null) { identifiers.Add(variable.Name); return; }
+            var unary = expression as IoTExpr.Unary;
+            if (unary != null) { CollectExpressionIdentifiers(unary.Expression, identifiers); return; }
+            var binary = expression as IoTExpr.Binary;
+            if (binary != null)
+            {
+                CollectExpressionIdentifiers(binary.Left, identifiers);
+                CollectExpressionIdentifiers(binary.Right, identifiers);
+                return;
+            }
+            var call = expression as IoTExpr.Call;
+            if (call != null)
+                foreach (var argument in call.Arguments)
+                    CollectExpressionIdentifiers(argument, identifiers);
+        }
+
+        // Return only identifiers that are structurally required by a
+        // condition. In an OR expression neither side is individually
+        // required, so retain only identifiers required by both branches.
+        // This prevents a conditional constant assignment from being linked
+        // to an unrelated control mentioned in an alternative OR branch.
+        private static void CollectRequiredConditionIdentifiers(
+            IoTExpr expression,
+            IList<string> identifiers)
+        {
+            if (expression == null) return;
+
+            var variable = expression as IoTExpr.Variable;
+            if (variable != null)
+            {
+                identifiers.Add(variable.Name);
+                return;
+            }
+
+            var unary = expression as IoTExpr.Unary;
+            if (unary != null)
+            {
+                CollectRequiredConditionIdentifiers(unary.Expression, identifiers);
+                return;
+            }
+
+            var binary = expression as IoTExpr.Binary;
+            if (binary == null) return;
+
+            if (binary.Operator == "|" || binary.Operator == "||")
+            {
+                var left = new List<string>();
+                var right = new List<string>();
+                CollectRequiredConditionIdentifiers(binary.Left, left);
+                CollectRequiredConditionIdentifiers(binary.Right, right);
+                foreach (var id in left.Distinct(StringComparer.OrdinalIgnoreCase))
+                    if (right.Any(x => string.Equals(x, id, StringComparison.OrdinalIgnoreCase)))
+                        identifiers.Add(id);
+                return;
+            }
+
+            CollectRequiredConditionIdentifiers(binary.Left, identifiers);
+            CollectRequiredConditionIdentifiers(binary.Right, identifiers);
+        }
+
+        private static bool GraphVariableDependsOnIdentifier(
+            string variableName,
+            string targetIdentifier,
+            ScenarioDependencyGraph graph,
+            ISet<string> visiting,
+            int depth)
+        {
+            if (string.Equals(variableName, targetIdentifier, StringComparison.OrdinalIgnoreCase))
+                return true;
+            if (graph == null || depth >= 16 || !visiting.Add(variableName)) return false;
+
+            IList<IList<string>> definitions;
+            if (!graph.Definitions.TryGetValue(variableName, out definitions) || definitions.Count == 0)
+                return false;
+
+            // Every assignment definition must retain a path to the target.
+            // A single unrelated/unknown definition makes the link ambiguous.
+            foreach (var definition in definitions)
+            {
+                bool definitionDepends = false;
+                foreach (var identifier in definition)
+                {
+                    if (GraphVariableDependsOnIdentifier(identifier, targetIdentifier, graph,
+                        new HashSet<string>(visiting, StringComparer.OrdinalIgnoreCase), depth + 1))
+                    {
+                        definitionDepends = true;
+                        break;
+                    }
+                }
+                if (!definitionDepends) return false;
+            }
+            return true;
+        }
+
+        private static bool VariableResolvesToIdentifier(
+            string variableName,
+            string targetIdentifier,
+            DeviceScenarioModel model,
+            ISet<string> visiting)
+        {
+            if (string.Equals(variableName, targetIdentifier, StringComparison.OrdinalIgnoreCase))
+                return true;
+            if (visiting != null && visiting.Contains(variableName)) return false;
+            return GraphVariableDependsOnIdentifier(variableName, targetIdentifier,
+                BuildScenarioDependencyGraph(model),
+                visiting == null ? new HashSet<string>(StringComparer.OrdinalIgnoreCase) : visiting, 0);
+        }
+
+        // Resolve data-flow links through a bounded graph. This answers only
+        // whether a dependency path exists; it does not infer boolean implication.
+        private static bool ScenarioExpressionDependsOnIdentifier(
+            IoTExpr expression,
+            string targetIdentifier,
+            DeviceScenarioModel model,
+            ISet<string> visiting)
+        {
+            if (expression == null || model == null) return false;
+            var identifiers = new List<string>();
+            CollectExpressionIdentifiers(expression, identifiers);
+            var graph = BuildScenarioDependencyGraph(model);
+            foreach (var identifier in identifiers)
+                if (GraphVariableDependsOnIdentifier(identifier, targetIdentifier, graph,
+                    new HashSet<string>(StringComparer.OrdinalIgnoreCase), 0))
+                    return true;
+            return false;
+        }
+
+        private static IList<string> GetEqualityValuesThroughAliases(
+            IoTExpr expression,
+            string identifier,
+            DeviceScenarioModel model)
+        {
+            string value;
+            if (!TryGetRequiredEqualityValue(expression, identifier, model, out value))
+                return new List<string>();
+            return new List<string> { value };
+        }
+
+        // An equality is considered a reliable gate only if it is required
+        // by the complete logical expression. For OR both branches must prove
+        // the same equality; for AND either conjunct may establish it. Negated
+        // and non-logical compound expressions are deliberately not inferred.
+        private static bool TryGetRequiredEqualityValue(
+            IoTExpr expression,
+            string identifier,
+            DeviceScenarioModel model,
+            out string value)
+        {
+            value = null;
+            var binary = expression as IoTExpr.Binary;
+            if (binary == null) return false;
+
+            if (binary.Operator == "==")
+            {
+                string leftValue;
+                string rightValue;
+                bool leftMatches = TryResolveEqualitySide(binary.Left, binary.Right,
+                    identifier, model, out leftValue);
+                bool rightMatches = TryResolveEqualitySide(binary.Right, binary.Left,
+                    identifier, model, out rightValue);
+                if (leftMatches && rightMatches &&
+                    !ScenarioValuesEquivalent(leftValue, rightValue))
+                    return false;
+                if (leftMatches) { value = leftValue; return true; }
+                if (rightMatches) { value = rightValue; return true; }
+                return false;
+            }
+
+            if (binary.Operator != "&" && binary.Operator != "|")
+                return false;
+
+            string left;
+            string right;
+            bool hasLeft = TryGetRequiredEqualityValue(binary.Left, identifier, model, out left);
+            bool hasRight = TryGetRequiredEqualityValue(binary.Right, identifier, model, out right);
+
+            if (binary.Operator == "|")
+            {
+                if (!hasLeft || !hasRight || !ScenarioValuesEquivalent(left, right))
+                    return false;
+                value = left;
+                return true;
+            }
+
+            if (hasLeft && hasRight && !ScenarioValuesEquivalent(left, right))
+                return false;
+            if (hasLeft) { value = left; return true; }
+            if (hasRight) { value = right; return true; }
+            return false;
+        }
+
+        private static bool TryResolveEqualitySide(
+            IoTExpr candidate,
+            IoTExpr literalExpression,
+            string identifier,
+            DeviceScenarioModel model,
+            out string value)
+        {
+            value = null;
+            var variable = candidate as IoTExpr.Variable;
+            if (variable == null ||
+                !VariableResolvesToIdentifier(variable.Name, identifier, model,
+                    new HashSet<string>(StringComparer.OrdinalIgnoreCase)))
+                return false;
+            return TryResolveScenarioLiteral(literalExpression, model,
+                new HashSet<string>(StringComparer.OrdinalIgnoreCase), out value);
+        }
+
+        private static void CollectEqualityValuesThroughAliases(
+            IoTExpr expression,
+            string identifier,
+            DeviceScenarioModel model,
+            IList<string> values)
+        {
+            var binary = expression as IoTExpr.Binary;
+            if (binary == null) return;
+            if (binary.Operator == "==")
+            {
+                var left = binary.Left as IoTExpr.Variable;
+                var right = binary.Right as IoTExpr.Variable;
+                string literal;
+                if (left != null &&
+                    VariableResolvesToIdentifier(left.Name, identifier, model,
+                        new HashSet<string>(StringComparer.OrdinalIgnoreCase)) &&
+                    TryResolveScenarioLiteral(binary.Right, model,
+                        new HashSet<string>(StringComparer.OrdinalIgnoreCase), out literal))
+                    values.Add(literal);
+                if (right != null &&
+                    VariableResolvesToIdentifier(right.Name, identifier, model,
+                        new HashSet<string>(StringComparer.OrdinalIgnoreCase)) &&
+                    TryResolveScenarioLiteral(binary.Left, model,
+                        new HashSet<string>(StringComparer.OrdinalIgnoreCase), out literal))
+                    values.Add(literal);
+            }
+            CollectEqualityValuesThroughAliases(binary.Left, identifier, model, values);
+            CollectEqualityValuesThroughAliases(binary.Right, identifier, model, values);
+        }
+
+        private static bool TryGetEqualityValue(IoTExpr expression, string identifier, out string value)
+        {
+            value = null;
+            var binary = expression as IoTExpr.Binary;
+            if (binary == null) return false;
+            if (binary.Operator == "==")
+            {
+                var left = binary.Left as IoTExpr.Variable;
+                var right = binary.Right as IoTExpr.Variable;
+                string literal;
+                if (left != null && string.Equals(left.Name, identifier, StringComparison.OrdinalIgnoreCase) &&
+                    TryGetLiteral(binary.Right, out literal)) { value = literal; return true; }
+                if (right != null && string.Equals(right.Name, identifier, StringComparison.OrdinalIgnoreCase) &&
+                    TryGetLiteral(binary.Left, out literal)) { value = literal; return true; }
+            }
+            return TryGetEqualityValue(binary.Left, identifier, out value) ||
+                TryGetEqualityValue(binary.Right, identifier, out value);
         }
 
         private bool TryAddReverseScenarioPlan(ScenarioPlan plan, ScenarioAction target)
@@ -115,6 +892,301 @@ namespace ESP32AIControl.WP81.Core.Scenarios
 
             plan.Actions.Add(target);
             return true;
+        }
+
+        private bool TryAddExpressionDependencyPlan(ScenarioPlan plan, ScenarioAction target)
+        {
+            if (_scenarioAnalyzer == null || _scenarioAnalyzer.LanguageModel == null ||
+                !_scenarioAnalyzer.LanguageModel.Valid || target == null)
+                return false;
+
+            var targetMatches = _devices.GetWidgetsById(target.WidgetId);
+            if (targetMatches.Count != 1 ||
+                !string.Equals(targetMatches[0].DeviceId, target.DeviceId, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            var model = _scenarioAnalyzer.LanguageModel;
+            var variables = BuildScenarioVariableContext(model);
+            var candidates = new List<Tuple<int, IList<ScenarioAction>>>();
+
+            foreach (var rule in model.Rules)
+            {
+                var matchingActions = rule.Actions.Where(a =>
+                    string.Equals(a.TargetId, target.WidgetId, StringComparison.OrdinalIgnoreCase)).ToList();
+                if (matchingActions.Count == 0) continue;
+
+                var initialContext = new IoTScenarioEvaluationContext(variables);
+                var controllable = new List<WidgetState>();
+                foreach (var id in rule.Condition.Identifiers)
+                {
+                    var matches = _devices.GetWidgetsById(id);
+                    if (matches.Count != 1 || !IsUserControl(matches[0]) ||
+                        !variables.ContainsKey(id))
+                        continue;
+                    controllable.Add(matches[0]);
+                }
+
+                // Evaluate the action result in each simulated state. The
+                // requested value may depend on controls or aliases whose values
+                // change together with the rule condition.
+                if (controllable.Count > 8)
+                    continue;
+
+                var combinations = 1 << controllable.Count;
+                var bestDependencyCount = int.MaxValue;
+                var bestPlans = new List<IList<ScenarioAction>>();
+                for (var mask = 0; mask < combinations; mask++)
+                {
+                    var simulated = new Dictionary<string, string>(variables, StringComparer.OrdinalIgnoreCase);
+                    var proposed = new List<ScenarioAction>();
+                    for (var bit = 0; bit < controllable.Count; bit++)
+                    {
+                        var widget = controllable[bit];
+                        var desired = (mask & (1 << bit)) != 0 ? "1" : "0";
+                        simulated[widget.Id] = desired;
+                        if (!ScenarioValuesEquivalent(widget.Value, desired))
+                        {
+                            proposed.Add(new ScenarioAction
+                            {
+                                Command = widget.DeviceId + "/" + widget.Id + "=" + desired,
+                                DeviceId = widget.DeviceId,
+                                WidgetId = widget.Id,
+                                Value = desired,
+                                Reason = "Предварительное условие сценария: " +
+                                    (string.IsNullOrWhiteSpace(widget.Description) ? widget.Id : widget.Description),
+                                IsDependency = true
+                            });
+                        }
+                    }
+
+                    var simulatedContext = new IoTScenarioEvaluationContext(simulated);
+                    if (!IoTScenarioEvaluator.IsTruthy(
+                        IoTScenarioEvaluator.Evaluate(rule.Condition.Expression, simulatedContext)))
+                        continue;
+
+                    var completePlan = new List<ScenarioAction>(proposed);
+                    bool actionsResolved = true;
+                    bool requestedValueMatches = false;
+                    foreach (var ruleAction in rule.Actions)
+                    {
+                        // IoTManager assignments are evaluated in source order.
+                        // Internal variables written by an earlier action become
+                        // visible to expressions of subsequent actions.
+                        var value = IoTScenarioEvaluator.Evaluate(ruleAction.Expression, simulatedContext);
+                        string formatted;
+                        if (!TryFormatScenarioValue(value, out formatted))
+                        {
+                            actionsResolved = false;
+                            break;
+                        }
+
+                        var matches = _devices.GetWidgetsById(ruleAction.TargetId);
+                        if (string.Equals(ruleAction.TargetId, target.WidgetId, StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (matches.Count != 1 ||
+                                !string.Equals(matches[0].DeviceId, target.DeviceId, StringComparison.OrdinalIgnoreCase) ||
+                                !ScenarioValuesEquivalent(formatted, target.Value))
+                            {
+                                actionsResolved = false;
+                                break;
+                            }
+                            requestedValueMatches = true;
+                            simulated[ruleAction.TargetId] = formatted;
+                            continue;
+                        }
+
+                        if (matches.Count == 0)
+                        {
+                            simulated[ruleAction.TargetId] = formatted;
+                            continue;
+                        }
+                        if (matches.Count != 1)
+                        {
+                            actionsResolved = false;
+                            break;
+                        }
+
+                        var widget = matches[0];
+                        completePlan.Add(new ScenarioAction
+                        {
+                            Command = widget.DeviceId + "/" + widget.Id + "=" + formatted,
+                            DeviceId = widget.DeviceId,
+                            WidgetId = widget.Id,
+                            Value = formatted,
+                            Reason = "Совместное действие активированной ветки сценария",
+                            IsDependency = true
+                        });
+                        simulated[ruleAction.TargetId] = formatted;
+                    }
+                    if (!actionsResolved || !requestedValueMatches) continue;
+
+                    completePlan.Add(target);
+                    if (proposed.Count < bestDependencyCount)
+                    {
+                        bestDependencyCount = proposed.Count;
+                        bestPlans.Clear();
+                    }
+                    if (proposed.Count == bestDependencyCount)
+                        bestPlans.Add(completePlan);
+                }
+
+                foreach (var candidate in bestPlans)
+                    candidates.Add(Tuple.Create(bestDependencyCount, candidate));
+            }
+
+            if (candidates.Count == 0) return false;
+
+            var minimum = candidates.Min(x => x.Item1);
+            var best = candidates.Where(x => x.Item1 == minimum)
+                .GroupBy(x => string.Join("|", x.Item2
+                    .OrderBy(a => a.DeviceId, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(a => a.WidgetId, StringComparer.OrdinalIgnoreCase)
+                    .Select(a => a.DeviceId + "/" + a.WidgetId + "=" + a.Value).ToArray()),
+                    StringComparer.OrdinalIgnoreCase)
+                .Select(x => x.First().Item2).ToList();
+
+            if (best.Count != 1) return false;
+
+            foreach (var action in best[0])
+            {
+                if (!ContainsAction(plan, action.DeviceId, action.WidgetId, action.Value))
+                    plan.Actions.Add(action);
+            }
+            return true;
+        }
+
+        private Dictionary<string, string> BuildScenarioVariableContext(DeviceScenarioModel model)
+        {
+            var variables = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (model == null || model.Identifiers == null) return variables;
+
+            var internalIdentifiers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var id in model.Identifiers)
+            {
+                var matches = _devices.GetWidgetsById(id);
+                if (matches.Count == 1)
+                    variables[id] = matches[0].Value ?? string.Empty;
+                else if (matches.Count == 0)
+                    internalIdentifiers.Add(id);
+                // Duplicate widget IDs are deliberately left unresolved.
+            }
+
+            // Resolve internal IoTManager variables from the current device
+            // snapshot. Each variable is added only if all its definitions
+            // evaluate to the same known value; iterate to reveal multi-hop
+            // assignment chains without overwriting live widget values.
+            for (var pass = 0; pass < 12 && internalIdentifiers.Count > 0; pass++)
+            {
+                bool changed = false;
+                foreach (var id in internalIdentifiers.ToList())
+                {
+                    var definitions = model.Rules.SelectMany(r => r.Actions)
+                        .Where(a => string.Equals(a.TargetId, id, StringComparison.OrdinalIgnoreCase))
+                        .ToList();
+                    if (definitions.Count == 0) continue;
+
+                    var resolved = new List<string>();
+                    bool complete = true;
+                    bool hasActiveDefinition = false;
+                    var context = new IoTScenarioEvaluationContext(
+                        new Dictionary<string, string>(variables, StringComparer.OrdinalIgnoreCase));
+                    foreach (var rule in model.Rules)
+                    {
+                        foreach (var definition in rule.Actions.Where(a =>
+                            string.Equals(a.TargetId, id, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            // An assignment inside IF/ELSE is usable only when
+                            // its branch condition is known to be active. Do not
+                            // treat an inactive branch as a competing definition.
+                            var condition = rule.Condition == null
+                                ? null
+                                : IoTScenarioEvaluator.Evaluate(rule.Condition.Expression, context);
+                            if (condition != null && condition is IoTValue.Unknown)
+                            {
+                                complete = false;
+                                break;
+                            }
+                            if (condition != null && !IoTScenarioEvaluator.IsTruthy(condition))
+                                continue;
+
+                            hasActiveDefinition = true;
+                            var value = IoTScenarioEvaluator.Evaluate(definition.Expression, context);
+                            string formatted;
+                            if (!TryFormatScenarioValue(value, out formatted))
+                            {
+                                complete = false;
+                                break;
+                            }
+                            resolved.Add(formatted);
+                        }
+                        if (!complete) break;
+                    }
+
+                    var unique = resolved.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                    if (complete && hasActiveDefinition && unique.Count == 1)
+                    {
+                        variables[id] = unique[0];
+                        internalIdentifiers.Remove(id);
+                        changed = true;
+                        break;
+                    }
+                }
+                if (!changed) break;
+            }
+            return variables;
+        }
+
+        private static bool TryFormatScenarioValue(IoTValue value, out string formatted)
+        {
+            formatted = null;
+            if (value == null || value is IoTValue.Unknown) return false;
+            var number = value as IoTValue.Number;
+            if (number != null)
+            {
+                formatted = number.Value.ToString("0.################", System.Globalization.CultureInfo.InvariantCulture);
+                return true;
+            }
+            var text = value as IoTValue.Text;
+            if (text != null) { formatted = text.Value ?? string.Empty; return true; }
+            var boolean = value as IoTValue.BooleanValue;
+            if (boolean != null) { formatted = boolean.Value ? "1" : "0"; return true; }
+            return false;
+        }
+
+        private static bool ScenarioValueMatches(IoTValue value, string expected)
+        {
+            if (value == null || value is IoTValue.Unknown)
+                return false;
+            var number = value as IoTValue.Number;
+            if (number != null)
+            {
+                double wanted;
+                return double.TryParse((expected ?? string.Empty).Replace(',', '.'),
+                    System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out wanted) &&
+                    Math.Abs(number.Value - wanted) < 0.000001;
+            }
+            var text = value as IoTValue.Text;
+            if (text != null)
+                return string.Equals(text.Value, expected, StringComparison.OrdinalIgnoreCase);
+            var boolean = value as IoTValue.BooleanValue;
+            if (boolean != null)
+                return boolean.Value == (expected == "1" || string.Equals(expected, "true", StringComparison.OrdinalIgnoreCase));
+            return false;
+        }
+
+        private static bool ScenarioValuesEquivalent(string first, string second)
+        {
+            double a, b;
+            if (double.TryParse((first ?? string.Empty).Replace(',', '.'),
+                    System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out a) &&
+                double.TryParse((second ?? string.Empty).Replace(',', '.'),
+                    System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out b))
+                return Math.Abs(a - b) < 0.000001;
+            return string.Equals((first ?? string.Empty).Trim(), (second ?? string.Empty).Trim(),
+                StringComparison.OrdinalIgnoreCase);
         }
 
         private void AddScenarioDependency(ScenarioPlan plan, string deviceId, ScenarioDependency dependency)

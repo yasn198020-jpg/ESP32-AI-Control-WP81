@@ -17,8 +17,12 @@ namespace ESP32AIControl.WP81.Core.Protocol
         public string Value { get; set; }
         public string Description { get; set; }
         public string WidgetType { get; set; }
+        public string DefinitionName { get; set; }
+        public string Unit { get; set; }
+        public string ConfigTopic { get; set; }
         public string Page { get; set; }
         public int Order { get; set; }
         public string RawPayload { get; set; }
+        public bool Retained { get; set; }
     }
 }

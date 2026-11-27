@@ -8,6 +8,10 @@ namespace ESP32AIControl.WP81.Models
         public string Id { get; set; }
         public string Description { get; set; }
         public string WidgetType { get; set; }
+        public string DefinitionName { get; set; }
+        public string ConfigJson { get; set; }
+        public string Unit { get; set; }
+        public string Topic { get; set; }
         public string Page { get; set; }
         public int Order { get; set; }
         public string Value { get; set; }
@@ -26,6 +30,10 @@ namespace ESP32AIControl.WP81.Models
                 Id = Id,
                 Description = Description,
                 WidgetType = WidgetType,
+                DefinitionName = DefinitionName,
+                ConfigJson = ConfigJson,
+                Unit = Unit,
+                Topic = Topic,
                 Page = Page,
                 Order = Order,
                 Value = Value,

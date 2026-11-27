@@ -59,6 +59,24 @@ namespace ESP32AIControl.WP81.Core.State
             return null;
         }
 
+        public IList<WidgetState> GetWidgetsById(string widgetId)
+        {
+            var result = new List<WidgetState>();
+            if (string.IsNullOrWhiteSpace(widgetId))
+                return result;
+
+            lock (_widgets)
+            {
+                foreach (var state in _widgets.Values)
+                {
+                    if (string.Equals(state.Id, widgetId, StringComparison.OrdinalIgnoreCase))
+                        result.Add(state.Clone());
+                }
+            }
+
+            return result;
+        }
+
         public IList<WidgetState> GetWidgetsSnapshot()
         {
             var result = new List<WidgetState>();
@@ -72,10 +90,49 @@ namespace ESP32AIControl.WP81.Core.State
             return result;
         }
 
-        public void Apply(Esp32Message message)
+        // Removes only the local cached widget record. No MQTT/ESP32 command is sent.
+        // A later CONFIG/STATE message recreates the record through Apply().
+        public bool RemoveLocal(string deviceId, string widgetId)
+        {
+            var key = (deviceId ?? string.Empty) + "/" + (widgetId ?? string.Empty);
+            lock (_widgets)
+            {
+                if (!_widgets.Remove(key)) return false;
+                var stampPrefix = key + "|";
+                var oldStamps = new List<string>();
+                foreach (var stamp in _lastUpdates.Keys)
+                    if (stamp.StartsWith(stampPrefix, StringComparison.Ordinal)) oldStamps.Add(stamp);
+                foreach (var stamp in oldStamps) _lastUpdates.Remove(stamp);
+
+                if (!string.IsNullOrWhiteSpace(widgetId))
+                {
+                    var replacement = string.Empty;
+                    foreach (var pair in _widgets)
+                    {
+                        if (string.Equals(pair.Value.Id, widgetId, StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (replacement.Length > 0) { replacement = string.Empty; break; }
+                            replacement = pair.Key;
+                        }
+                    }
+                    if (replacement.Length == 0) _widgetIdIndex.Remove(widgetId);
+                    else _widgetIdIndex[widgetId] = replacement;
+                }
+            }
+            return true;
+        }
+
+        public bool Apply(Esp32Message message)
         {
             if (message == null || string.IsNullOrEmpty(message.WidgetId))
-                return;
+                return false;
+
+            // Only CONFIG registers a widget. STATUS/EVENT messages for an
+            // unknown widget are ignored instead of creating orphan records.
+            if (message.Kind != Esp32MessageKind.Config &&
+                message.Kind != Esp32MessageKind.Status &&
+                message.Kind != Esp32MessageKind.Event)
+                return false;
 
             var key = (message.DeviceId ?? string.Empty) + "/" + message.WidgetId;
             WidgetState state;
@@ -84,12 +141,19 @@ namespace ESP32AIControl.WP81.Core.State
             {
                 if (!_widgets.TryGetValue(key, out state))
                 {
+                    if (message.Kind != Esp32MessageKind.Config)
+                        return false;
+
                     state = new WidgetState
                     {
                         DeviceId = message.DeviceId,
                         Id = message.WidgetId,
                         Description = message.Description,
                         WidgetType = message.WidgetType,
+                        DefinitionName = string.IsNullOrEmpty(message.DefinitionName) ? message.WidgetType : message.DefinitionName,
+                        ConfigJson = message.Kind == Esp32MessageKind.Config ? message.RawPayload : "{}",
+                        Unit = message.Unit,
+                        Topic = message.ConfigTopic,
                         Page = message.Page,
                         Order = message.Order
                     };
@@ -103,7 +167,14 @@ namespace ESP32AIControl.WP81.Core.State
                 if (!string.IsNullOrEmpty(message.Description))
                     state.Description = message.Description;
                 if (!string.IsNullOrEmpty(message.WidgetType))
+                {
                     state.WidgetType = message.WidgetType;
+                    state.DefinitionName = string.IsNullOrEmpty(message.DefinitionName) ? message.WidgetType : message.DefinitionName;
+                }
+                if (!string.IsNullOrEmpty(message.Unit)) state.Unit = message.Unit;
+                if (!string.IsNullOrEmpty(message.ConfigTopic)) state.Topic = message.ConfigTopic;
+                if (message.Kind == Esp32MessageKind.Config && !string.IsNullOrWhiteSpace(message.RawPayload))
+                    state.ConfigJson = message.RawPayload;
                 if (!string.IsNullOrEmpty(message.Page))
                     state.Page = message.Page;
                 if (message.Order != 0)
@@ -113,9 +184,13 @@ namespace ESP32AIControl.WP81.Core.State
                     message.Kind == Esp32MessageKind.Event)
                 {
                     if (IsDuplicate(key, message.Value))
-                        return;
+                        return false;
 
-                    state.Value = message.Value;
+                    var isChart = (state.DefinitionName ?? string.Empty).StartsWith("chart", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(GetConfigString(state.ConfigJson, "widget"), "chart", StringComparison.OrdinalIgnoreCase);
+                    state.Value = isChart && !string.IsNullOrWhiteSpace(message.RawPayload)
+                        ? message.RawPayload
+                        : message.Value;
                     state.UpdatedAt = DateTimeOffset.Now;
                 }
             }
@@ -123,6 +198,22 @@ namespace ESP32AIControl.WP81.Core.State
             var handler = WidgetChanged;
             if (handler != null)
                 handler(this, state.Clone());
+            return true;
+        }
+
+        private static string GetConfigString(string json, string key)
+        {
+            try
+            {
+                Windows.Data.Json.JsonObject root;
+                Windows.Data.Json.IJsonValue value;
+                if (Windows.Data.Json.JsonObject.TryParse(json ?? "{}", out root) &&
+                    root.TryGetValue(key, out value) &&
+                    value.ValueType == Windows.Data.Json.JsonValueType.String)
+                    return value.GetString();
+            }
+            catch { }
+            return string.Empty;
         }
 
         private void UpdateWidgetIdIndex(string widgetId, string key)

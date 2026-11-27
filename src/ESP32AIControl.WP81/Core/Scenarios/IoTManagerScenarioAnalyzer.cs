@@ -64,6 +64,23 @@ namespace ESP32AIControl.WP81.Core.Scenarios
         }
     }
 
+    public sealed class ScenarioVariableDiagnostic
+    {
+        public string Variable { get; set; }
+        public string Usage { get; set; }
+        public string Status { get; set; }
+        public string DeviceId { get; set; }
+        public string Description { get; set; }
+        public int Occurrences { get; set; }
+        public int AssignmentCount { get; set; }
+        public IList<string> AssignedValues { get; private set; }
+
+        public ScenarioVariableDiagnostic()
+        {
+            AssignedValues = new List<string>();
+        }
+    }
+
     public sealed class IoTManagerScenarioAnalyzer
     {
         private static readonly Regex ConditionRegex = new Regex(
@@ -75,6 +92,10 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             RegexOptions.IgnoreCase);
 
         private readonly List<ScenarioRule> _rules = new List<ScenarioRule>();
+
+        // Full expression-tree representation is retained alongside the legacy
+        // actuator-path index while the dependency planner is migrated.
+        public DeviceScenarioModel LanguageModel { get; private set; }
 
         public IoTManagerScenarioAnalyzer(string script)
         {
@@ -91,9 +112,141 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             get { return _rules.Count; }
         }
 
+        public IList<ScenarioVariableDiagnostic> ValidateReferences(DeviceRepository devices)
+        {
+            var result = new List<ScenarioVariableDiagnostic>();
+            var index = new Dictionary<string, ScenarioVariableDiagnostic>(StringComparer.OrdinalIgnoreCase);
+
+            if (devices == null)
+                return result;
+
+            for (var r = 0; r < _rules.Count; r++)
+            {
+                var rule = _rules[r];
+                for (var c = 0; c < rule.Conditions.Count; c++)
+                    AddReferenceDiagnostic(result, index, rule.Conditions[c].Variable, "условие / датчик", null, devices);
+
+                for (var a = 0; a < rule.Assignments.Count; a++)
+                    AddReferenceDiagnostic(result, index, rule.Assignments[a].Variable, "действие / исполнитель", rule.Assignments[a].Value, devices);
+            }
+
+            if (LanguageModel != null)
+            {
+                for (var r = 0; r < LanguageModel.Rules.Count; r++)
+                {
+                    var languageRule = LanguageModel.Rules[r];
+                    foreach (var identifier in languageRule.Condition.Identifiers)
+                        AddReferenceDiagnostic(result, index, identifier, "условие языка сценариев", null, devices);
+
+                    for (var a = 0; a < languageRule.Actions.Count; a++)
+                    {
+                        var action = languageRule.Actions[a];
+                        AddReferenceDiagnostic(result, index, action.TargetId, "действие языка сценариев",
+                            action.Expression.Render(), devices);
+                    }
+                }
+
+                if (LanguageModel.ParserErrors.Count > 0)
+                {
+                    result.Add(new ScenarioVariableDiagnostic
+                    {
+                        Variable = "Синтаксис сценария",
+                        Usage = "проверка языка сценариев",
+                        Status = "Ошибка разбора",
+                        Description = string.Join("; ", LanguageModel.ParserErrors)
+                    });
+                }
+            }
+
+            for (var i = 0; i < result.Count; i++)
+            {
+                var item = result[i];
+                if (item.AssignmentCount <= 1)
+                    continue;
+
+                var ambiguity = item.AssignedValues.Count > 1
+                    ? "Неоднозначная зависимость: переменная назначается разными значениями"
+                    : "Несколько правил назначают одно значение — проверьте условия";
+                item.Status = string.IsNullOrEmpty(item.Status)
+                    ? ambiguity : item.Status + " · " + ambiguity;
+            }
+
+            return result;
+        }
+
+        private static void AddReferenceDiagnostic(
+            IList<ScenarioVariableDiagnostic> result,
+            IDictionary<string, ScenarioVariableDiagnostic> index,
+            string variable,
+            string usage,
+            string assignedValue,
+            DeviceRepository devices)
+        {
+            if (string.IsNullOrWhiteSpace(variable))
+                return;
+
+            ScenarioVariableDiagnostic item;
+            if (index.TryGetValue(variable, out item))
+            {
+                item.Occurrences++;
+                if (item.Usage.IndexOf(usage, StringComparison.OrdinalIgnoreCase) < 0)
+                    item.Usage += ", " + usage;
+                AddAssignedValue(item, assignedValue);
+                return;
+            }
+
+            var matches = devices.GetWidgetsById(variable);
+            item = new ScenarioVariableDiagnostic
+            {
+                Variable = variable,
+                Usage = usage,
+                Occurrences = 1
+            };
+            AddAssignedValue(item, assignedValue);
+
+            if (matches.Count == 0)
+            {
+                item.Status = "Не найден среди виджетов (возможно, служебная переменная IoTManager)";
+                item.Description = "Проверьте ID или убедитесь, что устройство передало конфигурацию";
+            }
+            else if (matches.Count > 1)
+            {
+                item.Status = "Неоднозначный ID: найден на " +
+                    matches.Count.ToString(System.Globalization.CultureInfo.InvariantCulture) + " устройствах";
+                item.Description = "Нельзя однозначно определить ESP32 для этой переменной";
+            }
+            else
+            {
+                item.Status = "Связан";
+                item.DeviceId = matches[0].DeviceId;
+                item.Description = string.IsNullOrWhiteSpace(matches[0].Description)
+                    ? matches[0].WidgetType : matches[0].Description;
+            }
+
+            index[variable] = item;
+            result.Add(item);
+        }
+
+        private static void AddAssignedValue(ScenarioVariableDiagnostic item, string value)
+        {
+            if (item == null || string.IsNullOrWhiteSpace(value))
+                return;
+
+            item.AssignmentCount++;
+            for (var i = 0; i < item.AssignedValues.Count; i++)
+            {
+                if (string.Equals(item.AssignedValues[i], value, StringComparison.OrdinalIgnoreCase))
+                    return;
+            }
+
+            item.AssignedValues.Add(value);
+        }
+
         public void Load(string script)
         {
             _rules.Clear();
+            var parsedLanguage = IoTScenarioParser.Parse(script ?? string.Empty);
+            LanguageModel = IoTScenarioSemanticAnalyzer.Analyze(parsedLanguage);
 
             if (string.IsNullOrWhiteSpace(script))
                 return;
@@ -365,16 +518,17 @@ namespace ESP32AIControl.WP81.Core.Scenarios
             DeviceRepository devices,
             string deviceId)
         {
-            var state = devices.GetByWidgetId(identifier);
+            var matches = devices.GetWidgetsById(identifier);
 
-            // IoTManager also contains interpreter/internal names such as
-            // onStart and calculated variables. Unknown identifiers are left
-            // untouched; known widget IDs must belong to this ESP.
-            if (state == null)
+            // Unknown identifiers may be interpreter/internal variables.
+            // Ambiguous widget IDs must never be silently accepted as a match.
+            if (matches.Count == 0)
                 return true;
+            if (matches.Count > 1)
+                return false;
 
             return string.Equals(
-                state.DeviceId,
+                matches[0].DeviceId,
                 deviceId,
                 StringComparison.OrdinalIgnoreCase);
         }

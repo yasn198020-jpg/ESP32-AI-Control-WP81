@@ -37,6 +37,8 @@ namespace ESP32AIControl.WP81.Core.Protocol
             [DataMember(Name="page")] public string Page { get; set; }
             [DataMember(Name="order")] public int Order { get; set; }
             [DataMember(Name="val")] public object Value { get; set; }
+            [DataMember(Name="unit")] public string Unit { get; set; }
+            [DataMember(Name="after")] public string After { get; set; }
         }
 
         public static Esp32Message Parse(Esp32MessageKind kind, string topic, string payload, Esp32TopicParser topics)
@@ -91,10 +93,13 @@ namespace ESP32AIControl.WP81.Core.Protocol
                 Topic = topic,
                 DeviceId = parts.Length >= 1 ? parts[0] : string.Empty,
                 WidgetId = widgetId,
-                Description = First(dto.Description, dto.Label, dto.Name),
-                WidgetType = First(dto.Widget, dto.Subtype, dto.Type),
+                ConfigTopic = dto.Topic,
+                Description = First(dto.Description, dto.Label, dto.Name, widgetId),
+                WidgetType = First(dto.Widget, "status"),
+                DefinitionName = First(dto.Name, dto.Widget, "status"),
                 Page = dto.Page,
                 Order = dto.Order,
+                Unit = First(dto.Unit, dto.After),
                 Value = ValueToString(dto.Value),
                 RawPayload = payload
             };
@@ -104,9 +109,27 @@ namespace ESP32AIControl.WP81.Core.Protocol
         {
             try
             {
-                var dto = Deserialize<StatusDto>(payload);
-                if (dto.Status != null) return ValueToString(dto.Status);
-                if (dto.Value != null) return ValueToString(dto.Value);
+                Windows.Data.Json.JsonObject root;
+                if (Windows.Data.Json.JsonObject.TryParse(payload ?? string.Empty, out root))
+                {
+                    Windows.Data.Json.IJsonValue status;
+                    if (root.TryGetValue("status", out status))
+                    {
+                        if (status.ValueType == Windows.Data.Json.JsonValueType.Array ||
+                            status.ValueType == Windows.Data.Json.JsonValueType.Object)
+                            return status.ToString();
+                        if (status.ValueType == Windows.Data.Json.JsonValueType.String)
+                            return status.GetString();
+                        return status.ToString();
+                    }
+
+                    Windows.Data.Json.IJsonValue value;
+                    if (root.TryGetValue("val", out value))
+                    {
+                        if (value.ValueType == Windows.Data.Json.JsonValueType.String) return value.GetString();
+                        return value.ToString();
+                    }
+                }
             }
             catch { }
             return payload;

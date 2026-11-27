@@ -1,133 +1,987 @@
 <Page
     x:Class="ESP32AIControl.WP81.MainPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <Grid Background="#FF101116">
-        <Pivot x:Name="MainPivot">
-            <PivotItem Header="Управление">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="16,8,16,12">
-                    <StackPanel>
-                        <TextBlock Text="ESP32 AI Control" FontSize="30"/>
-                        <TextBlock Text="Windows Phone 8.1 • Lumia 830" FontSize="16" Opacity="0.7"/>
-                        <TextBlock x:Name="ConnectionText" Text="MQTT: отключено" FontSize="20" Margin="0,8,0,8"/>
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    RequestedTheme="Dark">
+    <Page.Resources>
+        <SolidColorBrush x:Key="AccentBrush" Color="#FFD0BCFF"/>
+        <SolidColorBrush x:Key="PanelBrush" Color="#FF2B2C34"/>
+        <SolidColorBrush x:Key="MutedBrush" Color="#FFACADB8"/>
+        <SolidColorBrush x:Key="CardBrush" Color="#FF30313A"/>
+        <SolidColorBrush x:Key="FieldBrush" Color="#FF25262D"/>
+        <SolidColorBrush x:Key="LineBrush" Color="#FF41434D"/>
+        <DataTemplate x:Key="WidgetPageHeaderTemplate">
+            <Border Background="#FF30313A" CornerRadius="8" Padding="7,4" Margin="0,0,4,0">
+                <TextBlock Text="{Binding}" FontSize="12" FontWeight="SemiBold"
+                           FontFamily="Segoe UI Symbol"
+                           Foreground="#FFEAF1F7" TextWrapping="NoWrap"/>
+            </Border>
+        </DataTemplate>
+        <!-- Unified Android-like settings category tabs for every settings subsection. -->
+        <DataTemplate x:Key="SettingsPivotHeaderTemplate">
+            <Border Background="#FF30313A" BorderBrush="#FF41434D" BorderThickness="1"
+                    CornerRadius="18" Padding="14,8" Margin="0,0,6,0">
+                <TextBlock Text="{Binding}" FontSize="13" FontWeight="SemiBold"
+                           Foreground="#FFEAF1F7" VerticalAlignment="Center"
+                           TextWrapping="NoWrap"/>
+            </Border>
+        </DataTemplate>
+        <Style x:Key="SettingsSectionTitleStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="17"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="#FFD0BCFF"/>
+            <Setter Property="Margin" Value="0,18,0,6"/>
+        </Style>
+        <Style x:Key="SettingsDescriptionStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Foreground" Value="#FFACADB8"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+        </Style>
+        <Style TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#FFEAF1F7"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="FontSize" Value="14"/>
+        </Style>
+        <Style TargetType="Button">
+            <Setter Property="Background" Value="#FF343540"/>
+            <Setter Property="Foreground" Value="#FFEAF1F7"/>
+            <Setter Property="BorderBrush" Value="#FF4A4B56"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="14,10"/>
+            <Setter Property="MinHeight" Value="48"/>
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Background" Value="#FF25262D"/>
+            <Setter Property="Foreground" Value="#FFEAF1F7"/>
+            <Setter Property="BorderBrush" Value="#FF4B4C58"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="12,10"/>
+            <Setter Property="Margin" Value="0,7,0,7"/>
+        </Style>
+        <Style TargetType="PasswordBox">
+            <Setter Property="Background" Value="#FF2B2B2B"/>
+            <Setter Property="Foreground" Value="#FFEAF1F7"/>
+            <Setter Property="BorderBrush" Value="#FF555555"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Margin" Value="0,7,0,7"/>
+        </Style>
+        <Style TargetType="ComboBox">
+            <Setter Property="Background" Value="#FF25262D"/>
+            <Setter Property="Foreground" Value="#FFEAF1F7"/>
+            <Setter Property="BorderBrush" Value="#FF4B4C58"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="MinHeight" Value="48"/>
+        </Style>
+        <Style TargetType="DatePicker">
+            <Setter Property="Foreground" Value="#FFEAF1F7"/>
+            <Setter Property="Background" Value="#FF25262D"/>
+            <Setter Property="BorderBrush" Value="#FF4B4C58"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Margin" Value="0,4,0,4"/>
+        </Style>
+        <Style TargetType="TimePicker">
+            <Setter Property="Foreground" Value="#FFEAF1F7"/>
+            <Setter Property="Background" Value="#FF25262D"/>
+            <Setter Property="BorderBrush" Value="#FF4B4C58"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Margin" Value="0,4,0,4"/>
+        </Style>
+        <Style TargetType="Slider"><Setter Property="Foreground" Value="#FFD0BCFF"/></Style>
+        <Style TargetType="CheckBox"><Setter Property="Foreground" Value="#FFEAF1F7"/></Style>
+        <Style TargetType="ListView">
+            <Setter Property="Background" Value="#FF25262D"/>
+            <Setter Property="Foreground" Value="#FFEAF1F7"/>
+            <Setter Property="BorderBrush" Value="#FF41434D"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
+        <Style TargetType="ListViewItem">
+            <Setter Property="Background" Value="#FF30313A"/>
+            <Setter Property="Foreground" Value="#FFEAF1F7"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="12,9"/>
+            <Setter Property="Margin" Value="0,3,0,3"/>
+        </Style>
+    </Page.Resources>
+    <Grid Background="#FF202020">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="64"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="80"/>
+        </Grid.RowDefinitions>
 
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                            <Button Content="Подключить" Click="ConnectButton_Click" Margin="0,0,8,0"/>
-                            <Button Content="Отключить" Click="DisconnectButton_Click"/>
-                            <Button Content="HELLO" Click="HelloButton_Click" Margin="8,0,0,0"/>
-                        </StackPanel>
+        <!-- Android-like top bar: menu, current screen title, info and MQTT cloud status. -->
+        <Border Grid.Row="0" Background="#FF202020" BorderBrush="#FF41434D"
+                BorderThickness="0,0,0,1" Padding="8,4,8,4">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="40"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="38"/>
+                    <ColumnDefinition Width="35"/>
+                </Grid.ColumnDefinitions>
+                <Button x:Name="MenuButton" Grid.Column="0"
+                        Click="MenuButton_Click" Background="Transparent"
+                        BorderThickness="0" Padding="0"
+                        Foreground="#FFEAF1F7" VerticalAlignment="Center"
+                        HorizontalAlignment="Center" Width="40" Height="48"
+                        AutomationProperties.Name="Открыть меню">
+                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Width="27">
+                        <Border Height="3" Background="#FFEAF1F7" CornerRadius="1" Margin="0,0,0,5"/>
+                        <Border Height="3" Background="#FFEAF1F7" CornerRadius="1" Margin="0,0,0,5"/>
+                        <Border Height="3" Background="#FFEAF1F7" CornerRadius="1"/>
+                    </StackPanel>
+                </Button>
+                <TextBlock x:Name="PageSubtitle" Grid.Column="1" Text="Главная"
+                           FontSize="18" FontWeight="SemiBold" Foreground="#FFEAF1F7"
+                           VerticalAlignment="Center" HorizontalAlignment="Left"
+                           Margin="4,0,0,0"
+                           TextAlignment="Center" TextWrapping="NoWrap"/>
+                <Button x:Name="TopInfoButton" Grid.Column="2" Content="ⓘ"
+                        Click="TopInfoButton_Click" Background="Transparent"
+                        BorderThickness="0" Padding="0" FontSize="20"
+                        Foreground="#FFEAF1F7" VerticalAlignment="Stretch"/>
+                <TextBlock x:Name="TopConnectionDot" Grid.Column="3" Text="☁"
+                           FontSize="22" Foreground="#FFF44336"
+                           VerticalAlignment="Center" HorizontalAlignment="Center"/>
+            </Grid>
+        </Border>
 
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                            <Button x:Name="VoiceButton" Content="🎙 Голос" Click="VoiceButton_Click" Margin="0,0,8,0"/>
-                            <TextBlock x:Name="VoiceResultText" Text="Скажите: «Марфа, открой теплицу через 20 минут»"
-                                       VerticalAlignment="Center" TextWrapping="Wrap" Width="420"/>
-                        </StackPanel>
+        <Grid x:Name="MainSections" Grid.Row="1" Background="#FF202020">
+<Grid x:Name="HomeSection" Visibility="Visible">
+                <Grid Margin="10,0,10,4">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
 
-                        <TextBlock Text="Виджеты ESP32" FontSize="22" Margin="0,4,0,8"/>
-                        <Pivot x:Name="WidgetPages" Height="430"/>
-
-                        <TextBlock Text="Диагностика MQTT" FontSize="19" Margin="0,14,0,6"/>
-                        <Border BorderThickness="1" Padding="6" MinHeight="100">
-                            <ScrollViewer Height="150">
-                                <TextBlock x:Name="LogText" TextWrapping="Wrap" FontSize="13"/>
-                            </ScrollViewer>
+                    <!-- Page tabs and live widgets are the focus of the Android dashboard. -->
+                    <Grid Grid.Row="0">
+                        <Pivot x:Name="WidgetPages" Margin="0"
+                               HeaderTemplate="{StaticResource WidgetPageHeaderTemplate}"/>
+                        <Border x:Name="DashboardEmptyOverlay" Background="#FF2B2C34" BorderBrush="#FF41434D"
+                                BorderThickness="1" CornerRadius="16" Padding="22"
+                                Margin="24" IsHitTestVisible="False" Visibility="Visible">
+                            <StackPanel x:Name="DashboardEmptyState" VerticalAlignment="Center"
+                                        HorizontalAlignment="Center">
+                                <TextBlock Text="Дашборд" FontSize="25" FontWeight="SemiBold"
+                                           Foreground="#FFD0BCFF" HorizontalAlignment="Center"/>
+                                <TextBlock Text="Здесь появятся виджеты теплиц"
+                                           FontSize="16" Foreground="#FFEAF1F7"
+                                           TextAlignment="Center" Margin="0,12,0,4"/>
+                                <TextBlock Text="Откройте меню ☰ и подключитесь к MQTT в настройках."
+                                           FontSize="13" Foreground="#FFACADB8"
+                                           TextAlignment="Center" TextWrapping="Wrap"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
                         </Border>
-                    </StackPanel>
-                </ScrollViewer>
-            </PivotItem>
+                    </Grid>
 
-            <PivotItem Header="Графики">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="16,8,16,12">
+                    <!-- The bottom-nav microphone reports recognition here without taking dashboard space. -->
+                    <Border Grid.Row="1" Background="#FF2B2C34"
+                            BorderBrush="#FF41434D" BorderThickness="1"
+                            CornerRadius="14" Padding="10" Margin="6,2,6,6">
+                        <StackPanel>
+                            <TextBlock Text="МАРФА · ГОЛОСОВОЕ УПРАВЛЕНИЕ"
+                                       FontSize="10" FontWeight="SemiBold"
+                                       Foreground="#FFD0BCFF" Margin="0,0,0,3"/>
+                            <TextBlock x:Name="VoiceResultText"
+                                       Text="Нажмите «Марфа», чтобы произнести команду"
+                                       Foreground="#FFACADB8" FontSize="12"
+                                       TextWrapping="Wrap" MaxHeight="42"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Grid>
+
+            <Grid x:Name="GraphsSection" Visibility="Collapsed">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="12,10,12,12">
                     <StackPanel>
-                        <TextBlock Text="История измерений" FontSize="28"/>
-                        <TextBlock Text="Запись производится с заданным интервалом, а не по каждому MQTT-пакету."
-                                   TextWrapping="Wrap" Opacity="0.7" Margin="0,4,0,10"/>
-                        <ComboBox x:Name="GraphWidgetBox" Header="Датчик / виджет" Margin="0,4"/>
-                        <StackPanel Orientation="Horizontal">
-                            <DatePicker x:Name="GraphFrom" Header="С" Width="200" Margin="0,4,8,4"/>
-                            <DatePicker x:Name="GraphTo" Header="По" Width="200" Margin="8,4,0,4"/>
+                        <StackPanel Margin="4,4,4,12">
+                            
+                            <TextBlock Text="История и графики" FontSize="24" FontWeight="SemiBold" Margin="0,2,0,2"/>
+                            <TextBlock Text="Изменение показаний датчиков за выбранный период." FontSize="13" Foreground="#FFACADB8"/>
                         </StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0,4,0,10">
-                            <Button Content="Построить" Click="BuildGraphButton_Click" Margin="0,0,8,0"/>
-                            <Button Content="Экспорт Word" Click="ExportGraphButton_Click"/>
-                        </StackPanel>
-                        <TextBlock x:Name="GraphSummary" Text="—" Margin="0,0,0,8"/>
-                        <Border BorderThickness="1" Padding="4">
-                            <Canvas x:Name="GraphCanvas" Height="340" MinWidth="420"/>
+                        <Border Background="#FF2B2C34" CornerRadius="16" BorderBrush="#FF41434D" BorderThickness="1" Padding="12" Margin="0,0,0,8">
+                            <StackPanel>
+                                <TextBlock Text="Датчики с историей" FontSize="17" FontWeight="SemiBold" Margin="2,0,2,6"/>
+                                <TextBlock Text="Выберите числовой датчик, чтобы открыть его график и последние измерения." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="2,0,2,6"/>
+                                <ListView x:Name="HistoryWidgetList" Height="220" SelectionMode="Single" SelectionChanged="HistoryWidgetList_SelectionChanged"/>
+                                <TextBlock x:Name="HistoryEmptyText" Text="Нет числовых виджетов. Подключитесь к MQTT и дождитесь CONFIG/STATE." Foreground="#FFACADB8" FontSize="12" TextWrapping="Wrap" Margin="4,8,4,4" Visibility="Collapsed"/>
+                            </StackPanel>
                         </Border>
+                        <Button Content="⚙ Настройки истории и графиков" Click="ToggleGraphSettingsButton_Click" HorizontalAlignment="Stretch" Margin="0,0,0,8" MinHeight="44"/>
+                        <Border x:Name="GraphSettingsCard" Visibility="Collapsed" Background="#FF2B2C34" CornerRadius="16" BorderBrush="#FF41434D" BorderThickness="1" Padding="14" Margin="0,0,0,10">
+                            <StackPanel>
+                                <TextBlock Text="Параметры графика" FontSize="17" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                                <ComboBox x:Name="GraphWidgetBox" Header="Датчик или виджет" Margin="0,2,0,8"/><StackPanel Orientation="Horizontal" Margin="0,2,0,8"><Button Content="Добавить в сравнение" Click="AddCompareWidgetButton_Click" Margin="0,0,6,0"/><Button Content="Очистить список" Click="ClearCompareWidgetsButton_Click"/></StackPanel><ListView x:Name="GraphCompareList" Height="110" SelectionMode="Single" Margin="0,0,0,8"/>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8"><ComboBox x:Name="GraphColorBox" Header="Цвет выбранного датчика" Width="190"><ComboBoxItem Content="Синий" Tag="Blue"/><ComboBoxItem Content="Оранжевый" Tag="Orange"/><ComboBoxItem Content="Зелёный" Tag="Green"/><ComboBoxItem Content="Пурпурный" Tag="Magenta"/><ComboBoxItem Content="Бирюзовый" Tag="Cyan"/><ComboBoxItem Content="Жёлтый" Tag="Yellow"/></ComboBox><Button Content="Применить цвет" Click="ApplyCompareColorButton_Click" VerticalAlignment="Bottom" Margin="8,0,0,0"/></StackPanel><StackPanel Orientation="Horizontal" Margin="0,0,0,8"><Button Content="Удалить выбранный" Click="RemoveCompareWidgetButton_Click" Margin="0,0,6,0"/><Button Content="Построить сравнение" Click="BuildCompareGraphButton_Click"/></StackPanel><TextBox x:Name="GraphSetNameBox" Header="Название набора" PlaceholderText="Например: температура"/><StackPanel Orientation="Horizontal" Margin="0,0,0,8"><Button Content="Сохранить набор" Click="SaveGraphSetButton_Click" Margin="0,0,6,0"/><Button Content="Загрузить" Click="LoadGraphSetButton_Click"/></StackPanel><ComboBox x:Name="GraphSavedSetsBox" Header="Сохранённые наборы" Margin="0,0,0,8"/><Button Content="Удалить набор" Click="DeleteGraphSetButton_Click" Margin="0,0,0,8"/><TextBlock Text="Быстрый период:" Foreground="#FFACADB8" Margin="0,0,0,4"/><StackPanel Orientation="Horizontal"><Button Content="Сегодня" Click="GraphPresetDayButton_Click" Margin="0,0,4,0"/><Button Content="7 дней" Click="GraphPresetWeekButton_Click" Margin="0,0,4,0"/><Button Content="30 дней" Click="GraphPresetMonthButton_Click"/></StackPanel><StackPanel Orientation="Horizontal" Margin="0,4,0,8"><TextBox x:Name="WidgetIntervalBox" Header="Интервал записи (сек)" Width="170" PlaceholderText="Общий интервал"/><Button Content="Сохранить интервал" Click="SaveWidgetIntervalButton_Click" VerticalAlignment="Bottom" Margin="8,0,0,0"/></StackPanel><ComboBox x:Name="WidgetIntervalPresetBox" Header="Быстрый выбор интервала" SelectedIndex="5" SelectionChanged="WidgetIntervalPresetBox_SelectionChanged" Margin="0,0,0,8"><ComboBoxItem Content="1 сек" Tag="1"/><ComboBoxItem Content="5 сек" Tag="5"/><ComboBoxItem Content="10 сек" Tag="10"/><ComboBoxItem Content="30 сек" Tag="30"/><ComboBoxItem Content="1 мин" Tag="60"/><ComboBoxItem Content="5 мин" Tag="300"/><ComboBoxItem Content="10 мин" Tag="600"/><ComboBoxItem Content="30 мин" Tag="1800"/><ComboBoxItem Content="1 час" Tag="3600"/></ComboBox>
+                                <TextBlock x:Name="WidgetIntervalStatus" Text="Интервал выбранного датчика" Foreground="#FFACADB8" FontSize="12" TextWrapping="Wrap" Margin="2,0,2,8"/>
+                                <ComboBox x:Name="GraphPeriodBox" Header="Период отображения" SelectedIndex="3" SelectionChanged="GraphPeriodBox_SelectionChanged" Margin="0,0,0,8">
+                                    <ComboBoxItem Content="1 час" Tag="1h"/><ComboBoxItem Content="6 часов" Tag="6h"/><ComboBoxItem Content="12 часов" Tag="12h"/><ComboBoxItem Content="Сегодня" Tag="today"/><ComboBoxItem Content="3 дня" Tag="3d"/><ComboBoxItem Content="7 дней" Tag="7d"/><ComboBoxItem Content="30 дней" Tag="30d"/><ComboBoxItem Content="Весь срок" Tag="all"/><ComboBoxItem Content="Произвольный период" Tag="custom"/>
+                                </ComboBox>
+                                <Grid x:Name="GraphCustomDatePanel" Visibility="Collapsed"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                    <DatePicker x:Name="GraphFrom" Header="Начало периода" Margin="0,2,5,2"/>
+                                    <DatePicker x:Name="GraphTo" Grid.Column="1" Header="Конец периода" Margin="5,2,0,2"/>
+                                </Grid>
+                                <Grid Margin="0,8,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                    <Button Content="Построить график" Click="BuildGraphButton_Click" Background="#FFD0BCFF" BorderBrush="#FFD0BCFF" Foreground="#FF202020" FontWeight="SemiBold" Margin="0,0,5,0"/>
+                                    <Button Grid.Column="1" Content="Экспорт Word" Click="ExportGraphButton_Click" Margin="5,0,0,0"/>
+                                </Grid>
+                                <Button Content="Экспорт сравнения в CSV" Click="ExportCompareCsvButton_Click" Margin="0,8,0,0"/>
+                                <Button Content="Экспорт сравнения в Word" Click="ExportCompareWordButton_Click" Margin="0,6,0,0"/>
+                                <Button Content="Очистить историю измерений" Click="ClearHistoryButton_Click" Margin="0,8,0,0"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Background="#FF2B2C34" CornerRadius="16" BorderBrush="#FF41434D" BorderThickness="1" Padding="12" Margin="0,0,0,8">
+                            <StackPanel>
+                                <TextBlock Text="Результат" FontSize="17" FontWeight="SemiBold" Margin="2,0,2,4"/>
+                                <TextBlock x:Name="GraphSummary" Text="Выберите датчик и период" Foreground="#FFACADB8" FontSize="12" TextWrapping="Wrap" Margin="2,0,2,8"/>
+                                <TextBlock x:Name="GraphSelectedPoint" Text="Выберите точку на графике" Foreground="#FFD0BCFF" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" Margin="2,0,2,8"/>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,6">
+                                    <Button Content="−" Click="ZoomOutGraphButton_Click" MinWidth="44" MinHeight="40"/>
+                                    <TextBlock x:Name="GraphZoomLabel" Text="×1,0" VerticalAlignment="Center" Margin="8,0"/>
+                                    <Button Content="＋" Click="ZoomInGraphButton_Click" MinWidth="44" MinHeight="40"/>
+                                    <Button Content="Сброс" Click="ResetGraphZoomButton_Click" MinHeight="40" Margin="6,0,0,0"/>
+                                </StackPanel>
+                                <Border Background="#FF202020" CornerRadius="10" Padding="6">
+                                    <ScrollViewer x:Name="GraphHorizontalScroll" Height="320"
+                                                  HorizontalScrollBarVisibility="Auto"
+                                                  VerticalScrollBarVisibility="Disabled">
+                                        <Canvas x:Name="GraphCanvas" Height="300" HorizontalAlignment="Left" ManipulationMode="Scale,TranslateX,TranslateY" ManipulationDelta="GraphCanvas_ManipulationDelta" />
+                                    </ScrollViewer>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Text="Измерение сохраняется сразу при изменении значения и дополнительно по выбранному интервалу, даже если значение не меняется." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="4,2,4,8"/>
                     </StackPanel>
                 </ScrollViewer>
-            </PivotItem>
+            </Grid>
 
-            <PivotItem Header="Задачи">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="16,8,16,12">
-                    <StackPanel>
-                        <TextBlock Text="Запланированные команды" FontSize="28"/>
-                        <TextBlock Text="Команда: device/widget=value" Opacity="0.7" Margin="0,4,0,8"/>
-                        <TextBox x:Name="ScheduleCommandBox" Header="Команда"/>
-                        <StackPanel Orientation="Horizontal">
-                            <DatePicker x:Name="ScheduleDate" Header="Дата" Width="210" Margin="0,4,8,4"/>
-                            <TimePicker x:Name="ScheduleTime" Header="Время" Width="210" Margin="8,4,0,4"/>
-                        </StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0,4,0,10">
-                            <Button Content="Добавить" Click="AddScheduleButton_Click" Margin="0,0,6,0"/>
-                            <Button Content="Изменить" Click="UpdateScheduleButton_Click" Margin="6,0"/>
-                            <Button Content="Отменить" Click="CancelScheduleButton_Click" Margin="6,0"/>
-                            <Button Content="Обновить" Click="RefreshScheduleButton_Click" Margin="6,0"/>
-                        </StackPanel>
-                        <ListView x:Name="ScheduleList" Height="420" SelectionChanged="ScheduleList_SelectionChanged"/>
+            <Grid x:Name="TasksSection" Visibility="Collapsed">
+                <Grid Margin="12,10,12,12">
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                    <StackPanel Grid.Row="0" Margin="4,4,4,12">
+                        
+                        <TextBlock Text="Планировщик команд ESP32" FontSize="18" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,2,0,2"/>
+                        <TextBlock Text="Команда будет отправлена устройству в указанное время." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap"/>
                     </StackPanel>
-                </ScrollViewer>
-            </PivotItem>
-
-            <PivotItem Header="Настройки">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="16,8,16,12">
-                    <StackPanel>
-                        <TextBlock Text="Подключение" FontSize="26"/>
-                        <TextBox x:Name="HostBox" Header="MQTT host" Text="m4.wqtt.ru"/>
-                        <TextBox x:Name="PortBox" Header="TCP port" Text="2815"/>
-                        <TextBox x:Name="PrefixBox" Header="MQTT prefix" Text="dghjko"/>
-                        <TextBox x:Name="UserNameBox" Header="MQTT username"/>
-                        <PasswordBox x:Name="PasswordBox" Header="MQTT password"/>
-
-                        <TextBlock Text="Графики и хранение" FontSize="24" Margin="0,16,0,4"/>
-                        <TextBox x:Name="MeasurementIntervalBox" Header="Интервал записи, секунд" Text="60"/>
-                        <TextBox x:Name="RetentionDaysBox" Header="Период хранения, дней" Text="30"/>
-                        <ComboBox x:Name="AutoExportBox" Header="Автоэкспорт Word">
-                            <ComboBoxItem Content="Never" Tag="Never"/>
-                            <ComboBoxItem Content="1 день" Tag="Day"/>
-                            <ComboBoxItem Content="Неделя" Tag="Week"/>
-                            <ComboBoxItem Content="Месяц" Tag="Month"/>
-                        </ComboBox>
-
-                        <TextBlock Text="Голосовое управление" FontSize="24" Margin="0,16,0,4"/>
-                        <TextBox x:Name="VoiceOpenCommandBox" Header="Команда «открой теплицу»" PlaceholderText="device/widget=1"/>
-                        <TextBox x:Name="VoiceCloseCommandBox" Header="Команда «закрой теплицу»" PlaceholderText="device/widget=0"/>
-
-                        <TextBlock Text="Сценарий IoTManager" FontSize="24" Margin="0,16,0,4"/>
-                        <TextBlock Text="Вставьте сюда блок scenario=> из export.json. Марфа ищет зависимости от реле вверх по условиям сценария."
-                                   TextWrapping="Wrap" Opacity="0.7"/>
-                        <TextBox x:Name="ScenarioTextBox"
-                                 Header="Сценарий"
-                                 AcceptsReturn="True"
-                                 TextWrapping="Wrap"
-                                 Height="220"
-                                 />
-                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                            <Button Content="Импорт export.json" Click="ImportScenarioButton_Click" Margin="0,0,8,0"/>
-                            <Button Content="Проверить план" Click="TestScenarioButton_Click"/>
+                    <Border Grid.Row="1" Background="#FF2B2C34" CornerRadius="16" BorderBrush="#FF41434D" BorderThickness="1" Padding="12" Margin="0,0,0,10">
+                        <StackPanel>
+                            <TextBlock Text="Новая команда" FontSize="15" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="2,0,2,4"/>
+                            <TextBox x:Name="ScheduleCommandBox" Header="Команда устройству" PlaceholderText="device/widget=value"/>
+                            <Grid Margin="0,2,0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <DatePicker x:Name="ScheduleDate" Header="Дата" HorizontalAlignment="Stretch" Margin="0,2,5,2"/>
+                                <TimePicker x:Name="ScheduleTime" Grid.Column="1" Header="Время" HorizontalAlignment="Stretch" Margin="5,2,0,2"/>
+                            </Grid>
+                            <Grid Margin="0,6,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                                <Button Content="Добавить" Click="AddScheduleButton_Click" Background="#FFD0BCFF" BorderBrush="#FFD0BCFF" Foreground="#FF202020" FontWeight="SemiBold" Margin="0,0,5,5"/>
+                                <Button Grid.Column="1" Content="Изменить" Click="UpdateScheduleButton_Click" Margin="5,0,0,5"/>
+                                <Button Grid.Row="1" Content="Отменить" Click="CancelScheduleButton_Click" Margin="0,5,5,0"/>
+                                <Button Grid.Row="1" Grid.Column="1" Content="Обновить список" Click="RefreshScheduleButton_Click" Margin="5,5,0,0"/>
+                            </Grid>
                         </StackPanel>
+                    </Border>
+                    <Border Grid.Row="2" Background="#FF2B2C34" CornerRadius="16" BorderBrush="#FF41434D" BorderThickness="1" Padding="10">
+                        <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="2,0,2,8">
+                                <TextBlock Text="Запланировано" FontSize="15" FontWeight="SemiBold"/>
+                                <TextBlock Text="  •  выберите запись для изменения" FontSize="10" Foreground="#FFACADB8" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <ListView x:Name="ScheduleList" Grid.Row="1" SelectionChanged="ScheduleList_SelectionChanged" Background="#FF25262D" BorderThickness="0"/>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Grid>
 
-                        <Button Content="Сохранить настройки" Click="SaveSettingsButton_Click" Margin="0,12,0,8"/>
-                        <TextBlock x:Name="SettingsStatus" Text="" TextWrapping="Wrap"/>
-
-                        <TextBlock Text="Word-экспорт" FontSize="24" Margin="0,18,0,4"/>
-                        <Button Content="Экспорт всей истории за сегодня" Click="ExportTodayButton_Click"/>
-                        <TextBlock Text="Документы сохраняются в локальной папке приложения. Формат .doc совместим с Word."
-                                   Opacity="0.7" TextWrapping="Wrap" Margin="0,6,0,0"/>
+            <Grid x:Name="SettingsSection" Visibility="Collapsed">
+                <Grid Margin="12,8,12,8">
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <StackPanel Grid.Row="0" Margin="4,2,4,8">
+                        
+                        <TextBlock Text="Настройки" FontSize="24" FontWeight="SemiBold" Margin="0,1,0,1"/>
+                        <TextBlock Text="Подключение · хранение · профили · голос · сценарии · журнал" FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap"/>
                     </StackPanel>
-                </ScrollViewer>
-            </PivotItem>
-        </Pivot>
+                                            <Pivot x:Name="SettingsPivot" Grid.Row="1" Background="#FF202020" Foreground="#FFEAF1F7"
+                           HeaderTemplate="{StaticResource SettingsPivotHeaderTemplate}">
+                <PivotItem Header="Подключение">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="10,4,10,12">
+                            <StackPanel Margin="2,8,2,10">
+                                <TextBlock Text="Подключение" FontSize="21" FontWeight="SemiBold" Foreground="#FFEAF1F7" Margin="0,0,0,3"/>
+                                <TextBlock Text="Настройте MQTT-сервер, параметры клиента и состояние соединения с контроллером." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1" CornerRadius="14" Padding="12" Margin="0,0,0,10">
+                                <StackPanel>
+                                    <TextBlock Text="MQTT-СЕРВЕР" FontSize="14" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,0,0,3"/>
+                                    <TextBlock Text="Адрес брокера и пространство MQTT-топиков." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,0,0,5"/>
+                                    <TextBox x:Name="HostBox" Header="MQTT сервер или адрес" Text="m4.wqtt.ru" LostFocus="MqttSetting_LostFocus"/>
+                                    <TextBox x:Name="PortBox" Header="Порт подключения" Text="2815" LostFocus="MqttSetting_LostFocus"/>
+                                    <TextBox x:Name="PrefixBox" Header="Префикс MQTT" Text="dghjko" LostFocus="MqttSetting_LostFocus"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1" CornerRadius="14" Padding="12" Margin="0,0,0,10">
+                                <StackPanel>
+                                    <TextBlock Text="УЧЁТНАЯ ЗАПИСЬ КЛИЕНТА" FontSize="14" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,0,0,3"/>
+                                    <TextBlock Text="Данные авторизации и уникальный идентификатор этого приложения." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,0,0,5"/>
+                                    <TextBox x:Name="UserNameBox" Header="Имя пользователя" LostFocus="MqttSetting_LostFocus"/>
+                                    <PasswordBox x:Name="PasswordBox" Header="Пароль MQTT" LostFocus="MqttSetting_LostFocus"/>
+                                    <TextBox x:Name="ClientIdBox" Header="Идентификатор клиента" Text="ESP32-AI-Control-WP81" LostFocus="MqttSetting_LostFocus"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1" CornerRadius="14" Padding="12" Margin="0,0,0,10">
+                                <StackPanel>
+                                    <TextBlock Text="ЗАЩИТА СОЕДИНЕНИЯ" FontSize="14" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,0,0,4"/>
+                                    <CheckBox x:Name="MqttTlsCheckBox" Content="Использовать защищённое TLS-соединение" Margin="0,4,0,2" Checked="MqttTlsCheckBox_Changed" Unchecked="MqttTlsCheckBox_Changed"/>
+                                    <TextBlock Text="Включайте TLS, если выбранный MQTT-брокер поддерживает защищённое подключение на указанном порту." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1" CornerRadius="14" Padding="12" Margin="0,0,0,10">
+                                <StackPanel>
+                                    <TextBlock Text="СОЕДИНЕНИЕ С КОНТРОЛЛЕРОМ" FontSize="14" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,0,0,6"/>
+                                    <TextBlock x:Name="ConnectionText" Text="MQTT: отключено" FontSize="16" Foreground="#FFFFB454" Margin="0,0,0,8"/>
+                                    <Button Content="Подключиться" Click="ConnectButton_Click" Background="#FFD0BCFF" BorderBrush="#FFD0BCFF" Foreground="#FF202020" FontWeight="SemiBold" HorizontalAlignment="Stretch" Margin="0,0,0,6"/>
+                                    <Button Content="Отключиться" Click="DisconnectButton_Click" HorizontalAlignment="Stretch" Margin="0,0,0,6"/>
+                                    <Button Content="Запросить данные (HELLO)" Click="HelloButton_Click" HorizontalAlignment="Stretch"/>
+                                    <TextBlock Text="Параметры MQTT сохраняются автоматически при изменении полей. При нажатии «Подключиться» они также сохраняются перед запуском соединения." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1" CornerRadius="14" Padding="12" Margin="0,0,0,8">
+                                <StackPanel>
+                                    <TextBlock Text="ВНЕШНИЙ ВИД" FontSize="14" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,0,0,3"/>
+                                    <TextBlock Text="Масштаб текста и элементов интерфейса." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap"/>
+                                    <Slider x:Name="UiFontScaleSlider" Minimum="0.7" Maximum="1.1" Value="0.85" StepFrequency="0.05"/>
+                                    <TextBlock Text="Точный выбор размера также доступен через пункт «Размер текста» в меню." FontSize="11" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </PivotItem>
+                <PivotItem Header="Хранение">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="10,4,10,12">
+                            <StackPanel Margin="4,6,4,8">
+                                <TextBlock Text="Хранение данных" FontSize="19" FontWeight="SemiBold"
+                                           Foreground="#FFEAF1F7" Margin="0,0,0,3"/>
+                                <TextBlock Text="Управление записью показаний и автоматическим созданием отчётов."
+                                           FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1"
+                                    CornerRadius="14" Padding="14" Margin="0,0,0,8">
+                                <StackPanel>
+                                    <TextBlock Text="ХРАНЕНИЕ ИЗМЕРЕНИЙ" FontSize="14" FontWeight="SemiBold"
+                                               Foreground="#FFD0BCFF" Margin="0,0,0,5"/>
+                                    <TextBlock Text="Задайте, как часто приложение записывает показания датчиков и сколько дней сохраняет историю."
+                                               FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap"
+                                               Margin="0,0,0,8"/>
+                                    <TextBlock Text="Интервал записи" FontSize="13" FontWeight="SemiBold"
+                                               Foreground="#FFEAF1F7" Margin="0,2,0,0"/>
+                                    <TextBox x:Name="MeasurementIntervalBox" Header="Секунды между записями"
+                                             Text="60" PlaceholderText="Например, 60"/>
+                                    <TextBlock Text="Меньшее значение даёт более подробную историю и увеличивает количество записей."
+                                               FontSize="11" Foreground="#FFACADB8" TextWrapping="Wrap"
+                                               Margin="2,0,2,8"/>
+                                    <TextBlock Text="Срок хранения истории" FontSize="13" FontWeight="SemiBold"
+                                               Foreground="#FFEAF1F7" Margin="0,2,0,0"/>
+                                    <TextBox x:Name="RetentionDaysBox" Header="Количество дней"
+                                             Text="30" PlaceholderText="Например, 30"/>
+                                    <TextBlock Text="Укажите число дней, за которые нужно сохранять измерения."
+                                               FontSize="11" Foreground="#FFACADB8" TextWrapping="Wrap"
+                                               Margin="2,0,2,0"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1"
+                                    CornerRadius="14" Padding="14" Margin="0,0,0,8">
+                                <StackPanel>
+                                    <TextBlock Text="АВТОМАТИЧЕСКИЙ ЭКСПОРТ" FontSize="14" FontWeight="SemiBold"
+                                               Foreground="#FFD0BCFF" Margin="0,0,0,5"/>
+                                    <TextBlock Text="Приложение может периодически формировать отчёт Word с историей измерений."
+                                               FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap"
+                                               Margin="0,0,0,8"/>
+                                    <ComboBox x:Name="AutoExportBox" Header="Период создания отчёта">
+                                        <ComboBoxItem Content="Отключён" Tag="Never"/>
+                                        <ComboBoxItem Content="Каждый день" Tag="Day"/>
+                                        <ComboBoxItem Content="Раз в неделю" Tag="Week"/>
+                                        <ComboBoxItem Content="Раз в месяц" Tag="Month"/>
+                                    </ComboBox>
+                                    <TextBlock Text="При выборе периода автоматический экспорт будет выполняться по расписанию. Для отключения выберите «Отключён»."
+                                               FontSize="11" Foreground="#FFACADB8" TextWrapping="Wrap"
+                                               Margin="2,8,2,0"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="#FF25262D" BorderBrush="#FF41434D" BorderThickness="1"
+                                    CornerRadius="12" Padding="12" Margin="0,0,0,8">
+                                <StackPanel>
+                                    <TextBlock Text="ПРИМЕНЕНИЕ НАСТРОЕК" FontSize="12" FontWeight="SemiBold"
+                                               Foreground="#FFD0BCFF" Margin="0,0,0,4"/>
+                                    <TextBlock Text="После изменения параметров нажмите общую кнопку «Сохранить настройки» внизу экрана. Настройки хранения и автоэкспорта сохраняются вместе с остальными параметрами приложения."
+                                               FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </PivotItem>
+                <PivotItem Header="Сохранённые">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="10,4,10,12">
+                            <StackPanel Margin="4,8,4,8">
+                                <TextBlock Text="Сохранённые подключения"
+                                           FontSize="22" FontWeight="SemiBold"
+                                           Foreground="#FFEAF1F7"/>
+                                <TextBlock Text="Создавайте профили для разных MQTT-серверов и быстро переключайтесь между ними. Здесь хранятся параметры подключения, включая TLS и учётные данные."
+                                           FontSize="13" Foreground="#FFACADB8"
+                                           TextWrapping="Wrap" Margin="0,5,0,0"/>
+                            </StackPanel>
+
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D"
+                                    BorderThickness="1" CornerRadius="14"
+                                    Padding="12" Margin="0,4,0,8">
+                                <StackPanel>
+                                    <TextBlock Text="1. СОЗДАТЬ ИЛИ ОБНОВИТЬ ПРОФИЛЬ"
+                                               FontSize="14" FontWeight="SemiBold"
+                                               Foreground="#FFD0BCFF" Margin="0,0,0,4"/>
+                                    <TextBlock Text="Сначала настройте сервер на вкладке «Подключение», затем укажите имя здесь и сохраните параметры. Если имя уже существует, профиль будет обновлён."
+                                               FontSize="12" Foreground="#FFACADB8"
+                                               TextWrapping="Wrap" Margin="0,0,0,8"/>
+                                    <TextBox x:Name="SavedProfileNameBox"
+                                             Header="Название профиля"
+                                             PlaceholderText="Например, Основная теплица"/>
+                                    <Button Content="Сохранить текущие параметры"
+                                            Click="SaveMqttProfileButton_Click"
+                                            HorizontalAlignment="Stretch" MinHeight="46"
+                                            Margin="0,8,0,0"
+                                            Background="#FFD0BCFF"
+                                            Foreground="#FF25232D"/>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D"
+                                    BorderThickness="1" CornerRadius="14"
+                                    Padding="12" Margin="0,4,0,8">
+                                <StackPanel>
+                                    <TextBlock Text="2. МОИ ПРОФИЛИ"
+                                               FontSize="14" FontWeight="SemiBold"
+                                               Foreground="#FFD0BCFF" Margin="0,0,0,4"/>
+                                    <TextBlock Text="Выберите профиль для дальнейших действий. Звёздочка отмечает профиль, который приложение загрузит автоматически при запуске."
+                                               FontSize="12" Foreground="#FFACADB8"
+                                               TextWrapping="Wrap" Margin="0,0,0,8"/>
+                                    <ListView x:Name="SavedProfilesList"
+                                              Height="190" SelectionMode="Single"
+                                              SelectionChanged="SavedProfilesList_SelectionChanged"/>
+                                    <TextBlock Text="ДЕЙСТВИЯ С ВЫБРАННЫМ ПРОФИЛЕМ"
+                                               FontSize="12" FontWeight="SemiBold"
+                                               Foreground="#FFD0BCFF" Margin="0,12,0,4"/>
+                                    <Button Content="Загрузить параметры профиля"
+                                            Click="LoadMqttProfileButton_Click"
+                                            HorizontalAlignment="Stretch" MinHeight="44"
+                                            Margin="0,3"/>
+                                    <TextBlock Text="После загрузки параметров перейдите на вкладку «Подключение» и нажмите «Подключиться»."
+                                               FontSize="12" Foreground="#FFACADB8"
+                                               TextWrapping="Wrap" Margin="0,2,0,8"/>
+                                    <Button Content="Назначить профилем по умолчанию"
+                                            Click="SetDefaultMqttProfileButton_Click"
+                                            HorizontalAlignment="Stretch" MinHeight="44"
+                                            Margin="0,3"/>
+                                    <Button Content="Удалить выбранный профиль"
+                                            Click="DeleteMqttProfileButton_Click"
+                                            HorizontalAlignment="Stretch" MinHeight="44"
+                                            Margin="0,3"/>
+                                    <TextBlock x:Name="SavedProfilesStatus" Text="Выберите профиль или создайте новый."
+                                               TextWrapping="Wrap" FontSize="12"
+                                               Foreground="#FFACADB8" Margin="0,10,0,0"/>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D"
+                                    BorderThickness="1" CornerRadius="14"
+                                    Padding="12" Margin="0,4,0,8">
+                                <StackPanel>
+                                    <TextBlock Text="ВАЖНО"
+                                               FontSize="13" FontWeight="SemiBold"
+                                               Foreground="#FFD0BCFF" Margin="0,0,0,4"/>
+                                    <TextBlock Text="Загрузка профиля меняет сохранённые параметры приложения, но сама по себе не запускает MQTT-соединение. Удаление профиля не удаляет настройки сервера из текущей конфигурации; если удалён профиль по умолчанию, автоматическая загрузка этого профиля отключается."
+                                               FontSize="12" Foreground="#FFACADB8"
+                                               TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </PivotItem>
+                <PivotItem Header="Голос">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="10,4,10,12">
+                            <StackPanel Margin="4,8,4,8">
+                                <TextBlock Text="Голосовое управление" FontSize="22"
+                                           FontWeight="SemiBold" Foreground="#FFEAF1F7"/>
+                                <TextBlock Text="Настройте голосовой ответ Марфы и стандартные команды. Обученные фразы и управление микрофоном находятся в соответствующих разделах приложения."
+                                           FontSize="13" Foreground="#FFACADB8"
+                                           TextWrapping="Wrap" Margin="0,5,0,0"/>
+                            </StackPanel>
+
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D"
+                                    BorderThickness="1" CornerRadius="14"
+                                    Padding="12" Margin="0,4,0,8">
+                                <StackPanel>
+                                    <TextBlock Text="КАК РАБОТАЕТ ГОЛОСОВОЕ УПРАВЛЕНИЕ"
+                                               FontSize="13" FontWeight="SemiBold"
+                                               Foreground="#FFD0BCFF" Margin="0,0,0,6"/>
+                                    <TextBlock Text="Нажмите кнопку «Марфа» на нижней панели, чтобы произнести команду. Для привязки новых фраз к виджетам откройте раздел «Команды». Результат распознавания и ответ отображаются на главном экране."
+                                               FontSize="12" Foreground="#FFACADB8"
+                                               TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D"
+                                    BorderThickness="1" CornerRadius="14"
+                                    Padding="12" Margin="0,4,0,8">
+                                <StackPanel>
+                                    <TextBlock Text="1. СИНТЕЗ РЕЧИ"
+                                               FontSize="14" FontWeight="SemiBold"
+                                               Foreground="#FFD0BCFF" Margin="0,0,0,4"/>
+                                    <TextBlock Text="Выберите установленный в Windows системный голос. Марфа использует его для озвучивания ответов после выполнения команды."
+                                               FontSize="12" Foreground="#FFACADB8"
+                                               TextWrapping="Wrap" Margin="0,0,0,8"/>
+                                    <ComboBox x:Name="TtsVoiceBox" Header="Установленный голос"
+                                              MinHeight="48"/>
+                                    <TextBlock Text="Профиль звучания" FontSize="13"
+                                               FontWeight="SemiBold" Margin="0,10,0,2"/>
+                                    <ComboBox x:Name="TtsPresetBox" Header="Готовый пресет"
+                                              SelectionChanged="TtsPresetBox_SelectionChanged">
+                                        <ComboBoxItem Content="Нежный — мягкий и спокойный" Tag="soft"/>
+                                        <ComboBoxItem Content="Дружелюбный — тёплый и естественный" Tag="friendly"/>
+                                        <ComboBoxItem Content="Естественный — нейтральный" Tag="natural"/>
+                                        <ComboBoxItem Content="Ассистент — чёткий и спокойный" Tag="assistant"/>
+                                    </ComboBox>
+                                    <TextBlock Text="Скорость речи" FontSize="13"
+                                               FontWeight="SemiBold" Margin="0,8,0,0"/>
+                                    <TextBlock x:Name="TtsRateValueText" Text="0,92"
+                                               FontSize="12" Foreground="#FFACADB8"/>
+                                    <Slider x:Name="TtsRateSlider" Minimum="0.75" Maximum="1.15"
+                                            Value="0.92" StepFrequency="0.01"
+                                            ValueChanged="TtsRateSlider_ValueChanged"/>
+                                    <TextBlock Text="Высота голоса" FontSize="13"
+                                               FontWeight="SemiBold" Margin="0,6,0,0"/>
+                                    <TextBlock x:Name="TtsPitchValueText" Text="1,05"
+                                               FontSize="12" Foreground="#FFACADB8"/>
+                                    <Slider x:Name="TtsPitchSlider" Minimum="0.85" Maximum="1.25"
+                                            Value="1.05" StepFrequency="0.01"
+                                            ValueChanged="TtsPitchSlider_ValueChanged"/>
+                                    <TextBlock Text="Изменения применяются к ответам Марфы после сохранения общих настроек. Для проверки можно прослушать текущие значения до сохранения."
+                                               FontSize="11" Foreground="#FFACADB8"
+                                               TextWrapping="Wrap" Margin="0,4,0,6"/>
+                                    <Button Content="Проверить голос" Click="TtsTestButton_Click"
+                                            HorizontalAlignment="Stretch" MinHeight="46"
+                                            Margin="0,4,0,0"/>
+                                    <TextBlock x:Name="TtsVoiceStatus"
+                                               Text="Выберите голос, профиль и проверьте звучание."
+                                               FontSize="12" Foreground="#FFACADB8"
+                                               TextWrapping="Wrap" Margin="0,8,0,0"/>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D"
+                                    BorderThickness="1" CornerRadius="14"
+                                    Padding="12" Margin="0,4,0,8">
+                                <StackPanel>
+                                    <TextBlock Text="2. СТАНДАРТНЫЕ КОМАНДЫ"
+                                               FontSize="14" FontWeight="SemiBold"
+                                               Foreground="#FFD0BCFF" Margin="0,0,0,4"/>
+                                    <TextBlock Text="Укажите MQTT-действия, которые используются для стандартных фраз открытия и закрытия теплицы. Формат команды: device/widget=значение."
+                                               FontSize="12" Foreground="#FFACADB8"
+                                               TextWrapping="Wrap" Margin="0,0,0,6"/>
+                                    <TextBox x:Name="VoiceOpenCommandBox"
+                                             Header="Команда «открой теплицу»"
+                                             PlaceholderText="device/widget=1"/>
+                                    <TextBox x:Name="VoiceCloseCommandBox"
+                                             Header="Команда «закрой теплицу»"
+                                             PlaceholderText="device/widget=0"/>
+                                    <TextBlock Text="Эти поля задают действия по умолчанию. Остальные фразы, варианты произношения и привязки к отдельным виджетам настраиваются в разделе «Команды»."
+                                               FontSize="12" Foreground="#FFACADB8"
+                                               TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D"
+                                    BorderThickness="1" CornerRadius="14"
+                                    Padding="12" Margin="0,4,0,8">
+                                <StackPanel>
+                                    <TextBlock Text="3. ДИАГНОСТИКА МАРФЫ"
+                                               FontSize="14" FontWeight="SemiBold"
+                                               Foreground="#FFD0BCFF" Margin="0,0,0,4"/>
+                                    <TextBlock Text="Откройте диагностический центр, чтобы проверить распознавание команды, её разбор и предварительный план действий. Проверка плана не отправляет команды на ESP32."
+                                               FontSize="12" Foreground="#FFACADB8"
+                                               TextWrapping="Wrap" Margin="0,0,0,8"/>
+                                    <Button Content="Открыть проверку Марфы"
+                                            Click="OpenMarfaDiagnostics_Click"
+                                            HorizontalAlignment="Stretch" MinHeight="46"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </PivotItem>
+                <PivotItem Header="Сценарии">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="10,4,10,12">
+                            <StackPanel Margin="4,4,4,10">
+                                <TextBlock Text="Сценарии IoTManager" FontSize="22"
+                                           FontWeight="SemiBold" Foreground="#FFEAF1F7"/>
+                                <TextBlock Text="Импортируйте export.json, проверьте связи переменных с виджетами и просмотрите план голосовых действий."
+                                           FontSize="13" Foreground="#FFACADB8"
+                                           TextWrapping="Wrap" Margin="0,5,0,0"/>
+                            </StackPanel>
+
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D"
+                                    BorderThickness="1" CornerRadius="14" Padding="12"
+                                    Margin="0,0,0,10">
+                                <StackPanel>
+                                    <TextBlock Text="1. ИМПОРТ СЦЕНАРИЯ" FontSize="14"
+                                               FontWeight="SemiBold" Foreground="#FFD0BCFF"
+                                               Margin="0,0,0,5"/>
+                                    <TextBlock Text="Выберите JSON-файл экспорта IoTManager. Приложение распознаёт правила scenario=&gt; и сохраняет импортированный текст в настройках."
+                                               FontSize="12" Foreground="#FFACADB8"
+                                               TextWrapping="Wrap" Margin="0,0,0,8"/>
+                                    <TextBlock Text="Содержимое сценария" FontSize="13"
+                                               FontWeight="SemiBold" Margin="0,0,0,2"/>
+                                    <TextBox x:Name="ScenarioTextBox"
+                                             Header="Сценарий IoTManager"
+                                             PlaceholderText="Здесь появится содержимое export.json"
+                                             AcceptsReturn="True"
+                                             TextWrapping="Wrap"
+                                             Height="230"/>
+                                    <Button Content="Импортировать export.json"
+                                            Click="ImportScenarioButton_Click"
+                                            HorizontalAlignment="Stretch"
+                                            Margin="0,6,0,0"/>
+                                    <TextBlock Text="Подсказка: для анализа зависимостей также используются команды открытия и закрытия из настроек голоса."
+                                               FontSize="12" Foreground="#FFACADB8"
+                                               TextWrapping="Wrap" Margin="0,8,0,0"/>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D"
+                                    BorderThickness="1" CornerRadius="14" Padding="12"
+                                    Margin="0,0,0,10">
+                                <StackPanel>
+                                    <TextBlock Text="2. СВЯЗИ ПЕРЕМЕННЫХ С ВИДЖЕТАМИ"
+                                               FontSize="14" FontWeight="SemiBold"
+                                               Foreground="#FFD0BCFF" Margin="0,0,0,5"/>
+                                    <TextBlock Text="Здесь отображаются найденные соответствия ID, а также неоднозначные и отсутствующие связи."
+                                               FontSize="12" Foreground="#FFACADB8"
+                                               TextWrapping="Wrap" Margin="0,0,0,8"/>
+                                    <TextBlock x:Name="ScenarioDiagnosticsStatus"
+                                               Text="После импорта здесь появятся результаты сопоставления ID."
+                                               TextWrapping="Wrap" FontSize="12"
+                                               Foreground="#FFACADB8" Margin="0,0,0,6"/>
+                                    <ListView x:Name="ScenarioDiagnosticsList" Height="190"
+                                              SelectionMode="None" IsItemClickEnabled="False"/>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D"
+                                    BorderThickness="1" CornerRadius="14" Padding="12"
+                                    Margin="0,0,0,10">
+                                <StackPanel>
+                                    <TextBlock Text="3. ПРОВЕРКА ПЛАНА ДЕЙСТВИЙ"
+                                               FontSize="14" FontWeight="SemiBold"
+                                               Foreground="#FFD0BCFF" Margin="0,0,0,5"/>
+                                    <TextBlock Text="Сформируйте предварительный план по командам открытия и закрытия. Проверка не отправляет команды на ESP32."
+                                               FontSize="12" Foreground="#FFACADB8"
+                                               TextWrapping="Wrap" Margin="0,0,0,8"/>
+                                    <Button Content="Проверить план"
+                                            Click="TestScenarioButton_Click"
+                                            HorizontalAlignment="Stretch"
+                                            Background="#FFD0BCFF" BorderBrush="#FFD0BCFF"
+                                            Foreground="#FF202020" FontWeight="SemiBold"
+                                            Margin="0,0,0,8"/>
+                                    <TextBlock x:Name="ScenarioPlanStatus"
+                                               Text="Импортируйте сценарий и нажмите «Проверить план»."
+                                               TextWrapping="Wrap" FontSize="12"
+                                               Foreground="#FFACADB8" Margin="0,0,0,6"/>
+                                    <ListView x:Name="ScenarioPlanList" Height="220"
+                                              SelectionMode="None" IsItemClickEnabled="False"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </PivotItem>
+                <PivotItem Header="Автосценарии">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="10,4,10,12">
+                            <StackPanel Margin="2,8,2,10">
+                                <TextBlock Text="Автоматические сценарии" FontSize="21" FontWeight="SemiBold" Foreground="#FFEAF1F7" Margin="0,0,0,3"/>
+                                <TextBlock Text="Создавайте локальные правила: проверяйте значения датчиков и запускайте действия на устройствах. Правила обрабатываются по данным MQTT и WebSocket." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1" CornerRadius="14" Padding="12" Margin="0,0,0,10">
+                                <StackPanel>
+                                    <TextBlock Text="НОВЫЙ СЦЕНАРИЙ" FontSize="14" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,0,0,3"/>
+                                    <TextBlock Text="Сначала задайте понятное название правила." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,0,0,5"/>
+                                    <TextBox x:Name="LocalScenarioTitleBox" Header="Название сценария" PlaceholderText="Например, высокая температура"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1" CornerRadius="14" Padding="12" Margin="0,0,0,10">
+                                <StackPanel>
+                                    <TextBlock Text="1. УСЛОВИЯ СРАБАТЫВАНИЯ" FontSize="14" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,0,0,3"/>
+                                    <TextBlock Text="Выберите датчик, оператор сравнения и пороговое значение." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                                    <ComboBox x:Name="LocalScenarioConditionWidgetBox" Header="Датчик или виджет" Margin="0,2,0,6"/>
+                                    <ComboBox x:Name="LocalScenarioConnectorBox" Header="Связь с предыдущим условием" SelectedIndex="0" Margin="0,0,0,6">
+                                        <ComboBoxItem Content="И (AND)" Tag="AND"/>
+                                        <ComboBoxItem Content="ИЛИ (OR)" Tag="OR"/>
+                                    </ComboBox>
+                                    <ComboBox x:Name="LocalScenarioOperatorBox" Header="Оператор сравнения" SelectedIndex="0" Margin="0,0,0,6">
+                                        <ComboBoxItem Content="Больше >" Tag=">"/>
+                                        <ComboBoxItem Content="Не меньше ≥" Tag=">="/>
+                                        <ComboBoxItem Content="Меньше &lt;" Tag="&lt;"/>
+                                        <ComboBoxItem Content="Не больше ≤" Tag="&lt;="/>
+                                        <ComboBoxItem Content="Равно =" Tag="="/>
+                                        <ComboBoxItem Content="Не равно ≠" Tag="!="/>
+                                    </ComboBox>
+                                    <TextBox x:Name="LocalScenarioThresholdBox" Header="Пороговое значение" PlaceholderText="Например, 25" Margin="0,0,0,8"/>
+                                    <Button Content="＋ Добавить условие" Click="LocalScenarioAddConditionButton_Click" HorizontalAlignment="Stretch"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1" CornerRadius="14" Padding="12" Margin="0,0,0,10">
+                                <StackPanel>
+                                    <TextBlock Text="СПИСОК УСЛОВИЙ" FontSize="14" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,0,0,3"/>
+                                    <TextBlock Text="Проверьте последовательность условий. Для следующих строк используйте AND или OR в начале." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                                    <TextBox x:Name="LocalScenarioConditionsBox" Header="Условия правила" AcceptsReturn="True" TextWrapping="Wrap" Height="110" PlaceholderText="sensor1 > 25&#10;AND sensor2 = 1&#10;OR sensor3 &lt; 10"/>
+                                    <TextBlock Text="Формат строки: widgetId оператор значение." FontSize="11" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="2,6,2,0"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1" CornerRadius="14" Padding="12" Margin="0,0,0,10">
+                                <StackPanel>
+                                    <TextBlock Text="2. ДЕЙСТВИЯ ПРИ СРАБАТЫВАНИИ" FontSize="14" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,0,0,3"/>
+                                    <TextBlock Text="Укажите исполнительный виджет и значение, которое будет отправлено." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                                    <ComboBox x:Name="LocalScenarioActionWidgetBox" Header="Устройство и исполнительный виджет" Margin="0,2,0,6"/>
+                                    <TextBox x:Name="LocalScenarioActionValueBox" Header="Отправляемое значение" Text="1" PlaceholderText="Например, 1 или 0" Margin="0,0,0,8"/>
+                                    <Button Content="＋ Добавить действие" Click="LocalScenarioAddActionButton_Click" HorizontalAlignment="Stretch"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1" CornerRadius="14" Padding="12" Margin="0,0,0,10">
+                                <StackPanel>
+                                    <TextBlock Text="СПИСОК ДЕЙСТВИЙ" FontSize="14" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,0,0,3"/>
+                                    <TextBlock Text="Проверьте команды, которые будут отправлены при выполнении правила." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                                    <TextBox x:Name="LocalScenarioActionsBox" Header="Действия правила" AcceptsReturn="True" TextWrapping="Wrap" Height="90" PlaceholderText="esp32/relay1=1"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1" CornerRadius="14" Padding="12" Margin="0,0,0,10">
+                                <StackPanel>
+                                    <TextBlock Text="3. УВЕДОМЛЕНИЯ И АКТИВАЦИЯ" FontSize="14" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,0,0,3"/>
+                                    <TextBlock Text="Настройте сообщение и выберите, должен ли сценарий быть активен сразу после сохранения." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                                    <TextBox x:Name="LocalScenarioMessageBox" Header="Текст уведомления" Text="Условие выполнено: {value}"/>
+                                    <CheckBox x:Name="LocalScenarioEnabledCheckBox" Content="Сценарий включён" Margin="0,8,0,2"/>
+                                    <CheckBox x:Name="LocalScenarioNotificationCheckBox" Content="Показывать уведомление" Margin="0,2,0,2"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1" CornerRadius="14" Padding="12" Margin="0,0,0,10">
+                                <StackPanel>
+                                    <TextBlock Text="СОХРАНЕНИЕ СЦЕНАРИЯ" FontSize="14" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,0,0,6"/>
+                                    <Button x:Name="LocalScenarioSaveButton" Content="Добавить сценарий" Click="LocalScenarioSaveButton_Click" HorizontalAlignment="Stretch" Background="#FFD0BCFF" BorderBrush="#FFD0BCFF" Foreground="#FF202020" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                                    <Button Content="Очистить форму" Click="LocalScenarioClearButton_Click" HorizontalAlignment="Stretch"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1" CornerRadius="14" Padding="12" Margin="0,0,0,8">
+                                <StackPanel>
+                                    <TextBlock Text="СОХРАНЁННЫЕ СЦЕНАРИИ" FontSize="14" FontWeight="SemiBold" Foreground="#FFD0BCFF" Margin="0,0,0,3"/>
+                                    <TextBlock Text="Выберите правило, чтобы включить, выключить или удалить его. Сценарий срабатывает один раз и может сработать снова после того, как хотя бы одно условие станет FALSE." FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                                    <ListView x:Name="LocalScenariosList" Height="220" SelectionMode="Single" SelectionChanged="LocalScenariosList_SelectionChanged"/>
+                                    <Button Content="Включить / выключить выбранный" Click="LocalScenarioToggleButton_Click" HorizontalAlignment="Stretch" Margin="0,8,0,6"/>
+                                    <Button Content="Удалить выбранный сценарий" Click="LocalScenarioDeleteButton_Click" HorizontalAlignment="Stretch"/>
+                                    <TextBlock x:Name="LocalScenariosStatus" Text="" TextWrapping="Wrap" FontSize="12" Foreground="#FFACADB8" Margin="0,8,0,0"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </PivotItem>
+                <PivotItem Header="Журнал">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="10,4,10,12">
+                            <StackPanel Margin="2,8,2,10">
+                                <TextBlock Text="Журнал и экспорт" FontSize="21" FontWeight="SemiBold"
+                                           Foreground="#FFEAF1F7" Margin="0,0,0,3"/>
+                                <TextBlock Text="Здесь отображаются события сетевого обмена, подключения и ошибки. Новые записи появляются сверху."
+                                           FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1"
+                                    CornerRadius="14" Padding="12" Margin="0,0,0,10">
+                                <StackPanel>
+                                    <TextBlock Text="ЖУРНАЛ СОЕДИНЕНИЯ" FontSize="14" FontWeight="SemiBold"
+                                               Foreground="#FFD0BCFF" Margin="0,0,0,4"/>
+                                    <TextBlock Text="События MQTT, UDP, WebSocket и сетевые ошибки. Выберите категорию, чтобы быстрее найти нужную запись."
+                                               FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap"
+                                               Margin="0,0,0,8"/>
+                                    <ComboBox x:Name="LogModeBox" Header="Источник записей"
+                                              SelectedIndex="0"
+                                              SelectionChanged="LogModeBox_SelectionChanged">
+                                        <ComboBoxItem Content="Текущая сессия" Tag="SESSION"/>
+                                        <ComboBoxItem Content="Сохранённый сетевой журнал" Tag="SAVED"/>
+                                    </ComboBox>
+                                    <TextBlock Text="Windows Phone 8.1 не ведёт отдельные Android-журналы фоновой службы. Здесь доступны события текущей сессии и сохранённая сетевая диагностика."
+                                               FontSize="11" Foreground="#FFACADB8"
+                                               TextWrapping="Wrap" Margin="2,0,2,6"/>
+                                    <ComboBox x:Name="LogFilterBox" Header="Фильтр событий"
+                                              SelectedIndex="0"
+                                              SelectionChanged="LogFilterBox_SelectionChanged">
+                                        <ComboBoxItem Content="Все события" Tag="ALL"/>
+                                        <ComboBoxItem Content="MQTT" Tag="MQTT"/>
+                                        <ComboBoxItem Content="UDP / обнаружение" Tag="UDP"/>
+                                        <ComboBoxItem Content="WebSocket" Tag="WS"/>
+                                        <ComboBoxItem Content="Сценарии" Tag="SCENARIO"/>
+                                        <ComboBoxItem Content="Действия" Tag="ACTION"/>
+                                        <ComboBoxItem Content="Проверка" Tag="VERIFY"/>
+                                        <ComboBoxItem Content="Ошибки" Tag="ERROR"/>
+                                    </ComboBox>
+                                    <Button Content="Копировать отображаемые записи"
+                                            Click="CopyLogButton_Click"
+                                            HorizontalAlignment="Stretch" Margin="0,2,0,4"/>
+                                    <Button Content="Очистить журнал"
+                                            Click="ClearLogButton_Click"
+                                            HorizontalAlignment="Stretch" Margin="0,0,0,4"/>
+                                    <TextBlock x:Name="LogActionStatus" Text=""
+                                               FontSize="11" Foreground="#FFACADB8"
+                                               TextWrapping="Wrap" Margin="2,0,2,8"/>
+                                    <Border Background="#FF1E1F25" BorderBrush="#FF41434D"
+                                            BorderThickness="1" CornerRadius="10" Padding="8">
+                                        <ScrollViewer Height="230" VerticalScrollBarVisibility="Auto"
+                                                      HorizontalScrollBarVisibility="Disabled">
+                                            <TextBlock x:Name="LogText" TextWrapping="Wrap"
+                                                       FontSize="13" Foreground="#FFE1E3E8"
+                                                       IsTextSelectionEnabled="True"/>
+                                        </ScrollViewer>
+                                    </Border>
+                                    <TextBlock Text="Журнал хранит ограниченное количество последних событий; старые записи удаляются автоматически."
+                                               FontSize="11" Foreground="#FFACADB8"
+                                               TextWrapping="Wrap" Margin="2,8,2,0"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1"
+                                    CornerRadius="14" Padding="12" Margin="0,0,0,8">
+                                <StackPanel>
+                                    <TextBlock Text="ЭКСПОРТ ИСТОРИИ" FontSize="14" FontWeight="SemiBold"
+                                               Foreground="#FFD0BCFF" Margin="0,0,0,4"/>
+                                    <TextBlock Text="Создайте документ с измерениями за текущий день. Файл сохраняется в локальной папке приложения и открывается в Microsoft Word или совместимом редакторе."
+                                               FontSize="12" Foreground="#FFACADB8" TextWrapping="Wrap"
+                                               Margin="0,0,0,8"/>
+                                    <Button Content="Экспортировать историю за сегодня"
+                                            Click="ExportTodayButton_Click"
+                                            HorizontalAlignment="Stretch"
+                                            Background="#FFD0BCFF" BorderBrush="#FFD0BCFF"
+                                            Foreground="#FF202020" FontWeight="SemiBold"/>
+                                    <TextBlock Text="Результат экспорта и возможные ошибки отображаются в статусе настроек."
+                                               FontSize="11" Foreground="#FFACADB8"
+                                               TextWrapping="Wrap" Margin="2,8,2,0"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </PivotItem>
+                        </Pivot>
+                    <Border Grid.Row="2" Background="#FF2B2C34" BorderBrush="#FF41434D" BorderThickness="1" CornerRadius="14" Padding="10" Margin="0,8,0,0">
+                        <StackPanel>
+                            <Button Content="Сохранить настройки" Click="SaveSettingsButton_Click"
+                                    Background="#FFD0BCFF" BorderBrush="#FFD0BCFF"
+                                    Foreground="#FF202020" FontWeight="SemiBold" MinHeight="50"/>
+                            <Grid Margin="0,6,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Button Content="Экспорт копии" Click="ExportSettingsBackupButton_Click" FontSize="12" Padding="6,8" Margin="0,0,4,0"/>
+                                <Button Grid.Column="1" Content="Восстановить" Click="ImportSettingsBackupButton_Click" FontSize="12" Padding="6,8" Margin="4,0,0,0"/>
+                            </Grid>
+                            <TextBlock Text="Резервная копия хранится в общей папке Изображения телефона." TextWrapping="Wrap" FontSize="11" Foreground="#FFACADB8" Margin="2,6,2,2"/>
+                            <TextBlock x:Name="SettingsStatus" Text="" TextWrapping="Wrap" FontSize="12" Margin="2,2,2,0"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Grid>
+            </Grid>
+
+        <!-- Fixed bottom navigation inspired by the Android app. -->
+        <Border Grid.Row="2" Background="#FF24252A"
+                BorderBrush="#FF414141" BorderThickness="0,1,0,0">
+            <Grid Background="#FF24252A">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <Button x:Name="NavHomeButton" Grid.Column="0" Click="NavigateHome_Click"
+                    Height="80" Padding="2" BorderThickness="0"
+                    Background="Transparent" Foreground="#FFACADB8">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Border x:Name="NavHomeButtonIndicator" Width="64" Height="30"
+                            CornerRadius="16" Background="Transparent"
+                            HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <TextBlock Text="▲" FontSize="22" HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" Foreground="#FFACADB8"/>
+                    </Border>
+                    <TextBlock Text="Главная" FontSize="12" HorizontalAlignment="Center"
+                               VerticalAlignment="Center" Foreground="#FFACADB8"
+                               TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
+            </Button>
+            <Button x:Name="NavMarfaButton" Grid.Column="1" Click="NavigateMarfa_Click"
+                    Height="80" Padding="2" BorderThickness="0"
+                    Background="Transparent" Foreground="#FFACADB8"
+                    AutomationProperties.Name="Голосовое управление Марфа">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Border x:Name="NavMarfaButtonIndicator" Width="64" Height="30"
+                            CornerRadius="16" Background="Transparent"
+                            HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <TextBlock Text="🎙" FontSize="22" HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" Foreground="#FFACADB8"/>
+                    </Border>
+                    <TextBlock Text="Марфа" FontSize="12" HorizontalAlignment="Center"
+                               VerticalAlignment="Center" Foreground="#FFACADB8"
+                               TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
+            </Button>
+            <Button x:Name="NavCommandsButton" Grid.Column="2" Click="NavigateCommands_Click"
+                    Height="80" Padding="2" BorderThickness="0"
+                    Background="Transparent" Foreground="#FFACADB8">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Border x:Name="NavCommandsButtonIndicator" Width="64" Height="30"
+                            CornerRadius="16" Background="Transparent"
+                            HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <TextBlock Text="🎤" FontSize="22" HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" Foreground="#FFACADB8"/>
+                    </Border>
+                    <TextBlock Text="Команды" FontSize="11" HorizontalAlignment="Center"
+                               VerticalAlignment="Center" Foreground="#FFACADB8"
+                               TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
+            </Button>
+            <Button x:Name="NavGraphsButton" Grid.Column="3" Click="NavigateGraphs_Click"
+                    Height="80" Padding="2" BorderThickness="0"
+                    Background="Transparent" Foreground="#FFACADB8">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Border x:Name="NavGraphsButtonIndicator" Width="64" Height="30"
+                            CornerRadius="16" Background="Transparent"
+                            HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <TextBlock Text="📊" FontSize="22" HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" Foreground="#FFACADB8"/>
+                    </Border>
+                    <TextBlock Text="История" FontSize="11" HorizontalAlignment="Center"
+                               VerticalAlignment="Center" Foreground="#FFACADB8"
+                               TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
+            </Button>
+            <Button x:Name="NavTasksButton" Grid.Column="4" Click="NavigateTasks_Click"
+                    Height="80" Padding="2" BorderThickness="0"
+                    Background="Transparent" Foreground="#FFACADB8">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Border x:Name="NavTasksButtonIndicator" Width="64" Height="30"
+                            CornerRadius="16" Background="Transparent"
+                            HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <TextBlock Text="⏱" FontSize="22" HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" Foreground="#FFACADB8"/>
+                    </Border>
+                    <TextBlock Text="Отложенные" FontSize="10" HorizontalAlignment="Center"
+                               VerticalAlignment="Center" Foreground="#FFACADB8"
+                               TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
+            </Button>
+
+            </Grid>
+        </Border>
     </Grid>
 </Page>

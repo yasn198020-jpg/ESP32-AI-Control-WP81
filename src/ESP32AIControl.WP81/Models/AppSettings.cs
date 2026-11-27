@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.Serialization;
 
 namespace ESP32AIControl.WP81.Models
@@ -12,11 +13,22 @@ namespace ESP32AIControl.WP81.Models
         [DataMember] public string UserName { get; set; }
         [DataMember] public string Password { get; set; }
         [DataMember] public string ClientId { get; set; }
+        [DataMember] public bool UseTls { get; set; }
+        [DataMember] public List<SavedMqttProfile> SavedMqttProfiles { get; set; }
+        [DataMember] public string DefaultMqttProfileName { get; set; }
+        [DataMember] public float UiFontScale { get; set; }
         [DataMember] public int MeasurementIntervalSeconds { get; set; }
+        [DataMember] public Dictionary<string, int> WidgetMeasurementIntervals { get; set; }
+        [DataMember] public List<SavedGraphSet> SavedGraphSets { get; set; }
+        [DataMember] public Dictionary<string, string> GraphWidgetColors { get; set; }
         [DataMember] public int RetentionDays { get; set; }
         [DataMember] public string AutoExportPeriod { get; set; }
         [DataMember] public string VoiceOpenCommand { get; set; }
         [DataMember] public string VoiceCloseCommand { get; set; }
+        [DataMember] public string TtsVoiceId { get; set; }
+        [DataMember] public string TtsVoicePreset { get; set; }
+        [DataMember] public float TtsVoiceRate { get; set; }
+        [DataMember] public float TtsVoicePitch { get; set; }
         [DataMember] public string IoTManagerScenario { get; set; }
 
         public AppSettings()
@@ -27,11 +39,22 @@ namespace ESP32AIControl.WP81.Models
             UserName = string.Empty;
             Password = string.Empty;
             ClientId = "ESP32-AI-Control-WP81";
+            UseTls = false;
+            SavedMqttProfiles = new List<SavedMqttProfile>();
+            DefaultMqttProfileName = string.Empty;
+            UiFontScale = 0.85f;
             MeasurementIntervalSeconds = 60;
+            WidgetMeasurementIntervals = new Dictionary<string, int>();
+            SavedGraphSets = new List<SavedGraphSet>();
+            GraphWidgetColors = new Dictionary<string, string>();
             RetentionDays = 30;
             AutoExportPeriod = "Never";
             VoiceOpenCommand = string.Empty;
             VoiceCloseCommand = string.Empty;
+            TtsVoiceId = string.Empty;
+            TtsVoicePreset = "friendly";
+            TtsVoiceRate = 0.92f;
+            TtsVoicePitch = 1.05f;
             IoTManagerScenario = string.Empty;
         }
 
@@ -44,8 +67,42 @@ namespace ESP32AIControl.WP81.Models
                 Prefix = Prefix,
                 UserName = UserName,
                 Password = Password,
-                ClientId = ClientId
+                ClientId = ClientId,
+                UseTls = UseTls
             };
+        }
+    }
+
+    [DataContract]
+    public sealed class SavedGraphSet
+    {
+        [DataMember] public string Name { get; set; }
+        [DataMember] public List<string> WidgetKeys { get; set; }
+        public SavedGraphSet() { Name = string.Empty; WidgetKeys = new List<string>(); }
+    }
+
+    [DataContract]
+    public sealed class SavedMqttProfile
+    {
+        [DataMember] public string Name { get; set; }
+        [DataMember] public string Host { get; set; }
+        [DataMember] public string Port { get; set; }
+        [DataMember] public string Prefix { get; set; }
+        [DataMember] public string UserName { get; set; }
+        [DataMember] public string Password { get; set; }
+        [DataMember] public string ClientId { get; set; }
+        [DataMember] public bool UseTls { get; set; }
+
+        public SavedMqttProfile()
+        {
+            Name = string.Empty;
+            Host = string.Empty;
+            Port = "1883";
+            Prefix = string.Empty;
+            UserName = string.Empty;
+            Password = string.Empty;
+            ClientId = "ESP32-AI-Control-WP81";
+            UseTls = false;
         }
     }
 }

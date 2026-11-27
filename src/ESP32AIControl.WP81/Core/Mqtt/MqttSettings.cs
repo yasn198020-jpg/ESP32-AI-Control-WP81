@@ -8,6 +8,7 @@ namespace ESP32AIControl.WP81.Core.Mqtt
         public string UserName { get; set; }
         public string Password { get; set; }
         public string ClientId { get; set; }
+        public bool UseTls { get; set; }
 
         public MqttSettings()
         {
@@ -17,6 +18,7 @@ namespace ESP32AIControl.WP81.Core.Mqtt
             UserName = string.Empty;
             Password = string.Empty;
             ClientId = "ESP32-AI-Control-WP81";
+            UseTls = false;
         }
 
         public string RootTopic

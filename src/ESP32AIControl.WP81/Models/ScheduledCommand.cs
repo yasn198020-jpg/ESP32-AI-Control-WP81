@@ -8,6 +8,8 @@ namespace ESP32AIControl.WP81.Models
     {
         [DataMember] public string Id { get; set; }
         [DataMember] public string Command { get; set; }
+        // Voice-originated delayed commands are shown in the Marfa queue; manually scheduled ESP32 tasks remain separate.
+        [DataMember] public string Origin { get; set; }
         [DataMember] public DateTimeOffset ExecuteAt { get; set; }
         [DataMember] public string Status { get; set; }
         [DataMember] public string LastError { get; set; }
@@ -20,6 +22,7 @@ namespace ESP32AIControl.WP81.Models
             {
                 Id = Id,
                 Command = Command,
+                Origin = Origin,
                 ExecuteAt = ExecuteAt,
                 Status = Status,
                 LastError = LastError,

@@ -9,13 +9,13 @@ namespace ESP32AIControl.WP81.Core.History
     public sealed class MeasurementRecorder
     {
         private readonly IMeasurementStore _store;
-        private readonly Func<int> _intervalProvider;
+        private readonly Func<WidgetState, int> _intervalProvider;
         private readonly Dictionary<string, DateTimeOffset> _lastSamples =
             new Dictionary<string, DateTimeOffset>();
         private readonly Dictionary<string, string> _lastValues =
             new Dictionary<string, string>();
 
-        public MeasurementRecorder(IMeasurementStore store, Func<int> intervalProvider)
+        public MeasurementRecorder(IMeasurementStore store, Func<WidgetState, int> intervalProvider)
         {
             _store = store;
             _intervalProvider = intervalProvider;
@@ -23,29 +23,31 @@ namespace ESP32AIControl.WP81.Core.History
 
         public async Task ObserveAsync(WidgetState state)
         {
-            if (state == null || string.IsNullOrEmpty(state.Id) || string.IsNullOrEmpty(state.Value))
+            if (state == null || string.IsNullOrEmpty(state.Id) ||
+                string.IsNullOrWhiteSpace(state.Value))
                 return;
 
             double numeric;
-            if (!double.TryParse(state.Value.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out numeric))
+            if (!double.TryParse(state.Value.Replace(',', '.'),
+                NumberStyles.Float, CultureInfo.InvariantCulture, out numeric))
                 return;
 
             var key = state.Key;
             var now = DateTimeOffset.Now;
-            DateTimeOffset previous;
-            var interval = Math.Max(1, _intervalProvider());
+            var intervalSeconds = Math.Max(1, _intervalProvider(state));
+            var intervalElapsed = true;
+            DateTimeOffset previousTime;
+            if (_lastSamples.TryGetValue(key, out previousTime))
+                intervalElapsed = (now - previousTime).TotalSeconds >= intervalSeconds;
 
-            if (_lastSamples.TryGetValue(key, out previous) &&
-                (now - previous).TotalSeconds < interval)
+            string previousValue;
+            var valueChanged = !_lastValues.TryGetValue(key, out previousValue) ||
+                !string.Equals(previousValue, state.Value, StringComparison.Ordinal);
+
+            // Android change_interval mode: save immediately on a value change,
+            // and also save periodically when the value remains unchanged.
+            if (!valueChanged && !intervalElapsed)
                 return;
-
-            string oldValue;
-            if (_lastValues.TryGetValue(key, out oldValue) && oldValue == state.Value &&
-                (now - previous).TotalSeconds < interval * 2)
-                return;
-
-            _lastSamples[key] = now;
-            _lastValues[key] = state.Value;
 
             await _store.AppendAsync(new MeasurementPoint
             {
@@ -54,6 +56,9 @@ namespace ESP32AIControl.WP81.Core.History
                 Value = state.Value,
                 Timestamp = now
             });
+
+            _lastSamples[key] = now;
+            _lastValues[key] = state.Value;
         }
     }
 }
