@@ -68,7 +68,8 @@ namespace ESP32AIControl.UWP
                         Foreground = Primary, Padding = new Thickness(16, 10, 16, 10),
                         BorderThickness = new Thickness(0), MinWidth = 0 };
                     var pageCopy = page;
-                    button.Margin = new Thickness(0, 0, 6, 0);\n                    button.Click += (s, e) => { _activePage = pageCopy; _selectPage(pageCopy); Render(); };
+                    button.Margin = new Thickness(0, 0, 6, 0);
+                    button.Click += (s, e) => { _activePage = pageCopy; _selectPage(pageCopy); Render(); };
                     row.Children.Add(button);
                 }
                 tabs.Content = row;
