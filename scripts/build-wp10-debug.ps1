@@ -16,7 +16,8 @@ if (-not (Test-Path -LiteralPath $project)) {
     throw "UWP project not found: $project"
 }
 
-# Calculate the next package revision without modifying Package.appxmanifest.
+# Calculate the next package revision. Package.appxmanifest is temporarily
+# updated for the build and restored byte-for-byte in the finally block.
 # Previous package versions are read from AppPackages and BuildOutput.
 $manifestPath = Join-Path $projectRoot 'Package.appxmanifest'
 [xml]$manifestXml = Get-Content -LiteralPath $manifestPath
