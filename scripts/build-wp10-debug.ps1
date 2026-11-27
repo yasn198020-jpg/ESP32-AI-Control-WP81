@@ -90,6 +90,15 @@ New-Item -ItemType Directory -Path $dist -Force | Out-Null
 $destination = Join-Path $dist $bundle.Name
 Copy-Item -LiteralPath $bundle.FullName -Destination $destination -Force
 
+# The local USB deployment helper still targets this stable legacy filename.
+# Keep it as a copy of the freshly built bundle; the package identity inside
+# the bundle retains the incremented version from the manifest.
+$legacyBundle = Join-Path $dist 'ESP32AIControl.UWP_1.0.0.0_ARM_x86_Debug.appxbundle'
+if ($destination -ne $legacyBundle) {
+    Copy-Item -LiteralPath $destination -Destination $legacyBundle -Force
+    Write-Host "Updated deployment compatibility bundle: $legacyBundle" -ForegroundColor Cyan
+}
+
 if ($CertificatePath) {
     if (-not (Test-Path -LiteralPath $CertificatePath)) { throw "Certificate file not found: $CertificatePath" }
     $sdkRoots = @(
