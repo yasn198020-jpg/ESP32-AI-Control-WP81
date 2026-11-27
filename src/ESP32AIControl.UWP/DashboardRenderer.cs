@@ -152,12 +152,13 @@ namespace ESP32AIControl.UWP
                     row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                     var draftKey = entry.Device.Id + "/" + widget.Id;
                     string draft; _inputDrafts.TryGetValue(draftKey, out draft);
+                    if (draft != null && draft == (widget.Value ?? "")) { _inputDrafts.Remove(draftKey); draft = null; }
                     var input = new TextBox { PlaceholderText = widget.Title, Text = draft ?? (widget.Value ?? ""), MinWidth = 80 };
                     input.TextChanged += (s, e) => _inputDrafts[draftKey] = input.Text;
                     if (definition == "inputdgt") input.InputScope = new Windows.UI.Xaml.Input.InputScope { Names = { new Windows.UI.Xaml.Input.InputScopeName(Windows.UI.Xaml.Input.InputScopeNameValue.Number) } };
                     row.Children.Add(input);
                     var send = ActionButton("Отправить");
-                    send.Click += (s, e) => { if (String.IsNullOrWhiteSpace(input.Text)) input.PlaceholderText = "Введите значение"; else { _send(entry.Device, widget, input.Text.Trim()); _inputDrafts.Remove(draftKey); } };
+                    send.Click += (s, e) => { if (String.IsNullOrWhiteSpace(input.Text)) input.PlaceholderText = "Введите значение"; else { _send(entry.Device, widget, input.Text.Trim()); } };
                     Grid.SetColumn(send, 1); row.Children.Add(send); body.Children.Add(row);
                 }
                 else if (definition == "progressline" || definition == "progress-line")
@@ -165,7 +166,7 @@ namespace ESP32AIControl.UWP
                     double value; Double.TryParse((widget.Value ?? "").Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out value);
                     var max = Math.Max(0.0001, widget.ConfigNumber("max", 100));
                     body.Children.Add(Text(widget.Title + "   " + Format(value) + " / " + Format(max), 16, Primary, false));
-                    body.Children.Add(new ProgressBar { Minimum = 0, Maximum = max, Value = Math.Max(0, Math.Min(max, value)), Height = 8 });
+                    body.Children.Add(new ProgressBar { Minimum = 0, Maximum = max, Value = Math.Max(0, Math.Min(max, value)), Height = Math.Max(2, widget.ConfigNumber("stroke", 10)) });
                 }
                 else if (definition == "progressround" || definition == "progress-round" || definition == "fillgauge")
                 {
