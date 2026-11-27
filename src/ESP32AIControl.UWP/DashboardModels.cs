@@ -34,11 +34,13 @@ namespace ESP32AIControl.UWP
         public int Order { get; set; }
         public long LastUpdatedUnixMs { get; set; }
         public string ConfigJson { get; set; }
+        public string CommandState { get; set; }
+        public string ExpectedCommandValue { get; set; }
 
         public WidgetModel()
         {
             Id = ""; Title = ""; Type = "VALUE"; DefinitionName = "";
-            Value = ""; Unit = ""; Page = ""; ConfigJson = "{}";
+            Value = ""; Unit = ""; Page = ""; ConfigJson = "{}"; CommandState = ""; ExpectedCommandValue = "";
         }
 
         public string EffectiveDefinition
