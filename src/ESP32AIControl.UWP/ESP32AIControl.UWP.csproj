@@ -80,7 +80,7 @@
                      and '$(AppxLayoutDir)' != ''">
     <MakeDir Directories="$(AppxLayoutDir)$(EntryPointDir)" />
     <Copy SourceFiles="$(TargetDir)$(TargetFileName)"
-          DestinationFiles="$(AppxLayoutDir)$(EntryPointDir)$(DirectorySeparatorChar)$(TargetFileName)"
+          DestinationFiles="$(AppxLayoutDir)$(EntryPointDir)\$(TargetFileName)"
           SkipUnchangedFiles="true" />
   </Target>
 </Project>
