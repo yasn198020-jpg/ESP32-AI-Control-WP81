@@ -6,6 +6,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $project = Join-Path $PSScriptRoot '..\src\ESP32AIControl.UWP\ESP32AIControl.UWP.csproj'
 $project = [System.IO.Path]::GetFullPath($project)
+$projectRoot = Split-Path $project
 $msbuild = 'C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\MSBuild\15.0\Bin\MSBuild.exe'
 
 if (-not (Test-Path -LiteralPath $msbuild)) {
@@ -19,13 +20,24 @@ Write-Host '=== WP10 ARM Debug build ===' -ForegroundColor Cyan
 & $msbuild $project /restore /t:Build /p:Configuration=Debug /p:Platform=ARM /p:PlatformTarget=ARM /p:VisualStudioVersion=15.0 /p:TargetPlatformVersion=10.0.14393.0 /p:RuntimeIdentifiers=win10-arm /p:RuntimeIdentifier=win10-arm /p:AppxPackageSigningEnabled=false /v:minimal
 if ($LASTEXITCODE -ne 0) { throw "MSBuild failed with exit code $LASTEXITCODE" }
 
-$packageDir = Join-Path (Split-Path $project) 'AppPackages\ESP32AIControl.UWP_1.0.0.0_Debug_Test'
-$bundle = Get-ChildItem $packageDir -Filter '*ARM_x86_Debug.appxbundle' -File -ErrorAction SilentlyContinue | Select-Object -First 1
-if (-not $bundle) {
-    throw "ARM/x86 Debug bundle not found in $packageDir"
+$packagesRoot = Join-Path $projectRoot 'AppPackages'
+$packageDir = Get-ChildItem -LiteralPath $packagesRoot -Directory -Filter 'ESP32AIControl.UWP_*_Debug_Test' -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTime -Descending |
+    Select-Object -First 1
+
+if (-not $packageDir) {
+    throw "Debug package directory not found under $packagesRoot"
 }
 
-$dist = Join-Path (Split-Path $project) 'BuildOutput'
+$bundle = Get-ChildItem -LiteralPath $packageDir.FullName -Filter '*ARM_x86_Debug.appxbundle' -File -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTime -Descending |
+    Select-Object -First 1
+
+if (-not $bundle) {
+    throw "ARM/x86 Debug bundle not found in $($packageDir.FullName)"
+}
+
+$dist = Join-Path $projectRoot 'BuildOutput'
 New-Item -ItemType Directory -Path $dist -Force | Out-Null
 $destination = Join-Path $dist $bundle.Name
 Copy-Item -LiteralPath $bundle.FullName -Destination $destination -Force
@@ -58,4 +70,5 @@ if ($CertificatePath) {
 
 Write-Host ''
 Write-Host 'Build succeeded.' -ForegroundColor Green
+Write-Host "Package directory: $($packageDir.FullName)" -ForegroundColor Green
 Write-Host "Bundle: $destination" -ForegroundColor Green
