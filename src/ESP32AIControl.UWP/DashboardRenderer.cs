@@ -6,6 +6,10 @@ using Windows.UI;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Media;
+using Windows.UI.Xaml.Shapes;
+using Windows.UI.Xaml.Input;
+using Windows.UI.Xaml.Controls.Primitives;
+using Newtonsoft.Json.Linq;
 
 namespace ESP32AIControl.UWP
 {
@@ -89,14 +93,11 @@ namespace ESP32AIControl.UWP
                 var definition = widget.EffectiveDefinition;
                 var card = new Border { Background = Card, CornerRadius = new CornerRadius(10),
                     Margin = new Thickness(0, 0, 0, 8), Padding = new Thickness(14, 10, 14, 10) };
-                var body = new StackPanel { Spacing = 8 };
+                var body = new StackPanel();
                 card.Child = body;
                 if (definition == "toggle")
                 {
-                    var row = new Grid();
-                    row.ColumnDefinitions.Add(new ColumnDefinition());
-                    row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                    row.Children.Add(Text(widget.Title, 17, Primary, false));
+                    var row = TwoColumnRow(widget.Title);
                     var toggle = new ToggleSwitch { IsOn = IsOn(widget.Value), OnContent = "", OffContent = "", MinWidth = 60 };
                     Grid.SetColumn(toggle, 1);
                     toggle.Toggled += (s, e) => _send(entry.Device, widget, toggle.IsOn ? "1" : "0");
@@ -104,10 +105,7 @@ namespace ESP32AIControl.UWP
                 }
                 else if (definition == "button" || definition == "vbtn" || definition == "btn")
                 {
-                    var row = new Grid();
-                    row.ColumnDefinitions.Add(new ColumnDefinition());
-                    row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                    row.Children.Add(Text(widget.Title, 17, Primary, false));
+                    var row = TwoColumnRow(widget.Title);
                     var button = ActionButton("Нажать");
                     button.Click += (s, e) => _send(entry.Device, widget, "1");
                     Grid.SetColumn(button, 1); row.Children.Add(button); body.Children.Add(row);
@@ -156,7 +154,7 @@ namespace ESP32AIControl.UWP
                 else if (definition == "progressline" || definition == "progress-line")
                 {
                     double value; Double.TryParse((widget.Value ?? "").Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out value);
-                    var max = Math.Max(0.0001, widget.ConfigNumber("max", 100));
+                    var isFill = definition == "fillgauge";\n                    var max = isFill ? 100 : Math.Max(0.0001, widget.ConfigNumber("max", 100));
                     body.Children.Add(Text(widget.Title + "   " + Format(value) + " / " + Format(max), 16, Primary, false));
                     body.Children.Add(new ProgressBar { Minimum = 0, Maximum = max, Value = Math.Max(0, Math.Min(max, value)), Height = 8 });
                 }
@@ -169,11 +167,69 @@ namespace ESP32AIControl.UWP
                 if (widget.LastUpdatedUnixMs > 0)
                 {
                     var age = Math.Max(0, (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - widget.LastUpdatedUnixMs) / 1000);
-                    string ageText = age < 60 ? age + " сек назад" : age < 3600 ? (age/60) + " мин назад" : (age/3600) + " ч назад";
+                    string ageText = age < 60 ? age + " сек назад" : age < 3600 ? (age/60) + " мин назад" : age < 86400 ? (age/3600) + " ч назад" : (age/86400) + " дн назад";
                     body.Children.Add(Text("обновлено " + ageText, 10, Muted, false));
                 }
-                _host.Children.Add(card);
+                if (!entry.Device.Online) body.Children.Add(Text("Офлайн", 12, new SolidColorBrush(Color.FromArgb(255, 255, 138, 128)), true));\n                _host.Children.Add(card);
             }
+        }
+
+
+        private static Grid TwoColumnRow(string title)
+        {
+            var grid = new Grid { Margin = new Thickness(0, 3, 0, 3) };
+            grid.ColumnDefinitions.Add(new ColumnDefinition());
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.Children.Add(Text(title, 17, Primary, false));
+            return grid;
+        }
+
+        private static UIElement RenderChart(WidgetModel widget)
+        {
+            var panel = new StackPanel();
+            panel.Children.Add(Text(widget.Title, 17, Primary, false));
+            try
+            {
+                var root = JObject.Parse(widget.Value ?? "{}");
+                var status = root["status"] as JArray;
+                if (status == null || status.Count == 0)
+                {
+                    panel.Children.Add(Text("Нет точек графика", 13, Muted, true));
+                    return panel;
+                }
+                var series = new List<List<double>>();
+                foreach (var point in status.OfType<JObject>())
+                {
+                    for (int n = 1; n <= 3; n++)
+                    {
+                        var token = point["y" + n];
+                        double number;
+                        if (token != null && Double.TryParse(Convert.ToString(token, CultureInfo.InvariantCulture), NumberStyles.Any, CultureInfo.InvariantCulture, out number))
+                        {
+                            while (series.Count < n) series.Add(new List<double>());
+                            series[n - 1].Add(number);
+                        }
+                    }
+                }
+                foreach (var values in series)
+                {
+                    if (values.Count == 0) continue;
+                    var min = values.Min(); var max = values.Max();
+                    var range = Math.Max(0.0001, max - min);
+                    var bars = new StackPanel { Orientation = Orientation.Horizontal, Height = 72, VerticalAlignment = VerticalAlignment.Bottom };
+                    foreach (var value in TakeLastCompat(values, 60))
+                    {
+                        var bar = new Border { Background = Accent, Width = Math.Max(2, 260.0 / Math.Min(60, values.Count) - 2),
+                            Height = Math.Max(3, 68 * (value - min) / range + 3), VerticalAlignment = VerticalAlignment.Bottom,
+                            Margin = new Thickness(1, 0, 1, 0), CornerRadius = new CornerRadius(2) };
+                        bars.Children.Add(bar);
+                    }
+                    panel.Children.Add(bars);
+                }
+                panel.Children.Add(Text("Точек: " + status.Count, 12, Muted, false));
+            }
+            catch { panel.Children.Add(Text("Данные графика пока недоступны", 13, Muted, true)); }
+            return panel;
         }
 
         private static TextBlock Text(string value, double size, Brush brush, bool wrap)
@@ -198,6 +254,8 @@ namespace ESP32AIControl.UWP
         {
             return value.ToString("0.##", CultureInfo.InvariantCulture);
         }
+
+        private static IEnumerable<T> TakeLastCompat<T>(IEnumerable<T> source, int count) { return source.Skip(Math.Max(0, source.Count() - count)); }
 
         private static List<string> ReadOptions(IDictionary<string, object> config)
         {
