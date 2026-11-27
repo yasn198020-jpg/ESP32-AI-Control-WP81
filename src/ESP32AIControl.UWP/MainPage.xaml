@@ -64,7 +64,7 @@
             <Border x:Name="SideMenu" Grid.Column="0" Background="{StaticResource PanelBrush}"
                     Visibility="Collapsed">
                 <ScrollViewer>
-                    <StackPanel Padding="8">
+                    <StackPanel>
                         <TextBlock Text="РАЗДЕЛЫ" Foreground="{StaticResource AccentBrush}"
                                    Margin="12,14,0,8" FontSize="12" FontWeight="SemiBold"/>
                         <Button Content="Сценарии" Style="{StaticResource MenuItemButtonStyle}" Click="Scenarios_Click"/>
