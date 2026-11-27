@@ -16,8 +16,42 @@ if (-not (Test-Path -LiteralPath $project)) {
     throw "UWP project not found: $project"
 }
 
+# Calculate the next package revision without modifying Package.appxmanifest.
+# Previous package versions are read from AppPackages and BuildOutput, so every
+# build gets a higher revision even when the source manifest stays at 1.0.0.0.
+$manifestPath = Join-Path $projectRoot 'Package.appxmanifest'
+[xml]$manifestXml = Get-Content -LiteralPath $manifestPath
+$manifestVersion = [version]$manifestXml.Package.Identity.Version
+$knownVersions = New-Object 'System.Collections.Generic.List[version]'
+$knownVersions.Add($manifestVersion)
+
+$packagesRoot = Join-Path $projectRoot 'AppPackages'
+if (Test-Path -LiteralPath $packagesRoot) {
+    Get-ChildItem -LiteralPath $packagesRoot -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+        if ($_.Name -match '^ESP32AIControl\.UWP_(\d+\.\d+\.\d+\.\d+)_Debug_Test$') {
+            $knownVersions.Add([version]$Matches[1])
+        }
+    }
+}
+
+$dist = Join-Path $projectRoot 'BuildOutput'
+if (Test-Path -LiteralPath $dist) {
+    Get-ChildItem -LiteralPath $dist -File -Filter 'ESP32AIControl.UWP_*_ARM_x86_Debug.appxbundle' -ErrorAction SilentlyContinue | ForEach-Object {
+        if ($_.Name -match '^ESP32AIControl\.UWP_(\d+\.\d+\.\d+\.\d+)_ARM_x86_Debug\.appxbundle$') {
+            $knownVersions.Add([version]$Matches[1])
+        }
+    }
+}
+
+$latestVersion = $knownVersions | Sort-Object -Descending | Select-Object -First 1
+if ($latestVersion.Revision -ge 65535) {
+    throw "Package revision limit reached for $latestVersion. Update the manifest's major/minor/build version."
+}
+$nextVersion = '{0}.{1}.{2}.{3}' -f $latestVersion.Major, $latestVersion.Minor, $latestVersion.Build, ($latestVersion.Revision + 1)
+Write-Host "Package version: $nextVersion" -ForegroundColor Cyan
+
 Write-Host '=== WP10 ARM Debug build ===' -ForegroundColor Cyan
-& $msbuild $project /restore /t:Build /p:Configuration=Debug /p:Platform=ARM /p:PlatformTarget=ARM /p:VisualStudioVersion=15.0 /p:TargetPlatformVersion=10.0.14393.0 /p:RuntimeIdentifiers=win10-arm /p:RuntimeIdentifier=win10-arm /p:AppxPackageSigningEnabled=false /v:minimal
+& $msbuild $project /restore /t:Build /p:Configuration=Debug /p:Platform=ARM /p:PlatformTarget=ARM /p:VisualStudioVersion=15.0 /p:TargetPlatformVersion=10.0.14393.0 /p:RuntimeIdentifiers=win10-arm /p:RuntimeIdentifier=win10-arm /p:AppxPackageSigningEnabled=false /p:AppxPackageVersion=$nextVersion /p:AppxAutoIncrementPackageRevision=false /v:minimal
 if ($LASTEXITCODE -ne 0) { throw "MSBuild failed with exit code $LASTEXITCODE" }
 
 $packagesRoot = Join-Path $projectRoot 'AppPackages'
