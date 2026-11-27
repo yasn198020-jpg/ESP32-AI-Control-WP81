@@ -352,8 +352,11 @@ namespace ESP32AIControl.UWP
             Canvas.SetLeft(track, 7); Canvas.SetTop(track, 7); canvas.Children.Add(track);
             double fraction = Math.Max(0, Math.Min(1, value / Math.Max(0.0001, max)));
             double angle = fraction * 359.9;
+            bool semicircle = !fill && Convert.ToString(config.ContainsKey("semicircle") ? config["semicircle"] : "0") == "1";
+            double startAngle = semicircle ? 180.0 : -90.0;
+            if (semicircle) angle = fraction * 179.9;
             double cx = 43, cy = 43, radius = 36;
-            double radians = (-90 + angle) * Math.PI / 180.0;
+            double radians = (startAngle + angle) * Math.PI / 180.0;
             var end = new Windows.Foundation.Point(cx + radius * Math.Cos(radians), cy + radius * Math.Sin(radians));
             var startRadians = startAngle * Math.PI / 180.0;
             var figure = new PathFigure { StartPoint = new Windows.Foundation.Point(cx + radius * Math.Cos(startRadians), cy + radius * Math.Sin(startRadians)), IsClosed = false };
