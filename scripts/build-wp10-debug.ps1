@@ -51,14 +51,16 @@ Write-Host "Package version: $nextVersion" -ForegroundColor Cyan
 
 Write-Host '=== WP10 ARM Debug build ===' -ForegroundColor Cyan
 $originalManifestBytes = [System.IO.File]::ReadAllBytes($manifestPath)
-$manifestText = [System.IO.File]::ReadAllText($manifestPath)
-$identityVersionPattern = '(<Identity\b[^>]*\bVersion=")[^"]+(")'
-if (-not [regex]::IsMatch($manifestText, $identityVersionPattern)) {
-    throw "Could not locate Identity Version in $manifestPath"
+$manifestDoc = New-Object System.Xml.XmlDocument
+$manifestDoc.PreserveWhitespace = $true
+$manifestDoc.Load($manifestPath)
+$identityNode = $manifestDoc.SelectSingleNode("/*[local-name()='Package']/*[local-name()='Identity']")
+if ($null -eq $identityNode) {
+    throw "Could not locate the Package/Identity element in $manifestPath"
 }
-$buildManifestText = [regex]::Replace($manifestText, $identityVersionPattern, ('1' + $nextVersion + '2'), 1)
+$identityNode.SetAttribute('Version', $nextVersion)
 try {
-    [System.IO.File]::WriteAllText($manifestPath, $buildManifestText, (New-Object System.Text.UTF8Encoding($false)))
+    $manifestDoc.Save($manifestPath)
     Write-Host "Temporarily setting manifest package version to $nextVersion" -ForegroundColor Cyan
     & $msbuild $project /restore /t:Build /p:Configuration=Debug /p:Platform=ARM /p:PlatformTarget=ARM /p:VisualStudioVersion=15.0 /p:TargetPlatformVersion=10.0.14393.0 /p:RuntimeIdentifiers=win10-arm /p:RuntimeIdentifier=win10-arm /p:AppxPackageSigningEnabled=false /p:AppxAutoIncrementPackageRevision=false /v:minimal
     if ($LASTEXITCODE -ne 0) { throw "MSBuild failed with exit code $LASTEXITCODE" }
