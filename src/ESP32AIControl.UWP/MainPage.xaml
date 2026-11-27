@@ -81,27 +81,20 @@
             </Border>
 
             <Grid Grid.Column="1" x:Name="ContentHost" Margin="12,10">
-                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"
-                            MaxWidth="440" Spacing="10">
-                    <TextBlock x:Name="SectionHeading" Text="ESP32-AI-Control"
-                               FontSize="24" FontWeight="SemiBold"
-                               Foreground="{StaticResource PrimaryTextBrush}"
-                               HorizontalAlignment="Center" TextAlignment="Center"/>
-                    <TextBlock x:Name="SectionDescription"
-                               Text="Основа Windows 10 Mobile создана. Следующий этап — перенос экранов Android 5.1.1."
-                               FontSize="14" Foreground="{StaticResource SecondaryTextBrush}"
-                               TextAlignment="Center" HorizontalAlignment="Center"/>
-                    <Border Background="{StaticResource CardBrush}" CornerRadius="12"
-                            Padding="14" Margin="0,12,0,0">
-                        <StackPanel>
-                            <TextBlock Text="Состояние приложения" FontWeight="SemiBold"
-                                       Foreground="{StaticResource PrimaryTextBrush}"/>
-                            <TextBlock x:Name="StatusText" Text="Интерфейсный каркас. Подключение ESP32 ещё не перенесено."
-                                       Foreground="{StaticResource SecondaryTextBrush}"
-                                       FontSize="13" Margin="0,6,0,0"/>
-                        </StackPanel>
-                    </Border>
-                </StackPanel>
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel x:Name="ContentStack" Spacing="8">
+                        <TextBlock x:Name="SectionHeading" Text="ESP32-AI-Control"
+                                   FontSize="24" FontWeight="SemiBold"
+                                   Foreground="{StaticResource PrimaryTextBrush}"/>
+                        <TextBlock x:Name="SectionDescription"
+                                   Text="Основное приложение ESP32-AI-Control"
+                                   FontSize="14" Foreground="{StaticResource SecondaryTextBrush}"
+                                   TextWrapping="Wrap"/>
+                        <TextBlock x:Name="StatusText" Text="Ожидание конфигурации устройств."
+                                   Foreground="{StaticResource SecondaryTextBrush}" FontSize="13"/>
+                        <StackPanel x:Name="DashboardHost" Spacing="4"/>
+                    </StackPanel>
+                </ScrollViewer>
             </Grid>
         </Grid>
 
