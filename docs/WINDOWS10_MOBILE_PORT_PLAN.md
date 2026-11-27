@@ -63,4 +63,7 @@ The Android `HomeScreenActivity` custom photo desktop, including background phot
 
 ## Current implementation status
 
-The first implementation commit provides only a UWP project skeleton and navigation shell. The main Android screens and services have not yet been ported. MQTT, voice recognition/TTS, history persistence, scenarios, scheduling and ESP32 communication are not yet implemented in this UWP project.
+- Stage 1: UWP application shell and responsive navigation — initial implementation committed; not yet validated by a local Visual Studio build.
+- Stage 2: Main dashboard — Android-style page tabs, empty-configuration state, device/widget data model and first-pass renderers for toggle, button, input, range, select, progress and value widgets have been added. The renderer accepts device snapshots and emits command-request events, but no MQTT/device service is connected yet.
+- Stages 3–12: not yet implemented.
+- Deferred: custom photo-based home screen and its editor remain out of the initial migration sequence.
