@@ -74,8 +74,8 @@
                                    Margin="12,22,0,8" FontSize="12" FontWeight="SemiBold"/>
                         <Button Content="MQTT подключение" Style="{StaticResource MenuItemButtonStyle}" Click="MqttSettings_Click"/>
                         <Button Content="UDP устройства" Style="{StaticResource MenuItemButtonStyle}" Click="UdpSettings_Click"/>
-                        <Button Content="Рабочий стол" Style="{StaticResource MenuItemButtonStyle}" Click="DashboardSettings_Click"/>
                         <Button Content="Настройки приложения" Style="{StaticResource MenuItemButtonStyle}" Click="AppSettings_Click"/>
+                        <Button Content="Размер текста" Style="{StaticResource MenuItemButtonStyle}" Click="TextSize_Click"/>
                     </StackPanel>
                 </ScrollViewer>
             </Border>
