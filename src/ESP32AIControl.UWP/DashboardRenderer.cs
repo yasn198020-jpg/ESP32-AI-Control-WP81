@@ -344,6 +344,31 @@ namespace ESP32AIControl.UWP
             return canvas;
         }
 
+        private static Color ParseColor(string raw)
+        {
+            string value = (raw ?? "").Trim();
+            if (value.StartsWith("#")) value = value.Substring(1);
+            uint number;
+            if (UInt32.TryParse(value, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out number))
+            {
+                if (value.Length == 6) return Color.FromArgb(255, (byte)(number >> 16), (byte)(number >> 8), (byte)number);
+                if (value.Length == 8) return Color.FromArgb((byte)(number >> 24), (byte)(number >> 16), (byte)(number >> 8), (byte)number);
+            }
+            switch (value.ToLowerInvariant())
+            {
+                case "red": return Colors.Red;
+                case "green": return Colors.Green;
+                case "blue": return Colors.Blue;
+                case "yellow": return Colors.Yellow;
+                case "orange": return Colors.Orange;
+                case "cyan": return Colors.Cyan;
+                case "white": return Colors.White;
+                case "black": return Colors.Black;
+                case "magenta": return Colors.Magenta;
+                default: return Color.FromArgb(255, 144, 202, 249);
+            }
+        }
+
         private static Brush WidgetValueBrush(IDictionary<string, object> config, double value)
         {
             object raw;
@@ -368,8 +393,7 @@ namespace ESP32AIControl.UWP
             {
                 try
                 {
-                    var color = (Color)ColorConverter.ConvertFromString(selected);
-                    return new SolidColorBrush(color);
+                    return new SolidColorBrush(ParseColor(selected));
                 }
                 catch { }
             }
