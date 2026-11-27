@@ -46,7 +46,7 @@
                 <TextBlock x:Name="PageTitle" Grid.Column="1" Text="Главная"
                            VerticalAlignment="Center" FontSize="19" FontWeight="SemiBold"
                            Foreground="{StaticResource PrimaryTextBrush}" TextTrimming="CharacterEllipsis"/>
-                <Button Grid.Column="2" Content="ⓘ" Click="InfoButton_Click"
+                <Button Grid.Column="2" Content="◷" Click="ToggleLastUpdated_Click"
                         FontSize="20" Background="Transparent" BorderThickness="0"
                         Foreground="{StaticResource SecondaryTextBrush}"/>
                 <TextBlock x:Name="ConnectionIndicator" Grid.Column="3" Text="●"
