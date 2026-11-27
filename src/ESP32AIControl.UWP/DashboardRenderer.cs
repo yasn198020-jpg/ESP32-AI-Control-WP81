@@ -22,6 +22,9 @@ namespace ESP32AIControl.UWP
         private readonly Action<string> _selectPage;
         private readonly Action<DeviceModel, WidgetModel, string> _send;
         private string _activePage;
+        private bool _showLastUpdated;
+        private readonly Dictionary<string, string> _inputDrafts = new Dictionary<string, string>();
+        public bool ShowLastUpdated { get { return _showLastUpdated; } set { _showLastUpdated = value; } }
 
         private static readonly Brush Primary = new SolidColorBrush(Color.FromArgb(255, 241, 240, 247));
         private static readonly Brush Muted = new SolidColorBrush(Color.FromArgb(255, 172, 173, 184));
@@ -63,7 +66,9 @@ namespace ESP32AIControl.UWP
                 foreach (var page in pages)
                 {
                     var selected = page == _activePage;
-                    var button = new Button { Content = page.Replace("⚙️", "").Replace("⚙", "").Trim(),
+                    var hasGear = page.Contains("⚙") || page.Contains("⚙️") || page.Contains("⚙︎");
+                    var displayPage = page.Replace("⚙️", "").Replace("⚙︎", "").Replace("⚙", "").Trim();
+                    var button = new Button { Content = (hasGear ? "⚙  " : "") + (String.IsNullOrWhiteSpace(displayPage) ? page : displayPage),
                         Background = selected ? new SolidColorBrush(Color.FromArgb(255, 98, 98, 98)) : Panel,
                         Foreground = Primary, Padding = new Thickness(16, 10, 16, 10),
                         BorderThickness = new Thickness(0), MinWidth = 0 };
@@ -134,7 +139,7 @@ namespace ESP32AIControl.UWP
                     var config = widget.ReadConfig();
                     var options = ReadOptions(config);
                     if (options.Count == 0) { options.Add("Выключен"); options.Add("Включен"); }
-                    int selected; Int32.TryParse(widget.Value, out selected);
+                    int selected; if (!Int32.TryParse(widget.Value, out selected)) selected = (int)widget.ConfigNumber("status", 0);
                     var combo = new ComboBox { ItemsSource = options, SelectedIndex = Math.Max(0, Math.Min(options.Count - 1, selected)), HorizontalAlignment = HorizontalAlignment.Stretch };
                     combo.SelectionChanged += (s, e) => { if (combo.SelectedIndex >= 0) _send(entry.Device, widget, combo.SelectedIndex.ToString(CultureInfo.InvariantCulture)); };
                     body.Children.Add(combo);
@@ -145,11 +150,14 @@ namespace ESP32AIControl.UWP
                     var row = new Grid();
                     row.ColumnDefinitions.Add(new ColumnDefinition());
                     row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                    var input = new TextBox { PlaceholderText = widget.Title, Text = widget.Value ?? "", MinWidth = 80 };
+                    var draftKey = entry.Device.Id + "/" + widget.Id;
+                    string draft; _inputDrafts.TryGetValue(draftKey, out draft);
+                    var input = new TextBox { PlaceholderText = widget.Title, Text = draft ?? (widget.Value ?? ""), MinWidth = 80 };
+                    input.TextChanged += (s, e) => _inputDrafts[draftKey] = input.Text;
                     if (definition == "inputdgt") input.InputScope = new Windows.UI.Xaml.Input.InputScope { Names = { new Windows.UI.Xaml.Input.InputScopeName(Windows.UI.Xaml.Input.InputScopeNameValue.Number) } };
                     row.Children.Add(input);
                     var send = ActionButton("Отправить");
-                    send.Click += (s, e) => { if (String.IsNullOrWhiteSpace(input.Text)) input.PlaceholderText = "Введите значение"; else _send(entry.Device, widget, input.Text.Trim()); };
+                    send.Click += (s, e) => { if (String.IsNullOrWhiteSpace(input.Text)) input.PlaceholderText = "Введите значение"; else { _send(entry.Device, widget, input.Text.Trim()); _inputDrafts.Remove(draftKey); } };
                     Grid.SetColumn(send, 1); row.Children.Add(send); body.Children.Add(row);
                 }
                 else if (definition == "progressline" || definition == "progress-line")
@@ -165,10 +173,7 @@ namespace ESP32AIControl.UWP
                     Double.TryParse((widget.Value ?? "").Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out value);
                     var max = definition == "fillgauge" ? 100 : Math.Max(0.0001, widget.ConfigNumber("max", 100));
                     var gauge = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 5, 0, 5) };
-                    var gaugeValue = new StackPanel { Width = 76, VerticalAlignment = VerticalAlignment.Center };
-                    gaugeValue.Children.Add(Text(Format(value), 22, Accent, false));
-                    gaugeValue.Children.Add(new ProgressBar { Minimum = 0, Maximum = max, Value = Math.Max(0, Math.Min(max, value)), Height = 8 });
-                    gauge.Children.Add(gaugeValue);
+                    gauge.Children.Add(RenderCircularGauge(value, max, definition == "fillgauge", widget.ReadConfig()));
                     var details = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(14, 0, 0, 0) };
                     details.Children.Add(Text(widget.Title, 17, Primary, false));
                     details.Children.Add(Text(Format(value) + " / " + Format(max) + (definition == "fillgauge" ? " %" : ""), 16, Accent, false));
@@ -185,7 +190,7 @@ namespace ESP32AIControl.UWP
                     body.Children.Add(Text(String.IsNullOrWhiteSpace(widget.Value) ? "—" : widget.Value + (String.IsNullOrWhiteSpace(widget.Unit) ? "" : " " + widget.Unit), 21, Accent, false));
                 }
 
-                if (widget.LastUpdatedUnixMs > 0)
+                if (_showLastUpdated && widget.LastUpdatedUnixMs > 0)
                 {
                     var age = Math.Max(0, (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - widget.LastUpdatedUnixMs) / 1000);
                     string ageText = age < 60 ? age + " сек назад" : age < 3600 ? (age/60) + " мин назад" : age < 86400 ? (age/3600) + " ч назад" : (age/86400) + " дн назад";
@@ -218,49 +223,121 @@ namespace ESP32AIControl.UWP
         private static UIElement RenderChart(WidgetModel widget)
         {
             var panel = new StackPanel();
+            var config = widget.ReadConfig();
             panel.Children.Add(Text(widget.Title, 17, Primary, false));
             try
             {
                 var root = JObject.Parse(widget.Value ?? "{}");
                 var status = root["status"] as JArray;
-                if (status == null || status.Count == 0)
+                int maxCount = Math.Max(20, Math.Min(600, (int)widget.ConfigNumber("maxCount", 240)));
+                var series = new List<List<double>>();
+                if (status != null)
+                {
+                    foreach (var point in status.OfType<JObject>())
+                    {
+                        for (int n = 1; n <= 3; n++)
+                        {
+                            var token = point["y" + n];
+                            double number;
+                            if (token != null && Double.TryParse(Convert.ToString(token, CultureInfo.InvariantCulture), NumberStyles.Any, CultureInfo.InvariantCulture, out number))
+                            {
+                                while (series.Count < n) series.Add(new List<double>());
+                                series[n - 1].Add(number);
+                            }
+                        }
+                    }
+                }
+                series = series.Select(values => values.Skip(Math.Max(0, values.Count - maxCount)).ToList()).Where(v => v.Count > 0).ToList();
+                if (series.Count == 0)
                 {
                     panel.Children.Add(Text("Нет точек графика", 13, Muted, true));
                     return panel;
                 }
-                var series = new List<List<double>>();
-                foreach (var point in status.OfType<JObject>())
+                var isBar = String.Equals(Convert.ToString(config.ContainsKey("type") ? config["type"] : ""), "bar", StringComparison.OrdinalIgnoreCase)
+                    || widget.EffectiveDefinition == "chart3" || widget.EffectiveDefinition == "chart4";
+                var canvas = new Canvas { Height = 150, MinWidth = 240, HorizontalAlignment = HorizontalAlignment.Stretch };
+                canvas.SizeChanged += (s, e) => DrawChart(canvas, series, isBar, (int)widget.ConfigNumber("pointRadius", 2) > 0);
+                DrawChart(canvas, series, isBar, (int)widget.ConfigNumber("pointRadius", 2) > 0);
+                panel.Children.Add(canvas);
+                object namesRaw;
+                if (config.TryGetValue("series", out namesRaw))
                 {
-                    for (int n = 1; n <= 3; n++)
-                    {
-                        var token = point["y" + n];
-                        double number;
-                        if (token != null && Double.TryParse(Convert.ToString(token, CultureInfo.InvariantCulture), NumberStyles.Any, CultureInfo.InvariantCulture, out number))
-                        {
-                            while (series.Count < n) series.Add(new List<double>());
-                            series[n - 1].Add(number);
-                        }
-                    }
+                    var names = namesRaw as JArray;
+                    if (names != null && names.Count > 0)
+                        panel.Children.Add(Text(String.Join(" • ", names.Select(x => Convert.ToString(x))), 12, Muted, true));
                 }
-                foreach (var values in series)
-                {
-                    if (values.Count == 0) continue;
-                    var min = values.Min(); var max = values.Max();
-                    var range = Math.Max(0.0001, max - min);
-                    var bars = new StackPanel { Orientation = Orientation.Horizontal, Height = 72, VerticalAlignment = VerticalAlignment.Bottom };
-                    foreach (var value in TakeLastCompat(values, 60))
-                    {
-                        var bar = new Border { Background = Accent, Width = Math.Max(2, 260.0 / Math.Min(60, values.Count) - 2),
-                            Height = Math.Max(3, 68 * (value - min) / range + 3), VerticalAlignment = VerticalAlignment.Bottom,
-                            Margin = new Thickness(1, 0, 1, 0), CornerRadius = new CornerRadius(2) };
-                        bars.Children.Add(bar);
-                    }
-                    panel.Children.Add(bars);
-                }
-                panel.Children.Add(Text("Точек: " + status.Count, 12, Muted, false));
+                panel.Children.Add(Text("Точек: " + series.Max(v => v.Count), 12, Muted, false));
             }
             catch { panel.Children.Add(Text("Данные графика пока недоступны", 13, Muted, true)); }
             return panel;
+        }
+
+        private static void DrawChart(Canvas canvas, List<List<double>> series, bool bars, bool showPoints)
+        {
+            canvas.Children.Clear();
+            double width = Math.Max(240, canvas.ActualWidth);
+            const double height = 150, left = 8, top = 8, bottom = 18;
+            var all = series.SelectMany(v => v).ToList();
+            if (all.Count == 0) return;
+            double min = all.Min(), max = all.Max();
+            if (Math.Abs(max - min) < 0.000001) { max += 1; min -= 1; }
+            var palette = new[] { Accent, new SolidColorBrush(Color.FromArgb(255, 129, 199, 132)), new SolidColorBrush(Color.FromArgb(255, 255, 183, 77)) };
+            var baseline = new Line { X1 = left, X2 = width - 4, Y1 = height - bottom, Y2 = height - bottom, Stroke = Muted, StrokeThickness = 1, Opacity = 0.55 };
+            canvas.Children.Add(baseline);
+            for (int s = 0; s < series.Count; s++)
+            {
+                var values = series[s];
+                int count = values.Count;
+                double step = (width - left - 8) / Math.Max(1, count - 1);
+                if (bars)
+                {
+                    double barWidth = Math.Max(1.5, Math.Min(9, (width - left - 8) / Math.Max(1, count) - 1));
+                    for (int i = 0; i < count; i++)
+                    {
+                        double y = top + (max - values[i]) / (max - min) * (height - top - bottom);
+                        var bar = new Rectangle { Width = barWidth, Height = Math.Max(1, height - bottom - y), Fill = palette[s % palette.Length], Opacity = 0.85 };
+                        Canvas.SetLeft(bar, left + i * ((width - left - 8) / Math.Max(1, count)) );
+                        Canvas.SetTop(bar, y); canvas.Children.Add(bar);
+                    }
+                }
+                else
+                {
+                    var line = new Polyline { Stroke = palette[s % palette.Length], StrokeThickness = 2, StrokeLineJoin = PenLineJoin.Round };
+                    for (int i = 0; i < count; i++)
+                    {
+                        double x = left + i * step;
+                        double y = top + (max - values[i]) / (max - min) * (height - top - bottom);
+                        line.Points.Add(new Windows.Foundation.Point(x, y));
+                        if (showPoints && count <= 80)
+                        {
+                            var dot = new Ellipse { Width = 5, Height = 5, Fill = palette[s % palette.Length] };
+                            Canvas.SetLeft(dot, x - 2.5); Canvas.SetTop(dot, y - 2.5); canvas.Children.Add(dot);
+                        }
+                    }
+                    canvas.Children.Add(line);
+                }
+            }
+        }
+
+        private static UIElement RenderCircularGauge(double value, double max, bool fill, IDictionary<string, object> config)
+        {
+            var canvas = new Canvas { Width = 86, Height = 86 };
+            var track = new Ellipse { Width = 72, Height = 72, Stroke = new SolidColorBrush(Color.FromArgb(255, 75, 78, 88)), StrokeThickness = 7 };
+            Canvas.SetLeft(track, 7); Canvas.SetTop(track, 7); canvas.Children.Add(track);
+            double fraction = Math.Max(0, Math.Min(1, value / Math.Max(0.0001, max)));
+            double angle = fraction * 359.9;
+            double cx = 43, cy = 43, radius = 36;
+            double radians = (-90 + angle) * Math.PI / 180.0;
+            var end = new Windows.Foundation.Point(cx + radius * Math.Cos(radians), cy + radius * Math.Sin(radians));
+            var figure = new PathFigure { StartPoint = new Windows.Foundation.Point(cx, cy - radius), IsClosed = false };
+            figure.Segments.Add(new ArcSegment { Point = end, Size = new Windows.Foundation.Size(radius, radius), IsLargeArc = angle > 180, SweepDirection = SweepDirection.Clockwise });
+            var geometry = new PathGeometry(); geometry.Figures.Add(figure);
+            var arc = new Windows.UI.Xaml.Shapes.Path { Data = geometry, Stroke = Accent, StrokeThickness = 7, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round };
+            canvas.Children.Add(arc);
+            var valueText = Text(Format(value), 18, Primary, false);
+            valueText.Width = 86; valueText.TextAlignment = TextAlignment.Center;
+            Canvas.SetTop(valueText, 32); canvas.Children.Add(valueText);
+            return canvas;
         }
 
         private static TextBlock Text(string value, double size, Brush brush, bool wrap)
