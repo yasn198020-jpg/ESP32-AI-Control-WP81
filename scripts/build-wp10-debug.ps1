@@ -56,7 +56,7 @@ $identityVersionPattern = '(<Identity\b[^>]*\bVersion=")[^"]+(")'
 if (-not [regex]::IsMatch($manifestText, $identityVersionPattern)) {
     throw "Could not locate Identity Version in $manifestPath"
 }
-$buildManifestText = [regex]::Replace($manifestText, $identityVersionPattern, ('$1' + $nextVersion + '$2'), 1)
+$buildManifestText = [regex]::Replace($manifestText, $identityVersionPattern, ('1' + $nextVersion + '2'), 1)
 try {
     [System.IO.File]::WriteAllText($manifestPath, $buildManifestText, (New-Object System.Text.UTF8Encoding($false)))
     Write-Host "Temporarily setting manifest package version to $nextVersion" -ForegroundColor Cyan
