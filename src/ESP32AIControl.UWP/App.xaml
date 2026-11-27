@@ -1,0 +1,16 @@
+<Application
+    x:Class="ESP32AIControl.UWP.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Application.Resources>
+        <ResourceDictionary>
+            <SolidColorBrush x:Key="AppBackgroundBrush" Color="#FF202126"/>
+            <SolidColorBrush x:Key="PanelBrush" Color="#FF2B2D35"/>
+            <SolidColorBrush x:Key="CardBrush" Color="#FF30333C"/>
+            <SolidColorBrush x:Key="AccentBrush" Color="#FFD0BCFF"/>
+            <SolidColorBrush x:Key="PrimaryTextBrush" Color="#FFF1F0F7"/>
+            <SolidColorBrush x:Key="SecondaryTextBrush" Color="#FFACADB8"/>
+            <SolidColorBrush x:Key="DividerBrush" Color="#FF41434D"/>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>
