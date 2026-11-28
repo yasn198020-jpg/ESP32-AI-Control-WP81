@@ -92,7 +92,9 @@
                                    FontSize="14" Foreground="{StaticResource SecondaryTextBrush}"
                                    TextWrapping="Wrap"/>
                         <TextBlock x:Name="StatusText" Text="Ожидание конфигурации устройств."
-                                   Foreground="{StaticResource SecondaryTextBrush}" FontSize="13"/>
+                                   Foreground="{StaticResource SecondaryTextBrush}" FontSize="13" TextWrapping="Wrap" Margin="0,6,0,4"/>
+                        <ProgressBar x:Name="UpdateProgressBar" Minimum="0" Maximum="100" Value="0" Height="6" Visibility="Collapsed" Margin="0,8,0,2"/>
+                        <TextBlock x:Name="UpdateProgressText" Text="" Foreground="{StaticResource SecondaryTextBrush}" FontSize="12" TextWrapping="Wrap" Visibility="Collapsed"/>
                         <Button x:Name="UpdateDownloadButton" Content="Скачать и установить"
                                 Visibility="Collapsed" HorizontalAlignment="Left"
                                 Margin="0,12,0,0" Click="DownloadUpdate_Click"/>
