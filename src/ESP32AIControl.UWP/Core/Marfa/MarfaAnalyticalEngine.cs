@@ -315,7 +315,7 @@ namespace ESP32AIControl.UWP.Core.Marfa
         }
         private static string EntityName(EntityKind k) { return k == EntityKind.GENERIC ? "объект" : k.ToString().ToLowerInvariant(); }
 
-        private static IList<string> MatchingContextPages(string text, IList<MarfaDevice> devices, string desired)
+        private IList<string> MatchingContextPages(string text, IList<MarfaDevice> devices, string desired)
         {
             var command = ContextTokens(text, devices); if (command.Count == 0) return new List<string>();
             var ranked = new List<Tuple<string,int>>();
