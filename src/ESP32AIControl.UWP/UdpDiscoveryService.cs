@@ -32,6 +32,7 @@ namespace ESP32AIControl.UWP
             new Dictionary<string, UdpDiscoveredDevice>(StringComparer.OrdinalIgnoreCase);
         private DatagramSocket _socket;
         private bool _disposed;
+        private DateTimeOffset _lastSnapshotPersistAt = DateTimeOffset.MinValue;
 
         public event Action<IList<UdpDiscoveredDevice>> DevicesChanged;
         public event Action<string> Diagnostic;
@@ -151,8 +152,14 @@ namespace ESP32AIControl.UWP
                 Status = ReadString(json, "status"), FirmwareVersion = ReadString(json, "fv"),
                 LastSeenAt = DateTimeOffset.UtcNow
             };
-            lock (_sync) _devices[ip] = device;
-            PublishSnapshot(false);
+            bool persist;
+            lock (_sync)
+            {
+                _devices[ip] = device;
+                persist = DateTimeOffset.UtcNow - _lastSnapshotPersistAt >= TimeSpan.FromSeconds(10);
+                if (persist) _lastSnapshotPersistAt = DateTimeOffset.UtcNow;
+            }
+            PublishSnapshot(persist);
             RaiseDiagnostic("Найдено устройство: " + (String.IsNullOrWhiteSpace(device.Name) ? device.Id : device.Name) + " · " + ip);
         }
 
