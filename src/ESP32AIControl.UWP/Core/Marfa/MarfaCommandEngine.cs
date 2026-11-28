@@ -147,8 +147,10 @@ namespace ESP32AIControl.UWP.Core.Marfa
             }
 
             if (LooksLikeSmartRule(text))
-                return Result(LocalCommandAction.CLARIFY,
-                    "Я распознала условный сценарий, но его редактор ещё не подключён в этой версии. Пока не буду создавать или запускать правило.");
+            {
+                var smartRule = ParseSmartRule(text, devices);
+                if (smartRule != null) return Remember(smartRule, text);
+            }
 
             if (IsValueQuestion(text))
             {
@@ -326,6 +328,61 @@ namespace ESP32AIControl.UWP.Core.Marfa
             var set = Regex.Match(text, @"(?:установи|установить|поставь|поставить|задай|задать|назначь)\s+(-?\d+(?:[.,]\d+)?)");
             if (set.Success) return new ActionSpec { Value = set.Groups[1].Value.Replace(',', '.'), Reply = "Устанавливаю " + set.Groups[1].Value, Infinitive = "установить значение" };
             return null;
+        }
+
+        private LocalCommandResult ParseSmartRule(string text, IList<MarfaDevice> devices)
+        {
+            var thresholdMatch = Regex.Match(text,
+                @"(?:выше|больше|превысит|достигнет|ниже|меньше|опустится)\\s+(-?\\d+(?:[.,]\\d+)?)");
+            if (!thresholdMatch.Success)
+                return Result(LocalCommandAction.CLARIFY, "Укажите порог условия, например: «если температура выше 25 градусов, открой форточку».");
+
+            double threshold;
+            if (!Double.TryParse(thresholdMatch.Groups[1].Value.Replace(',', '.'),
+                NumberStyles.Number, CultureInfo.InvariantCulture, out threshold))
+                return Result(LocalCommandAction.CLARIFY, "Не удалось разобрать числовой порог условия.");
+
+            string operatorText = ContainsAny(thresholdMatch.Value, "ниже", "меньше", "опустится") ? "<" : ">";
+            var action = DetectAction(text);
+            if (action == null)
+                return Result(LocalCommandAction.CLARIFY, "Укажите действие после условия: что Марфа должна включить, выключить, открыть или закрыть?");
+
+            string sensorText = text.Substring(0, thresholdMatch.Index);
+            var sensorResolution = analytical.ResolveSensor(sensorText, devices);
+            if (sensorResolution.Candidate == null)
+                return Result(LocalCommandAction.CLARIFY,
+                    sensorResolution.Clarification ?? "Уточните датчик, по которому проверять условие.");
+
+            string targetText = (sensorText + " " +
+                text.Substring(thresholdMatch.Index + thresholdMatch.Length)).Trim();
+            var targetResolution = analytical.ResolveControl(targetText, devices, action.Value);
+            if (targetResolution.Candidate == null)
+                return Result(LocalCommandAction.CLARIFY,
+                    targetResolution.Clarification ?? "Уточните устройство, которым управлять при выполнении условия.");
+
+            var sensor = sensorResolution.Candidate;
+            var target = targetResolution.Candidate;
+            var item = new LocalCommandActionItem
+            {
+                DeviceId = target.Device.Id, WidgetId = target.Widget.Id, Value = action.Value
+            };
+            var plan = new ScenarioCommandPlan { Actions = new List<LocalCommandActionItem> { item } };
+            return new LocalCommandResult
+            {
+                Action = LocalCommandAction.SMART_RULE,
+                Reply = "Поняла правило: если " + (sensor.Widget.Title ?? sensor.Widget.Id) + " " +
+                    operatorText + " " + threshold.ToString(CultureInfo.InvariantCulture) + ", " +
+                    action.Infinitive + " " + (target.Widget.Title ?? target.Widget.Id),
+                ConditionDeviceId = sensor.Device.Id,
+                ConditionWidgetId = sensor.Widget.Id,
+                ConditionOperator = operatorText,
+                ConditionThreshold = threshold,
+                ActionDeviceId = target.Device.Id,
+                ActionWidgetId = target.Widget.Id,
+                ActionValue = action.Value,
+                ActionItems = new List<LocalCommandActionItem> { item },
+                ScenarioPlan = plan
+            };
         }
 
         private static bool IsValueQuestion(string text)
