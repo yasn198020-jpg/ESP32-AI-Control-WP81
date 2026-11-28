@@ -436,13 +436,20 @@ namespace ESP32AIControl.UWP
                         if (String.IsNullOrWhiteSpace(widgetId)) return;
                         var widget = device.Widgets.FirstOrDefault(x => x.Id == widgetId);
                         if (widget == null) { widget = new WidgetModel { Id = widgetId }; device.Widgets.Add(widget); }
+                        string widgetType = (string)json["widget"] ?? "status";
+                        string normalizedType = widgetType.Trim().ToLowerInvariant();
                         widget.Title = (string)json["descr"] ?? (string)json["label"] ?? (string)json["name"] ?? widgetId;
-                        widget.Type = (string)json["widget"] ?? "status";
-                        widget.DefinitionName = widget.Type;
+                        widget.Type = normalizedType == "toggle" ? "TOGGLE" :
+                            (normalizedType == "button" || normalizedType == "vbtn" || normalizedType == "btn") ? "BUTTON" :
+                            (normalizedType.StartsWith("input") || new[] { "text", "number", "slider", "range", "rangeservo", "select" }.Contains(normalizedType)) ? "INPUT" :
+                            (normalizedType.StartsWith("anydata") || normalizedType.StartsWith("chart") ||
+                             new[] { "value", "fillgauge", "progressline", "progress-line", "progressround", "progress-round" }.Contains(normalizedType)) ? "VALUE" : "STATUS";
+                        widget.DefinitionName = ((string)json["name"] ?? widgetType).Trim();
+                        if (widget.DefinitionName.Length == 0) widget.DefinitionName = widgetType;
                         widget.Page = (string)json["page"] ?? "";
                         widget.Order = (int?)json["order"] ?? 0;
                         widget.ConfigJson = json.ToString(Formatting.None);
-                        widget.Unit = (string)json["unit"] ?? "";
+                        widget.Unit = ((string)json["after"] ?? "").Trim();
                     }
                     else if ((leaf == "status" || leaf == "event") && parts.Length >= 3)
                     {
