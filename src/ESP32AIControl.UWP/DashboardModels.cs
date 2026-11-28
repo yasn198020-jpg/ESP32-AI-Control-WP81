@@ -134,7 +134,7 @@ namespace ESP32AIControl.UWP
         private ushort _packetId;
         private readonly Dictionary<string, long> _lastDeviceMessageAt =
             new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, Tuple<string, long>> _lastStatusEvents =
+        private readonly Dictionary<string, Tuple<string, long, string>> _lastStatusEvents =
             new Dictionary<string, Tuple<string, long>>(StringComparer.OrdinalIgnoreCase);
         private Task _runTask = Task.CompletedTask;
         private bool _connected;
@@ -505,7 +505,7 @@ namespace ESP32AIControl.UWP
                         if (leaf == "event")
                         {
                             string eventKey = deviceId + "/" + widgetId;
-                            Tuple<string, long> previous;
+                            Tuple<string, long, string> previous;
                             long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                             if (_lastStatusEvents.TryGetValue(eventKey, out previous) &&
                                 previous.Item1 == "status" && previous.Item2 <= now &&
