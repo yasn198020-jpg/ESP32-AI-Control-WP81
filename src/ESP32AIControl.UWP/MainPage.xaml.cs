@@ -237,12 +237,15 @@ namespace ESP32AIControl.UWP
                 PlaceholderText = "Пароль Device Portal"
             };
 
-            var fields = new StackPanel { Spacing = 8 };
-            fields.Children.Add(new TextBlock { Text = "Адрес Lumia (HTTPS)" });
+            var fields = new StackPanel();
+            var addressLabel = new TextBlock { Text = "Адрес Lumia (HTTPS)", Margin = new Thickness(0, 0, 0, 4) };
+            var userLabel = new TextBlock { Text = "Логин Device Portal", Margin = new Thickness(0, 12, 0, 4) };
+            var passwordLabel = new TextBlock { Text = "Пароль Device Portal", Margin = new Thickness(0, 12, 0, 4) };
+            fields.Children.Add(addressLabel);
             fields.Children.Add(addressBox);
-            fields.Children.Add(new TextBlock { Text = "Логин Device Portal" });
+            fields.Children.Add(userLabel);
             fields.Children.Add(userBox);
-            fields.Children.Add(new TextBlock { Text = "Пароль Device Portal" });
+            fields.Children.Add(passwordLabel);
             fields.Children.Add(passwordBox);
             fields.Children.Add(new TextBlock
             {
