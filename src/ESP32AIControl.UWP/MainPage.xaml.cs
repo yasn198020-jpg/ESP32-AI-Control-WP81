@@ -2,14 +2,16 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Diagnostics;
-using System.Threading.Tasks;\nusing System.Text;
+using System.Threading.Tasks;
+using System.Text;
 using Windows.UI;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Media;
 using Windows.Storage;
 using Windows.UI.Core;
-using Windows.Media.SpeechRecognition;\nusing Windows.UI.Xaml.Shapes;
+using Windows.Media.SpeechRecognition;
+using Windows.UI.Xaml.Shapes;
 
 namespace ESP32AIControl.UWP
 {
