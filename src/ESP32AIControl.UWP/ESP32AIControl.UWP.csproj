@@ -53,6 +53,7 @@
     <Compile Include="MainPage.xaml.cs"><DependentUpon>MainPage.xaml</DependentUpon></Compile>
     <Compile Include="DashboardModels.cs" />
     <Compile Include="UdpDiscoveryService.cs" />
+    <Compile Include="AppDiagnosticsStore.cs" />
     <Compile Include="DashboardRenderer.cs" />
     <Compile Include="DeviceCommandRequestedEventArgs.cs" />
     <Compile Include="UpdateService.cs" />
