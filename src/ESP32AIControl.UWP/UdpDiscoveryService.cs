@@ -93,6 +93,15 @@ namespace ESP32AIControl.UWP
             RaiseDiagnostic("UDP discovery остановлен");
         }
 
+        public void Clear()
+        {
+            lock (_sync) _devices.Clear();
+            SaveSnapshot(new List<UdpDiscoveredDevice>());
+            var handler = DevicesChanged;
+            if (handler != null) handler(new List<UdpDiscoveredDevice>());
+            RaiseDiagnostic("Список обнаруженных UDP-устройств очищен");
+        }
+
         public void PruneExpired()
         {
             bool changed = false;
