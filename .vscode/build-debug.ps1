@@ -1,3 +1,8 @@
+param(
+    [ValidateSet('Debug', 'Release')]
+    [string]$BuildConfiguration = 'Debug'
+)
+
 $ErrorActionPreference = 'Stop'
 $solution = Join-Path $PSScriptRoot '..\ESP32-AI-Control-WP81.sln'
 
@@ -55,6 +60,6 @@ if (-not $msbuild) {
 }
 
 Write-Host "Using MSBuild: $msbuild"
-& $msbuild $solution /m /t:Build /p:Configuration=Debug /p:Platform=ARM /verbosity:minimal
+& $msbuild $solution /m /t:Build "/p:Configuration=$BuildConfiguration" /p:Platform=ARM /verbosity:minimal
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-Write-Host 'WP8.1 Debug ARM build completed successfully.'
+Write-Host "WP8.1 $BuildConfiguration ARM build completed successfully."
