@@ -140,7 +140,7 @@ namespace ESP32AIControl.UWP
                 var packageUri = new Uri(packagePath, UriKind.Absolute);
                 packageUriText = packageUri.AbsoluteUri;
 
-                if (!packageUri.IsAbsoluteUri || packageUri.Scheme != Uri.UriSchemeFile)
+                if (!packageUri.IsAbsoluteUri || !string.Equals(packageUri.Scheme, "file", StringComparison.OrdinalIgnoreCase))
                     throw new InvalidDataException("Для локального пакета ожидался абсолютный file:// URI.");
 
                 Debug.WriteLine("OTA install preflight: path=" + packagePath +
