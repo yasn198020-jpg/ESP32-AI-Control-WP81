@@ -123,6 +123,7 @@ namespace ESP32AIControl.UWP
         private readonly Dictionary<string, DeviceModel> _devices =
             new Dictionary<string, DeviceModel>(StringComparer.OrdinalIgnoreCase);
         private ushort _packetId;
+        private Task _runTask = Task.CompletedTask;
         private bool _connected;
         private bool _disposed;
 
@@ -139,7 +140,9 @@ namespace ESP32AIControl.UWP
             if (String.IsNullOrWhiteSpace(settings.Prefix)) throw new ArgumentException("Не указан MQTT prefix.");
             if (settings.Port < 1 || settings.Port > 65535) throw new ArgumentOutOfRangeException("Port");
 
+            var previousRun = _runTask;
             Stop();
+            try { await previousRun; } catch { }
             string cleanHost = settings.Host.Trim();
             bool tls = settings.UseTls;
             if (cleanHost.StartsWith("mqtts://", StringComparison.OrdinalIgnoreCase)) { cleanHost = cleanHost.Substring(8); tls = true; }
@@ -154,7 +157,7 @@ namespace ESP32AIControl.UWP
             };
             _lifetime = new CancellationTokenSource();
             var token = _lifetime.Token;
-            Task.Run(() => ConnectionLoopAsync(token));
+            _runTask = Task.Run(() => ConnectionLoopAsync(token));
         }
 
         public void Stop()
