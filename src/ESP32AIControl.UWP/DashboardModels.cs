@@ -289,8 +289,14 @@ namespace ESP32AIControl.UWP
                     using (var session = CancellationTokenSource.CreateLinkedTokenSource(token))
                     {
                         var keepAlive = KeepAliveLoopAsync(session.Token);
+                        var helloWatchdog = PeriodicHelloLoopAsync(session.Token);
                         try { await ReadLoopAsync(session.Token); }
-                        finally { session.Cancel(); try { await keepAlive; } catch { } }
+                        finally
+                        {
+                            session.Cancel();
+                            try { await keepAlive; } catch { }
+                            try { await helloWatchdog; } catch { }
+                        }
                     }
                 }
                 catch (OperationCanceledException) { break; }
@@ -365,6 +371,16 @@ namespace ESP32AIControl.UWP
             {
                 await Task.Delay(25000, token);
                 await SendPacketAsync(0xC0, new byte[0], token);
+            }
+        }
+
+        private async Task PeriodicHelloLoopAsync(CancellationToken token)
+        {
+            while (!token.IsCancellationRequested)
+            {
+                await Task.Delay(TimeSpan.FromHours(2), token);
+                if (!token.IsCancellationRequested && IsConnected)
+                    await PublishAsync("/" + _settings.Prefix, "HELLO");
             }
         }
 
@@ -464,6 +480,7 @@ namespace ESP32AIControl.UWP
                     device = new DeviceModel { Id = deviceId, Name = deviceId, Online = true };
                     _devices.Add(deviceId, device);
                 }
+                bool wasOnline = device.Online;
                 device.Online = true;
                 _lastDeviceMessageAt[deviceId] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                 string leaf = parts[parts.Length - 1];
@@ -539,6 +556,7 @@ namespace ESP32AIControl.UWP
                         device.Online = !String.Equals(state, "offline", StringComparison.OrdinalIgnoreCase);
                         if (!device.Online)
                         {
+                            device.Online = wasOnline;
                             // Retained Last-Will messages can be stale after a broker restart.
                             // Give the device 60 seconds to produce fresh traffic before
                             // accepting the offline state.
