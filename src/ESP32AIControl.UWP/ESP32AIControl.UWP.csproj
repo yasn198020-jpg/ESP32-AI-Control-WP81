@@ -64,6 +64,7 @@
     <Compile Include="Core\Marfa\MarfaMultiCommandSplitter.cs" />
     <Compile Include="Core\Marfa\TrainedCommandMatcher.cs" />
     <Compile Include="Core\Marfa\MarfaSpeechTextFormatter.cs" />
+    <Compile Include="Core\Marfa\MarfaClarificationResolver.cs" />
     <ApplicationDefinition Include="App.xaml"><Generator>MSBuild:Compile</Generator><SubType>Designer</SubType></ApplicationDefinition>
     <Page Include="MainPage.xaml"><Generator>MSBuild:Compile</Generator><SubType>Designer</SubType></Page>
     <AppxManifest Include="Package.appxmanifest"><SubType>Designer</SubType></AppxManifest>
