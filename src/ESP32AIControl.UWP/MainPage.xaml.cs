@@ -22,6 +22,9 @@ namespace ESP32AIControl.UWP
         private DashboardRenderer _dashboardRenderer;
         private UpdateManifest _pendingUpdateManifest;
         private readonly MqttDeviceService _mqtt = new MqttDeviceService();\n        private readonly HistoryStore _historyStore = new HistoryStore();
+        private readonly DelayedCommandStore _delayedCommandStore = new DelayedCommandStore();
+        private readonly DispatcherTimer _delayedCommandTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        private bool _delayedCommandTickRunning;
 
         public event EventHandler<DeviceCommandRequestedEventArgs> DeviceCommandRequested;
 
@@ -61,6 +64,8 @@ namespace ESP32AIControl.UWP
             ShowDashboard();
             UpdateNavigation(HomeNav);
             TryRestoreMqttConnection();
+            _delayedCommandTimer.Tick += DelayedCommandTimer_Tick;
+            _delayedCommandTimer.Start();
             SizeChanged += MainPage_SizeChanged;
         }
 
@@ -835,8 +840,139 @@ namespace ESP32AIControl.UWP
 
         private void Pending_Click(object sender, RoutedEventArgs e)
         {
-            SetSection("Отложенные", "Отложенные команды", "Список запланированных команд и их статусы.");
+            SetSection("Отложенные", "Отложенные команды", "Запланируйте действие устройства на более позднее время.");
             UpdateNavigation(PendingNav);
+            ShowPendingCommands();
+        }
+
+        private void ShowPendingCommands()
+        {
+            DashboardHost.Visibility = Visibility.Visible;
+            DashboardHost.Children.Clear();
+            var root = new StackPanel { Margin = new Thickness(0, 10, 0, 0), Spacing = 8 };
+            var devicePicker = new ComboBox { Header = "Устройство", MinWidth = 240 };
+            var widgetPicker = new ComboBox { Header = "Элемент управления", MinWidth = 240 };
+            var valueBox = new TextBox { Header = "Значение команды", PlaceholderText = "Например: 1, 0 или 23.5" };
+            var delayBox = new TextBox { Header = "Выполнить через (минут)", Text = "5", InputScope = new Windows.UI.Xaml.Input.InputScope { Names = { new Windows.UI.Xaml.Input.InputScopeName { Name = Windows.UI.Xaml.Input.InputScopeNameValue.Number } } } };
+            var info = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = new SolidColorBrush(Color.FromArgb(255, 170, 175, 190)) };
+            var listPanel = new StackPanel { Spacing = 8 };
+            var addButton = new Button { Content = "Запланировать команду", HorizontalAlignment = HorizontalAlignment.Stretch };
+            var devices = _dashboardSnapshot.Devices.ToList();
+            foreach (var device in devices)
+                devicePicker.Items.Add(new ComboBoxItem { Content = String.IsNullOrWhiteSpace(device.Name) ? device.Id : device.Name, Tag = device.Id });
+            Action refreshWidgets = () =>
+            {
+                widgetPicker.Items.Clear();
+                var selectedDevice = devicePicker.SelectedItem as ComboBoxItem;
+                var device = selectedDevice == null ? null : devices.FirstOrDefault(x => x.Id == Convert.ToString(selectedDevice.Tag));
+                if (device == null) return;
+                foreach (var widget in device.Widgets.Where(x => x.Type == "TOGGLE" || x.Type == "BUTTON" || x.Type == "INPUT"))
+                    widgetPicker.Items.Add(new ComboBoxItem { Content = String.IsNullOrWhiteSpace(widget.Title) ? widget.Id : widget.Title, Tag = widget.Id });
+                if (widgetPicker.Items.Count > 0) widgetPicker.SelectedIndex = 0;
+            };
+            devicePicker.SelectionChanged += (s, e) => refreshWidgets();
+            if (devicePicker.Items.Count > 0) devicePicker.SelectedIndex = 0;
+            refreshWidgets();
+            addButton.Click += (s, e) =>
+            {
+                var selectedDevice = devicePicker.SelectedItem as ComboBoxItem;
+                var selectedWidget = widgetPicker.SelectedItem as ComboBoxItem;
+                int minutes;
+                if (selectedDevice == null || selectedWidget == null)
+                {
+                    info.Text = "Сначала выберите устройство и элемент управления.";
+                    return;
+                }
+                if (!Int32.TryParse(delayBox.Text, out minutes) || minutes < 1 || minutes > 525600)
+                {
+                    info.Text = "Укажите задержку от 1 минуты до 365 дней.";
+                    return;
+                }
+                if (String.IsNullOrWhiteSpace(valueBox.Text))
+                {
+                    info.Text = "Введите значение, которое нужно отправить устройству.";
+                    return;
+                }
+                string deviceId = Convert.ToString(selectedDevice.Tag);
+                string widgetId = Convert.ToString(selectedWidget.Tag);
+                var device = devices.First(x => x.Id == deviceId);
+                var widget = device.Widgets.First(x => x.Id == widgetId);
+                long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                _delayedCommandStore.Add(new DelayedDeviceCommand {
+                    Id = Guid.NewGuid().ToString("N"), DeviceId = deviceId,
+                    DeviceName = device.Name, WidgetId = widgetId, WidgetName = widget.Title,
+                    Value = valueBox.Text.Trim(), CreatedAtUnixMs = now,
+                    ExecuteAtUnixMs = now + (long)minutes * 60L * 1000L
+                });
+                valueBox.Text = "";
+                info.Text = "Команда сохранена. Она будет отправлена в назначенное время, когда приложение активно и MQTT подключён.";
+                RefreshPendingCommandList(listPanel);
+            };
+            root.Children.Add(new TextBlock { Text = "Создание отложенной команды", FontSize = 20, FontWeight = Windows.UI.Text.FontWeights.SemiBold });
+            root.Children.Add(devicePicker);
+            root.Children.Add(widgetPicker);
+            root.Children.Add(valueBox);
+            root.Children.Add(delayBox);
+            root.Children.Add(addButton);
+            root.Children.Add(info);
+            root.Children.Add(new TextBlock { Text = "Очередь команд", FontSize = 20, Margin = new Thickness(0, 18, 0, 4), FontWeight = Windows.UI.Text.FontWeights.SemiBold });
+            root.Children.Add(listPanel);
+            DashboardHost.Children.Add(new ScrollViewer { Content = root, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+            RefreshPendingCommandList(listPanel);
+        }
+
+        private void RefreshPendingCommandList(Panel panel)
+        {
+            panel.Children.Clear();
+            var commands = _delayedCommandStore.GetAll();
+            if (commands.Count == 0)
+            {
+                panel.Children.Add(new TextBlock { Text = "Отложенных команд пока нет.", Margin = new Thickness(0, 8, 0, 8) });
+                return;
+            }
+            foreach (var command in commands)
+            {
+                var card = new StackPanel { Margin = new Thickness(0, 6, 0, 10), Padding = new Thickness(12), Background = new SolidColorBrush(Color.FromArgb(255, 42, 44, 54)) };
+                long remaining = Math.Max(0, command.ExecuteAtUnixMs - DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+                string when = DateTimeOffset.FromUnixTimeMilliseconds(command.ExecuteAtUnixMs).ToLocalTime().ToString("dd.MM.yyyy HH:mm");
+                string countdown = remaining <= 0 ? "Ожидает отправки" : "Осталось: " + TimeSpan.FromMilliseconds(remaining).ToString(@"d\.hh\:mm\:ss");
+                card.Children.Add(new TextBlock { Text = command.CommandText(), FontSize = 17, TextWrapping = TextWrapping.Wrap });
+                card.Children.Add(new TextBlock { Text = "Выполнение: " + when });
+                card.Children.Add(new TextBlock { Text = countdown, Foreground = new SolidColorBrush(Color.FromArgb(255, 190, 190, 205)) });
+                var cancel = new Button { Content = "Отменить", Tag = command.Id, HorizontalAlignment = HorizontalAlignment.Left };
+                cancel.Click += (s, e) =>
+                {
+                    _delayedCommandStore.Remove(Convert.ToString(((Button)s).Tag));
+                    RefreshPendingCommandList(panel);
+                };
+                card.Children.Add(cancel);
+                panel.Children.Add(card);
+            }
+        }
+
+        private async void DelayedCommandTimer_Tick(object sender, object e)
+        {
+            if (_delayedCommandTickRunning) return;
+            _delayedCommandTickRunning = true;
+            try
+            {
+                foreach (var command in _delayedCommandStore.GetAll().Where(x => x.ExecuteAtUnixMs <= DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()).ToList())
+                {
+                    if (!_mqtt.IsConnected) break;
+                    bool sent = await _mqtt.SendControlAsync(command.DeviceId, command.WidgetId, command.Value);
+                    if (sent) _delayedCommandStore.Remove(command.Id);
+                    else break;
+                }
+                if (PageTitle.Text == "Отложенные")
+                {
+                    var scroll = DashboardHost.Children.OfType<ScrollViewer>().FirstOrDefault();
+                    var root = scroll == null ? null : scroll.Content as StackPanel;
+                    var list = root == null ? null : root.Children.OfType<StackPanel>().LastOrDefault();
+                    if (list != null) RefreshPendingCommandList(list);
+                }
+            }
+            catch (Exception ex) { StatusText.Text = "Ошибка очереди отложенных команд: " + ex.Message; }
+            finally { _delayedCommandTickRunning = false; }
         }
 
         private void Scenarios_Click(object sender, RoutedEventArgs e) { SetSection("Сценарии", "Сценарии", "Перенос сценариев будет выполнен отдельным этапом."); }
