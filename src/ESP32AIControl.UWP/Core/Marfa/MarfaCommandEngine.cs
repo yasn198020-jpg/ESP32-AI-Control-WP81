@@ -88,6 +88,11 @@ namespace ESP32AIControl.UWP.Core.Marfa
             var pendingResult = ResolvePending(text, devices);
             if (pendingResult != null) return Remember(pendingResult, text);
 
+            // Follow-up pronouns and short time phrases must be resolved against
+            // the remembered dialog target before trying a fresh semantic search.
+            var followUp = ParseFollowUp(text, devices);
+            if (followUp != null) return Remember(followUp, text);
+
             ActionSpec action = DetectAction(text);
             long delay = ParseTime(text);
             if (action != null)
@@ -168,8 +173,6 @@ namespace ESP32AIControl.UWP.Core.Marfa
                 }, text);
             }
 
-            var followUp = ParseFollowUp(text, devices);
-            if (followUp != null) return Remember(followUp, text);
             return Remember(Result(LocalCommandAction.NOT_FOUND,
                 "Не поняла. Скажите, например: «открой форточку», «выключи насос через 20 минут», «какая температура?», «закрой её»."),
                 text);
