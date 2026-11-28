@@ -546,6 +546,38 @@ namespace ESP32AIControl.UWP
                 return;
             }
 
+            if (parsed.DelayMs > 0)
+            {
+                long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                int queued = 0;
+                foreach (var action in parsed.ActionItems)
+                {
+                    var target = _dashboardSnapshot.Devices.FirstOrDefault(x => x.Id == action.DeviceId);
+                    var targetWidget = target == null ? null : target.Widgets.FirstOrDefault(x => x.Id == action.WidgetId);
+                    if (target == null || targetWidget == null)
+                    {
+                        output.Text += "\nНе найдено устройство или элемент " + action.WidgetId + ". Остальные команды не поставлены в очередь.";
+                        break;
+                    }
+                    _delayedCommandStore.Add(new DelayedDeviceCommand
+                    {
+                        Id = Guid.NewGuid().ToString("N"),
+                        DeviceId = action.DeviceId,
+                        DeviceName = target.Name ?? "",
+                        WidgetId = action.WidgetId,
+                        WidgetName = targetWidget.Title ?? action.WidgetId,
+                        Value = action.Value,
+                        CreatedAtUnixMs = now,
+                        ExecuteAtUnixMs = now + parsed.DelayMs
+                    });
+                    queued++;
+                }
+                if (queued > 0)
+                    output.Text += "\nВ очередь поставлено: " + queued + " из " + parsed.ActionItems.Count +
+                        ". Выполнение: " + DateTimeOffset.FromUnixTimeMilliseconds(now + parsed.DelayMs).ToLocalTime().ToString("g") + ".";
+                return;
+            }
+
             int sentCount = 0;
             foreach (var action in parsed.ActionItems)
             {
