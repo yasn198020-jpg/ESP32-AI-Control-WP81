@@ -25,6 +25,7 @@
     </Page.Resources>
 
     <Grid>
+        <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="56"/>
             <RowDefinition Height="*"/>
@@ -148,4 +149,5 @@
                 </ScrollViewer>
             </Border>
         </Grid>
+    </Grid>
 </Page>
