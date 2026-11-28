@@ -93,7 +93,7 @@
                                    TextWrapping="Wrap"/>
                         <TextBlock x:Name="StatusText" Text="Ожидание конфигурации устройств."
                                    Foreground="{StaticResource SecondaryTextBrush}" FontSize="13"/>
-                        <Button x:Name="UpdateDownloadButton" Content="Скачать обновление"
+                        <Button x:Name="UpdateDownloadButton" Content="Скачать и установить"
                                 Visibility="Collapsed" HorizontalAlignment="Left"
                                 Margin="0,12,0,0" Click="DownloadUpdate_Click"/>
                         <StackPanel x:Name="DashboardHost"/>
