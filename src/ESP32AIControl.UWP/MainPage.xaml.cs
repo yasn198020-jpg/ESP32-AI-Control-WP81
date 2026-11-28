@@ -12,6 +12,7 @@ using Windows.UI.Xaml.Media;
 using Windows.Storage;
 using Windows.UI.Core;
 using Windows.Media.SpeechRecognition;
+using ESP32AIControl.UWP.Core.Marfa;
 using Windows.UI.Xaml.Shapes;
 using Windows.UI.Notifications;
 
@@ -31,6 +32,7 @@ namespace ESP32AIControl.UWP
         private readonly HistoryStore _historyStore = new HistoryStore();
         private readonly DelayedCommandStore _delayedCommandStore = new DelayedCommandStore();
         private readonly ScenarioAutomationStore _scenarioStore = new ScenarioAutomationStore();
+        private readonly MarfaCommandEngine _marfaCommandEngine = new MarfaCommandEngine();
         private readonly DispatcherTimer _delayedCommandTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         private bool _delayedCommandTickRunning;
         private bool _isSuspended;
@@ -434,7 +436,7 @@ namespace ESP32AIControl.UWP
 
             var root = new StackPanel { Margin = new Thickness(0, 10, 0, 0) };
             root.Children.Add(new TextBlock { Text = "Марфа", FontSize = 24, FontWeight = Windows.UI.Text.FontWeights.SemiBold });
-            root.Children.Add(new TextBlock { Text = "Нажмите кнопку и произнесите одну из сохранённых фраз. Для распознавания требуется установленный русский речевой пакет Windows.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 12) });
+            root.Children.Add(new TextBlock { Text = "Нажмите кнопку и произнесите команду обычным языком. Марфа анализирует текущую конфигурацию MQTT. Для распознавания требуется русский речевой пакет Windows.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 12) });
             var recognized = new TextBlock { Text = "Ожидание команды…", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 8) };
             var listen = new Button { Content = "🎙 Слушать команду", HorizontalAlignment = HorizontalAlignment.Stretch, MinHeight = 48 };
             listen.Click += async (s, a) =>
@@ -490,6 +492,81 @@ namespace ESP32AIControl.UWP
             DashboardHost.Children.Add(new ScrollViewer { Content = root, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
         }
 
+        private IList<MarfaDevice> BuildMarfaDeviceSnapshot()
+        {
+            var result = new List<MarfaDevice>();
+            foreach (var source in _dashboardSnapshot.Devices)
+            {
+                var device = new MarfaDevice { Id = source.Id, Name = source.Name, Online = source.Online };
+                foreach (var item in source.Widgets)
+                {
+                    MarfaWidgetType type;
+                    if (!Enum.TryParse(item.Type ?? "", true, out type)) type = MarfaWidgetType.VALUE;
+                    device.Widgets.Add(new MarfaWidgetState
+                    {
+                        Id = item.Id, Title = item.Title, Type = type, Value = item.Value,
+                        Unit = item.Unit, Page = item.Page, Order = item.Order,
+                        DefinitionName = item.DefinitionName, ConfigJson = item.ConfigJson,
+                        LastUpdated = item.LastUpdatedUnixMs
+                    });
+                }
+                result.Add(device);
+            }
+            return result;
+        }
+
+        private async Task ExecuteNaturalMarfaCommandAsync(string recognizedText, TextBlock output)
+        {
+            var parsed = _marfaCommandEngine.Parse(recognizedText, BuildMarfaDeviceSnapshot());
+            output.Text += "\n" + parsed.Reply;
+
+            if (parsed.Action == LocalCommandAction.READ_VALUE)
+            {
+                var device = _dashboardSnapshot.Devices.FirstOrDefault(x => x.Id == parsed.DeviceId);
+                var widget = device == null ? null : device.Widgets.FirstOrDefault(x => x.Id == parsed.WidgetId);
+                if (widget != null)
+                    output.Text += "\nТекущее значение: " + widget.Value + (String.IsNullOrWhiteSpace(widget.Unit) ? "" : " " + widget.Unit);
+                return;
+            }
+            if (parsed.Action != LocalCommandAction.CONTROL || parsed.ActionItems == null || parsed.ActionItems.Count == 0)
+                return;
+
+            var confirmation = new ContentDialog
+            {
+                Title = "Подтвердить команду Марфы",
+                Content = parsed.Reply + "\n\nБудут отправлены команды: " + parsed.ActionItems.Count,
+                PrimaryButtonText = "Выполнить",
+                CloseButtonText = "Отмена"
+            };
+            var choice = await confirmation.ShowAsync();
+            if (choice != ContentDialogResult.Primary)
+            {
+                _marfaCommandEngine.ClearDialogContext();
+                output.Text += "\nКоманда отменена.";
+                return;
+            }
+
+            int sentCount = 0;
+            foreach (var action in parsed.ActionItems)
+            {
+                var target = _dashboardSnapshot.Devices.FirstOrDefault(x => x.Id == action.DeviceId);
+                var targetWidget = target == null ? null : target.Widgets.FirstOrDefault(x => x.Id == action.WidgetId);
+                if (target == null || targetWidget == null)
+                {
+                    output.Text += "\nНе найдено устройство или элемент " + action.WidgetId + ". Остальные команды остановлены.";
+                    break;
+                }
+                bool sent = await _mqtt.SendControlAsync(action.DeviceId, action.WidgetId, action.Value);
+                if (!sent)
+                {
+                    output.Text += "\nMQTT не отправил команду. Проверьте соединение.";
+                    break;
+                }
+                sentCount++;
+            }
+            if (sentCount > 0) output.Text += "\nОтправлено команд: " + sentCount + " из " + parsed.ActionItems.Count + ". Ожидаю подтверждения ESP32.";
+        }
+
         private static string NormalizeVoicePhrase(string value)
         {
             if (String.IsNullOrWhiteSpace(value)) return "";
@@ -508,7 +585,7 @@ namespace ESP32AIControl.UWP
 
             if (matches.Count == 0)
             {
-                output.Text += "\nКоманда не найдена. Добавьте эту фразу или её вариант в разделе «Команды».";
+                await ExecuteNaturalMarfaCommandAsync(recognizedText, output);
                 return;
             }
             if (matches.Count > 1)
