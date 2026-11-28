@@ -219,71 +219,53 @@ namespace ESP32AIControl.UWP
             }
         }
 
-        private async Task<DevicePortalCredentials> RequestDevicePortalCredentialsAsync()
+        private TaskCompletionSource<DevicePortalCredentials> _portalCredentialsCompletion;
+
+        private Task<DevicePortalCredentials> RequestDevicePortalCredentialsAsync()
         {
-            var addressBox = new TextBox
-            {
-                Text = UpdateService.GetDevicePortalAddress(),
-                PlaceholderText = "Например, 192.168.1.58"
-            };
-            var userBox = new TextBox
-            {
-                Text = UpdateService.GetDevicePortalUserName(),
-                PlaceholderText = "Имя пользователя Device Portal"
-            };
-            var passwordBox = new PasswordBox
-            {
-                Password = UpdateService.GetDevicePortalPassword(),
-                PlaceholderText = "Пароль Device Portal"
-            };
+            PortalAddressBox.Text = UpdateService.GetDevicePortalAddress();
+            PortalUserBox.Text = UpdateService.GetDevicePortalUserName();
+            PortalPasswordBox.Password = UpdateService.GetDevicePortalPassword();
+            _portalCredentialsCompletion = new TaskCompletionSource<DevicePortalCredentials>();
+            DevicePortalOverlay.Visibility = Visibility.Visible;
+            return _portalCredentialsCompletion.Task;
+        }
 
-            var fields = new StackPanel();
-            var addressLabel = new TextBlock { Text = "Адрес Lumia (HTTPS)", Margin = new Thickness(0, 0, 0, 4) };
-            var userLabel = new TextBlock { Text = "Логин Device Portal", Margin = new Thickness(0, 12, 0, 4) };
-            var passwordLabel = new TextBlock { Text = "Пароль Device Portal", Margin = new Thickness(0, 12, 0, 4) };
-            fields.Children.Add(addressLabel);
-            fields.Children.Add(addressBox);
-            fields.Children.Add(userLabel);
-            fields.Children.Add(userBox);
-            fields.Children.Add(passwordLabel);
-            fields.Children.Add(passwordBox);
-            fields.Children.Add(new TextBlock
-            {
-                Text = "Пароль сохранится в защищённом хранилище Windows и будет использоваться только для подключения к Device Portal по локальной сети.",
-                TextWrapping = Windows.UI.Xaml.TextWrapping.Wrap,
-                FontSize = 12,
-                Opacity = 0.75
-            });
+        private void PortalCancel_Click(object sender, RoutedEventArgs e)
+        {
+            DevicePortalOverlay.Visibility = Visibility.Collapsed;
+            if (_portalCredentialsCompletion != null)
+                _portalCredentialsCompletion.TrySetResult(null);
+        }
 
-            var dialog = new ContentDialog
-            {
-                Title = "Установка обновления",
-                Content = fields,
-                PrimaryButtonText = "Продолжить",
-                SecondaryButtonText = "Отмена",
-                DefaultButton = ContentDialogButton.Primary
-            };
-
-            if (await dialog.ShowAsync() != ContentDialogResult.Primary)
-                return null;
-
-            if (string.IsNullOrWhiteSpace(addressBox.Text) ||
-                string.IsNullOrWhiteSpace(userBox.Text) ||
-                string.IsNullOrEmpty(passwordBox.Password))
+        private void PortalContinue_Click(object sender, RoutedEventArgs e)
+        {
+            if (string.IsNullOrWhiteSpace(PortalAddressBox.Text) ||
+                string.IsNullOrWhiteSpace(PortalUserBox.Text) ||
+                string.IsNullOrEmpty(PortalPasswordBox.Password))
             {
                 StatusText.Text = "Для установки укажите адрес Lumia, логин и пароль Device Portal.";
-                return null;
+                return;
             }
 
-            UpdateService.SaveDevicePortalCredentials(
-                addressBox.Text, userBox.Text, passwordBox.Password);
-
-            return new DevicePortalCredentials
+            try
             {
-                Address = addressBox.Text.Trim(),
-                UserName = userBox.Text.Trim(),
-                Password = passwordBox.Password
-            };
+                UpdateService.SaveDevicePortalCredentials(
+                    PortalAddressBox.Text, PortalUserBox.Text, PortalPasswordBox.Password);
+                var result = new DevicePortalCredentials
+                {
+                    Address = PortalAddressBox.Text.Trim(),
+                    UserName = PortalUserBox.Text.Trim(),
+                    Password = PortalPasswordBox.Password
+                };
+                DevicePortalOverlay.Visibility = Visibility.Collapsed;
+                if (_portalCredentialsCompletion != null)
+                    _portalCredentialsCompletion.TrySetResult(result);
+            }
+            catch (Exception ex)
+            {
+                StatusText.Text = "Не удалось сохранить параметры Device Portal: " + ex.Message;
+            }
         }
 
         private void Home_Click(object sender, RoutedEventArgs e)
