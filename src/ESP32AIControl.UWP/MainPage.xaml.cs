@@ -33,7 +33,8 @@ namespace ESP32AIControl.UWP
         private readonly HistoryStore _historyStore = new HistoryStore();
         private readonly DelayedCommandStore _delayedCommandStore = new DelayedCommandStore();
         private readonly ScenarioAutomationStore _scenarioStore = new ScenarioAutomationStore();
-        private readonly MarfaCommandEngine _marfaCommandEngine = new MarfaCommandEngine();
+        private readonly StoredDeviceScenarioStore _marfaScenarioStore = new StoredDeviceScenarioStore();
+        private readonly MarfaCommandEngine _marfaCommandEngine;
         private SpeechRecognizer _marfaRecognizer;
         private SpeechSynthesizer _marfaSynthesizer;
         private MediaElement _marfaAudio;
@@ -48,6 +49,7 @@ namespace ESP32AIControl.UWP
         public MainPage()
         {
             InitializeComponent();
+            _marfaCommandEngine = new MarfaCommandEngine(new StoredScenarioAdvisor(_marfaScenarioStore));
             _dashboardRenderer = new DashboardRenderer(DashboardHost, _dashboardSnapshot,
                 page => { StatusText.Text = "Страница: " + page; },
                 (device, widget, value) => DeviceCommandRequested?.Invoke(this,
