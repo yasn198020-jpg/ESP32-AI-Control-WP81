@@ -5,6 +5,7 @@ using Windows.UI;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Media;
+using Windows.Storage;
 
 namespace ESP32AIControl.UWP
 {
@@ -13,6 +14,7 @@ namespace ESP32AIControl.UWP
         private bool _menuOpen;
         private readonly DashboardSnapshot _dashboardSnapshot = new DashboardSnapshot();
         private DashboardRenderer _dashboardRenderer;
+        private UpdateManifest _pendingUpdateManifest;
 
         public event EventHandler<DeviceCommandRequestedEventArgs> DeviceCommandRequested;
 
@@ -103,6 +105,56 @@ namespace ESP32AIControl.UWP
             if (devices != null)
                 foreach (var device in devices) _dashboardSnapshot.Devices.Add(device);
             if (PageTitle.Text == "Главная") _dashboardRenderer.Render();
+        }
+
+        private async void Update_Click(object sender, RoutedEventArgs e)
+        {
+            SetSection("Обновление", "Обновление приложения", "Проверка канала Windows 10 Mobile…");
+            UpdateDownloadButton.Visibility = Visibility.Collapsed;
+            try
+            {
+                var result = await UpdateService.CheckAsync();
+                if (!result.Manifest.Enabled)
+                {
+                    StatusText.Text = "Канал обновлений пока не опубликован. Текущая версия: " + result.CurrentVersion;
+                    return;
+                }
+                if (!result.IsUpdateAvailable)
+                {
+                    StatusText.Text = "Установлена актуальная версия: " + result.CurrentVersion;
+                    return;
+                }
+                _pendingUpdateManifest = result.Manifest;
+                SectionDescription.Text = "Доступна версия " + result.AvailableVersion + ". " +
+                    (result.Manifest.ReleaseNotes ?? "");
+                StatusText.Text = "Текущая версия: " + result.CurrentVersion +
+                    ". Перед загрузкой будет проверена SHA-256.";
+                UpdateDownloadButton.Visibility = Visibility.Visible;
+            }
+            catch (Exception ex)
+            {
+                StatusText.Text = "Не удалось проверить обновление: " + ex.Message;
+            }
+        }
+
+        private async void DownloadUpdate_Click(object sender, RoutedEventArgs e)
+        {
+            UpdateDownloadButton.IsEnabled = false;
+            try
+            {
+                StatusText.Text = "Загрузка пакета и проверка SHA-256…";
+                StorageFile file = await UpdateService.DownloadAndVerifyAsync(_pendingUpdateManifest);
+                StatusText.Text = "Пакет загружен и проверен: " + file.Name +
+                    ". Установка пока не запускается: совместимый API Windows 10 Mobile проверяется отдельно.";
+            }
+            catch (Exception ex)
+            {
+                StatusText.Text = "Загрузка отклонена: " + ex.Message;
+            }
+            finally
+            {
+                UpdateDownloadButton.IsEnabled = true;
+            }
         }
 
         private void Home_Click(object sender, RoutedEventArgs e)
