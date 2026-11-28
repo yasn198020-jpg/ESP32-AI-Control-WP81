@@ -122,6 +122,13 @@ namespace ESP32AIControl.UWP
         private MqttConnectionSettings _settings;
         private readonly Dictionary<string, DeviceModel> _devices =
             new Dictionary<string, DeviceModel>(StringComparer.OrdinalIgnoreCase);
+        private sealed class PendingCommand
+        {
+            public string Id;
+            public string ExpectedStatus;
+        }
+        private readonly Dictionary<string, PendingCommand> _pendingCommands =
+            new Dictionary<string, PendingCommand>(StringComparer.OrdinalIgnoreCase);
         private ushort _packetId;
         private Task _runTask = Task.CompletedTask;
         private bool _connected;
@@ -171,8 +178,86 @@ namespace ESP32AIControl.UWP
         {
             if (!IsConnected || String.IsNullOrWhiteSpace(deviceId) || String.IsNullOrWhiteSpace(widgetId))
                 return false;
+            string key = deviceId + "/" + widgetId;
+            string commandId = Guid.NewGuid().ToString("N");
+            lock (_stateLock)
+            {
+                DeviceModel device;
+                if (!_devices.TryGetValue(deviceId, out device)) return false;
+                var widget = device.Widgets.FirstOrDefault(x => x.Id == widgetId);
+                if (widget == null || widget.CommandState == "PENDING" || _pendingCommands.ContainsKey(key)) return false;
+                widget.CommandState = "PENDING";
+                widget.ExpectedCommandValue = value ?? "";
+                _pendingCommands[key] = new PendingCommand { Id = commandId, ExpectedStatus = ExpectedStatusValue(widget, value) };
+                PublishSnapshotLocked();
+            }
             var payload = JsonConvert.SerializeObject(new { status = value ?? "" });
-            return await PublishAsync("/" + _settings.Prefix + "/" + deviceId + "/" + widgetId + "/control", payload);
+            bool sent = await PublishAsync("/" + _settings.Prefix + "/" + deviceId + "/" + widgetId + "/control", payload);
+            if (!sent)
+            {
+                lock (_stateLock)
+                {
+                    PendingCommand pending;
+                    if (_pendingCommands.TryGetValue(key, out pending) && pending.Id == commandId)
+                    {
+                        _pendingCommands.Remove(key);
+                        var widget = _devices[deviceId].Widgets.FirstOrDefault(x => x.Id == widgetId);
+                        if (widget != null) widget.CommandState = "SEND_FAILED";
+                        PublishSnapshotLocked();
+                    }
+                }
+                return false;
+            }
+            Task.Run(async () =>
+            {
+                await Task.Delay(10000);
+                lock (_stateLock)
+                {
+                    PendingCommand pending;
+                    if (_pendingCommands.TryGetValue(key, out pending) && pending.Id == commandId)
+                    {
+                        _pendingCommands.Remove(key);
+                        var widget = _devices[deviceId].Widgets.FirstOrDefault(x => x.Id == widgetId);
+                        if (widget != null) widget.CommandState = "TIMED_OUT";
+                        PublishSnapshotLocked();
+                    }
+                }
+            });
+            return true;
+        }
+
+        private static string ExpectedStatusValue(WidgetModel widget, string requested)
+        {
+            decimal value;
+            if (!Decimal.TryParse((requested ?? "").Trim().Replace(',', '.'), NumberStyles.Any,
+                CultureInfo.InvariantCulture, out value)) return requested ?? "";
+            var config = widget.ReadConfig();
+            object raw;
+            int digits = config.TryGetValue("round", out raw) ? Convert.ToInt32(raw, CultureInfo.InvariantCulture) : -1;
+            Func<decimal, decimal> round = input => digits >= 0 && digits <= 6
+                ? Decimal.Round(input, digits, MidpointRounding.AwayFromZero) : input;
+            value = round(value);
+            decimal multiply = config.TryGetValue("multiply", out raw) ? Convert.ToDecimal(raw, CultureInfo.InvariantCulture) : 1m;
+            value = value * multiply;
+            decimal plus = config.TryGetValue("plus", out raw) ? Convert.ToDecimal(raw, CultureInfo.InvariantCulture) : 0m;
+            value += plus;
+            string map = config.TryGetValue("map", out raw) ? Convert.ToString(raw, CultureInfo.InvariantCulture) : "";
+            var mapValues = (map ?? "").Split(',').Select(x => { long n; return Int64.TryParse(x.Trim(), out n) ? (long?)n : null; }).Where(x => x.HasValue).Select(x => x.Value).ToArray();
+            if (mapValues.Length == 4 && mapValues[0] != mapValues[1])
+            {
+                long x = (long)value;
+                value = (x - mapValues[0]) * (mapValues[3] - mapValues[2]) / (mapValues[1] - mapValues[0]) + mapValues[2];
+            }
+            return round(value).ToString(CultureInfo.InvariantCulture);
+        }
+
+        private static bool ValuesMatch(string expected, string actual)
+        {
+            decimal left, right;
+            if (Decimal.TryParse((expected ?? "").Trim().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out left) &&
+                Decimal.TryParse((actual ?? "").Trim().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out right))
+                return left == right;
+            return String.Equals((expected ?? "").Trim(), (actual ?? "").Trim(), StringComparison.Ordinal);
         }
 
         public async Task<bool> SendHelloAsync()
@@ -371,7 +456,16 @@ namespace ESP32AIControl.UWP
                         if (widget == null) { widget = new WidgetModel { Id = widgetId, Title = widgetId }; device.Widgets.Add(widget); }
                         widget.Value = value;
                         widget.LastUpdatedUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                        if (leaf == "status") widget.CommandState = "confirmed";
+                        if (leaf == "status")
+                        {
+                            PendingCommand pending;
+                            string pendingKey = deviceId + "/" + widgetId;
+                            if (_pendingCommands.TryGetValue(pendingKey, out pending) && ValuesMatch(pending.ExpectedStatus, value))
+                            {
+                                _pendingCommands.Remove(pendingKey);
+                                widget.CommandState = "CONFIRMED";
+                            }
+                        }
                     }
                     else if (leaf == "state" && parts.Length == 2)
                     {
