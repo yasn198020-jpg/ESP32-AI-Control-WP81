@@ -816,6 +816,7 @@ namespace ESP32AIControl.UWP
             lock (_sync) _retentionDays = value;
             Windows.Storage.ApplicationData.Current.LocalSettings.Values["history_retention_days"] = value;
             PruneCache();
+            var ignored = CompactArchiveAsync();
         }
 
         public void SetDisplayPeriod(long milliseconds)
@@ -841,11 +842,30 @@ namespace ESP32AIControl.UWP
         public async Task<IList<HistoryPoint>> LoadAsync(string deviceId, string widgetId, long since)
         {
             await EnsureLoadedAsync();
-            lock (_sync)
+            await _fileGate.WaitAsync();
+            try
             {
-                return _cache.Where(p => p.DeviceId == deviceId && p.WidgetId == widgetId && (since <= 0 || p.Timestamp >= since))
-                    .OrderBy(p => p.Timestamp).TakeLastCompat(5000).ToList();
+                string text = await Windows.Storage.FileIO.ReadTextAsync(_file);
+                var result = new System.Collections.Generic.List<HistoryPoint>();
+                long cutoff = RetentionCutoff();
+                foreach (string line in text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    try
+                    {
+                        JObject json = JObject.Parse(line);
+                        long timestamp = (long?)json["t"] ?? 0;
+                        if (timestamp <= 0 || (cutoff > 0 && timestamp < cutoff) || (since > 0 && timestamp < since)) continue;
+                        if ((string)json["d"] != deviceId || (string)json["w"] != widgetId) continue;
+                        result.Add(new HistoryPoint {
+                            Timestamp = timestamp, DeviceId = deviceId, WidgetId = widgetId,
+                            RawValue = (string)json["r"] ?? "", Value = (double?)json["v"] ?? 0
+                        });
+                    }
+                    catch { }
+                }
+                return result.OrderBy(p => p.Timestamp).TakeLastCompat(5000).ToList();
             }
+            finally { _fileGate.Release(); }
         }
 
         public async Task<int> CountAsync()
@@ -953,6 +973,34 @@ namespace ESP32AIControl.UWP
                 PruneCache();
             }
             finally { _fileGate.Release(); }
+        }
+
+        private async Task CompactArchiveAsync()
+        {
+            try
+            {
+                await EnsureLoadedAsync();
+                await _fileGate.WaitAsync();
+                try
+                {
+                    string text = await Windows.Storage.FileIO.ReadTextAsync(_file);
+                    long cutoff = RetentionCutoff();
+                    var kept = new System.Collections.Generic.List<string>();
+                    foreach (string line in text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        try
+                        {
+                            JObject json = JObject.Parse(line);
+                            long timestamp = (long?)json["t"] ?? 0;
+                            if (cutoff == 0 || timestamp >= cutoff) kept.Add(line);
+                        }
+                        catch { }
+                    }
+                    await Windows.Storage.FileIO.WriteTextAsync(_file, String.Join("\n", kept) + (kept.Count > 0 ? "\n" : ""));
+                }
+                finally { _fileGate.Release(); }
+            }
+            catch { }
         }
 
         private void PruneCache()
