@@ -1442,7 +1442,8 @@ namespace ESP32AIControl.UWP
                 await _historyStore.ClearAsync();
                 foreach (var item in _delayedCommandStore.GetAll()) _delayedCommandStore.Remove(item.Id);
                 foreach (var item in _scenarioStore.GetAll()) _scenarioStore.Delete(item.Id);
-                _diagnostics.Add("Settings", "Пользователь очистил историю, очередь отложенных команд и сценарии.");
+                _udpDiscovery.Clear();
+                _diagnostics.Add("Settings", "Пользователь очистил историю, очередь отложенных команд, сценарии и список UDP-устройств.");
                 StatusText.Text = "История, отложенные команды и сценарии очищены.";
             }
             catch (Exception ex) { StatusText.Text = "Ошибка очистки данных: " + ex.Message; }
