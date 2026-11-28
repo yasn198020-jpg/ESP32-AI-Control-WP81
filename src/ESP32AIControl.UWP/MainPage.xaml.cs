@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Linq;\nusing System.Diagnostics;
 using Windows.UI;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
@@ -110,7 +110,7 @@ namespace ESP32AIControl.UWP
         private async void Update_Click(object sender, RoutedEventArgs e)
         {
             SetSection("Обновление", "Обновление приложения", "Проверка канала Windows 10 Mobile…");
-            UpdateDownloadButton.Visibility = Visibility.Collapsed;
+            UpdateDownloadButton.Visibility = Visibility.Collapsed;\n            UpdateProgressBar.Visibility = Visibility.Collapsed;\n            UpdateProgressText.Visibility = Visibility.Collapsed;\n            UpdateProgressBar.Value = 0;
             try
             {
                 var result = await UpdateService.CheckAsync();
@@ -142,21 +142,45 @@ namespace ESP32AIControl.UWP
             UpdateDownloadButton.IsEnabled = false;
             try
             {
-                StatusText.Text = "Загрузка пакета…";
+                UpdateProgressBar.Visibility = Visibility.Visible;
+                UpdateProgressText.Visibility = Visibility.Visible;
+                UpdateProgressBar.IsIndeterminate = true;
+                UpdateProgressBar.Value = 0;
+                UpdateProgressText.Text = "Подготовка загрузки…";
+                var downloadClock = Stopwatch.StartNew();
                 StorageFile file = await UpdateService.DownloadAndVerifyAsync(
                     _pendingUpdateManifest,
                     (received, total) =>
                     {
-                        StatusText.Text = total > 0
-                            ? "Загрузка: " + (received / 1024 / 1024) + " из " +
-                              (total / 1024 / 1024) + " МБ"
-                            : "Загружено: " + (received / 1024 / 1024) + " МБ";
+                        double seconds = Math.Max(downloadClock.Elapsed.TotalSeconds, 0.1);
+                        double bytesPerSecond = received / seconds;
+                        string speed = bytesPerSecond >= 1024 * 1024
+                            ? (bytesPerSecond / 1024 / 1024).ToString("0.00") + " МБ/с"
+                            : (bytesPerSecond / 1024).ToString("0") + " КБ/с";
+                        if (total > 0)
+                        {
+                            UpdateProgressBar.IsIndeterminate = false;
+                            UpdateProgressBar.Value = Math.Min(100.0, received * 100.0 / total);
+                            UpdateProgressText.Text = (received / 1024.0 / 1024.0).ToString("0.00") +
+                                " из " + (total / 1024.0 / 1024.0).ToString("0.00") +
+                                " МБ  •  " + UpdateProgressBar.Value.ToString("0") + "%  •  " + speed;
+                        }
+                        else
+                        {
+                            UpdateProgressBar.IsIndeterminate = true;
+                            UpdateProgressText.Text = (received / 1024.0 / 1024.0).ToString("0.00") +
+                                " МБ  •  " + speed;
+                        }
                     });
+                downloadClock.Stop();
+                UpdateProgressBar.IsIndeterminate = false;
+                UpdateProgressBar.Value = 100;
+                UpdateProgressText.Text = "Загрузка завершена. Проверка SHA-256…";
 
-                StatusText.Text = "SHA-256 совпадает. Запуск системной установки…";
+                UpdateProgressText.Text = "SHA-256 совпадает. Запуск системной установки…";\n                StatusText.Text = "Установка обновления…";
                 var installResult = await UpdateService.InstallAsync(
                     file,
-                    value => StatusText.Text = "Установка Windows: " + value + "%");
+                    value =>\n                    {\n                        StatusText.Text = "Установка Windows: " + value + "%";\n                        UpdateProgressText.Text = "Установка Windows: " + value + "%";\n                    });
 
                 string state = installResult.InstallState.ToString();
                 if (state == "Installed")
