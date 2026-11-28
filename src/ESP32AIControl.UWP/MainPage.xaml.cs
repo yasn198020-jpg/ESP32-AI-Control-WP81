@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Diagnostics;
+using System.Threading.Tasks;
 using Windows.UI;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
@@ -181,24 +182,24 @@ namespace ESP32AIControl.UWP
                 UpdateProgressBar.Value = 100;
                 UpdateProgressText.Text = "Загрузка завершена. Проверка SHA-256…";
 
-                UpdateProgressText.Text = "SHA-256 совпадает. Запуск системной установки…";
-                StatusText.Text = "Установка обновления…";
-                var installResult = await UpdateService.InstallAsync(
-                    file,
-                    value =>
-                    {
-                        StatusText.Text = "Установка Windows: " + value + "%";
-                        UpdateProgressText.Text = "Установка Windows: " + value + "%";
-                    });
+                UpdateProgressText.Text = "SHA-256 совпадает. Подготовка установки через Device Portal…";
+                var portal = await RequestDevicePortalCredentialsAsync();
+                if (portal == null)
+                {
+                    StatusText.Text = "Установка отменена. Загруженный пакет сохранён для следующей попытки.";
+                    return;
+                }
 
-                string state = installResult.InstallState.ToString();
-                if (state == "Installed")
-                    StatusText.Text = "Обновление установлено. Приложение может быть закрыто системой; запустите его снова.";
-                else
-                    StatusText.Text = "Состояние установки: " + state + ". " +
-                        (string.IsNullOrWhiteSpace(installResult.ErrorText)
-                            ? "Система не подтвердила завершение установки."
-                            : installResult.ErrorText);
+                StatusText.Text = "Отправка пакета установщику Lumia…";
+                UpdateProgressBar.IsIndeterminate = true;
+                UpdateProgressText.Text = "Передача пакета Device Portal. Не закрывайте приложение…";
+                string installMessage = await UpdateService.InstallViaDevicePortalAsync(
+                    file, portal.Address, portal.UserName, portal.Password);
+
+                UpdateProgressBar.IsIndeterminate = false;
+                UpdateProgressBar.Value = 100;
+                UpdateProgressText.Text = "Запрос установки принят устройством.";
+                StatusText.Text = installMessage;
             }
             catch (Exception ex)
             {
@@ -216,6 +217,70 @@ namespace ESP32AIControl.UWP
             {
                 UpdateDownloadButton.IsEnabled = true;
             }
+        }
+
+        private async Task<DevicePortalCredentials> RequestDevicePortalCredentialsAsync()
+        {
+            var addressBox = new TextBox
+            {
+                Text = UpdateService.GetDevicePortalAddress(),
+                PlaceholderText = "Например, 192.168.1.58"
+            };
+            var userBox = new TextBox
+            {
+                Text = UpdateService.GetDevicePortalUserName(),
+                PlaceholderText = "Имя пользователя Device Portal"
+            };
+            var passwordBox = new PasswordBox
+            {
+                Password = UpdateService.GetDevicePortalPassword(),
+                PlaceholderText = "Пароль Device Portal"
+            };
+
+            var fields = new StackPanel { Spacing = 8 };
+            fields.Children.Add(new TextBlock { Text = "Адрес Lumia (HTTPS)" });
+            fields.Children.Add(addressBox);
+            fields.Children.Add(new TextBlock { Text = "Логин Device Portal" });
+            fields.Children.Add(userBox);
+            fields.Children.Add(new TextBlock { Text = "Пароль Device Portal" });
+            fields.Children.Add(passwordBox);
+            fields.Children.Add(new TextBlock
+            {
+                Text = "Пароль сохранится в защищённом хранилище Windows. Для REST-запроса приложение использует служебный префикс auto- к логину.",
+                TextWrapping = Windows.UI.Xaml.TextWrapping.Wrap,
+                FontSize = 12,
+                Opacity = 0.75
+            });
+
+            var dialog = new ContentDialog
+            {
+                Title = "Установка обновления",
+                Content = fields,
+                PrimaryButtonText = "Продолжить",
+                SecondaryButtonText = "Отмена",
+                DefaultButton = ContentDialogButton.Primary
+            };
+
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+                return null;
+
+            if (string.IsNullOrWhiteSpace(addressBox.Text) ||
+                string.IsNullOrWhiteSpace(userBox.Text) ||
+                string.IsNullOrEmpty(passwordBox.Password))
+            {
+                StatusText.Text = "Для установки укажите адрес Lumia, логин и пароль Device Portal.";
+                return null;
+            }
+
+            UpdateService.SaveDevicePortalCredentials(
+                addressBox.Text, userBox.Text, passwordBox.Password);
+
+            return new DevicePortalCredentials
+            {
+                Address = addressBox.Text.Trim(),
+                UserName = userBox.Text.Trim(),
+                Password = passwordBox.Password
+            };
         }
 
         private void Home_Click(object sender, RoutedEventArgs e)
