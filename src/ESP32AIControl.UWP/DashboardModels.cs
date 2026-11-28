@@ -135,7 +135,7 @@ namespace ESP32AIControl.UWP
         private readonly Dictionary<string, long> _lastDeviceMessageAt =
             new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, Tuple<string, long, string>> _lastStatusEvents =
-            new Dictionary<string, Tuple<string, long>>(StringComparer.OrdinalIgnoreCase);
+            new Dictionary<string, Tuple<string, long, string>>(StringComparer.OrdinalIgnoreCase);
         private Task _runTask = Task.CompletedTask;
         private bool _connected;
         private bool _disposed;
