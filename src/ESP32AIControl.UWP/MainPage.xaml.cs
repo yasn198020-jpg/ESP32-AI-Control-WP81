@@ -625,6 +625,51 @@ namespace ESP32AIControl.UWP
             var parsed = _marfaCommandEngine.Parse(recognizedText, BuildMarfaDeviceSnapshot());
             output.Text += "\n" + parsed.Reply;
 
+            if (parsed.Action == LocalCommandAction.SMART_RULE)
+            {
+                var confirmRule = new ContentDialog
+                {
+                    Title = "Сохранить сценарий Марфы?",
+                    Content = parsed.Reply,
+                    PrimaryButtonText = "Сохранить",
+                    CloseButtonText = "Отмена"
+                };
+                if (await confirmRule.ShowAsync() != ContentDialogResult.Primary)
+                {
+                    output.Text += "\\nСоздание сценария отменено.";
+                    return;
+                }
+                _scenarioStore.Save(new AutomationScenario
+                {
+                    Title = parsed.Reply,
+                    Message = "Условие выполнено: {value}",
+                    Enabled = true,
+                    NotificationEnabled = true,
+                    ActionType = "MQTT_CONTROL",
+                    Conditions = new List<AutomationCondition>
+                    {
+                        new AutomationCondition
+                        {
+                            WidgetId = parsed.ConditionWidgetId,
+                            Operator = parsed.ConditionOperator,
+                            Threshold = parsed.ConditionThreshold,
+                            Connector = "AND"
+                        }
+                    },
+                    Actions = new List<AutomationAction>
+                    {
+                        new AutomationAction
+                        {
+                            DeviceId = parsed.ActionDeviceId,
+                            WidgetId = parsed.ActionWidgetId,
+                            Value = parsed.ActionValue
+                        }
+                    }
+                });
+                output.Text += "\\nСценарий сохранён. Марфа будет отслеживать условие по данным ESP32.";
+                return;
+            }
+
             if (parsed.Action == LocalCommandAction.READ_VALUE)
             {
                 var device = _dashboardSnapshot.Devices.FirstOrDefault(x => x.Id == parsed.DeviceId);
