@@ -10,16 +10,12 @@ using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Windows.ApplicationModel;
 using Windows.Storage;
-using Windows.Security.Credentials;
-using Windows.Security.Cryptography.Certificates;
-using Windows.Web.Http.Filters;
 using WdpHttpClient = Windows.Web.Http.HttpClient;
 using WdpHttpMethod = Windows.Web.Http.HttpMethod;
 using WdpHttpRequestMessage = Windows.Web.Http.HttpRequestMessage;
 using WdpHttpMultipartFormDataContent = Windows.Web.Http.HttpMultipartFormDataContent;
 using WdpHttpStreamContent = Windows.Web.Http.HttpStreamContent;
 using WdpHttpMediaTypeHeaderValue = Windows.Web.Http.Headers.HttpMediaTypeHeaderValue;
-using WdpHttpCredentialsHeaderValue = Windows.Web.Http.Headers.HttpCredentialsHeaderValue;
 
 namespace ESP32AIControl.UWP
 {
@@ -50,15 +46,11 @@ namespace ESP32AIControl.UWP
     public sealed class DevicePortalCredentials
     {
         public string Address { get; set; }
-        public string UserName { get; set; }
-        public string Password { get; set; }
     }
 
     public static class UpdateService
     {
-        private const string PortalCredentialResource = "ESP32AIControl.DevicePortal";
         private const string PortalAddressKey = "DevicePortalAddress";
-        private const string PortalUserKey = "DevicePortalUser";
         public const string ManifestUrl = "https://raw.githubusercontent.com/yasn198020-jpg/ESP32-AI-Control-Updates/windows-10-mobile/version.json";
         private const string PackageBaseUrl = "https://raw.githubusercontent.com/yasn198020-jpg/ESP32-AI-Control-Updates/windows-10-mobile/";
         private static readonly HttpClient Client = new HttpClient();
@@ -146,81 +138,31 @@ namespace ESP32AIControl.UWP
             return value == null ? "192.168.1.58" : value.ToString();
         }
 
-        public static string GetDevicePortalUserName()
+        public static void SaveDevicePortalAddress(string address)
         {
-            object value = ApplicationData.Current.LocalSettings.Values[PortalUserKey];
-            return value == null ? "" : value.ToString();
-        }
-
-        public static string GetDevicePortalPassword()
-        {
-            string userName = GetDevicePortalUserName();
-            if (string.IsNullOrWhiteSpace(userName)) return "";
-
-            try
-            {
-                var vault = new PasswordVault();
-                foreach (var credential in vault.FindAllByResource(PortalCredentialResource))
-                {
-                    if (string.Equals(credential.UserName, userName, StringComparison.Ordinal))
-                    {
-                        credential.RetrievePassword();
-                        return credential.Password;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine("Device Portal credential lookup failed: " + ex.Message);
-            }
-            return "";
-        }
-
-        public static void SaveDevicePortalCredentials(string address, string userName, string password)
-        {
-            if (string.IsNullOrWhiteSpace(address) ||
-                string.IsNullOrWhiteSpace(userName) ||
-                string.IsNullOrEmpty(password))
-                throw new ArgumentException("Укажите адрес Device Portal, логин и пароль.");
-
+            if (string.IsNullOrWhiteSpace(address))
+                throw new ArgumentException("Укажите IP-адрес Lumia.");
             ApplicationData.Current.LocalSettings.Values[PortalAddressKey] = address.Trim();
-            ApplicationData.Current.LocalSettings.Values[PortalUserKey] = userName.Trim();
-
-            var vault = new PasswordVault();
-            try
-            {
-                foreach (var credential in vault.FindAllByResource(PortalCredentialResource))
-                    vault.Remove(credential);
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine("Device Portal credential cleanup: " + ex.Message);
-            }
-
-            vault.Add(new PasswordCredential(
-                PortalCredentialResource, userName.Trim(), password));
         }
 
         public static async Task<string> InstallViaDevicePortalAsync(
-            StorageFile packageFile, string address, string userName, string password)
+            StorageFile packageFile, string address)
         {
             if (packageFile == null) throw new ArgumentNullException("packageFile");
-            if (string.IsNullOrWhiteSpace(address) ||
-                string.IsNullOrWhiteSpace(userName) ||
-                string.IsNullOrEmpty(password))
-                throw new ArgumentException("Не заданы параметры подключения к Device Portal.");
+            if (string.IsNullOrWhiteSpace(address))
+                throw new ArgumentException("Не указан адрес Device Portal.");
 
             string endpoint = address.Trim();
-            if (!endpoint.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-                endpoint = "https://" + endpoint;
+            if (!endpoint.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+                endpoint = "http://" + endpoint;
             if (!endpoint.EndsWith("/", StringComparison.Ordinal))
                 endpoint += "/";
 
             Uri rootUri;
             if (!Uri.TryCreate(endpoint, UriKind.Absolute, out rootUri) ||
-                !string.Equals(rootUri.Scheme, "https", StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(rootUri.Scheme, "http", StringComparison.OrdinalIgnoreCase) ||
                 !string.IsNullOrEmpty(rootUri.UserInfo))
-                throw new InvalidDataException("Укажите адрес Device Portal в формате https://IP[:порт].");
+                throw new InvalidDataException("Укажите адрес Device Portal в формате http://IP[:порт].");
 
             IPAddress portalIp;
             if (!IPAddress.TryParse(rootUri.Host, out portalIp) ||
@@ -239,12 +181,6 @@ namespace ESP32AIControl.UWP
             if (properties.Size == 0)
                 throw new InvalidDataException("Загруженный пакет имеет нулевой размер.");
 
-            var filter = new HttpBaseProtocolFilter();
-            // Lumia Device Portal uses a device-local self-signed HTTPS certificate.
-            // Ignore only certificate-chain/name errors for this explicitly configured endpoint.
-            filter.IgnorableServerCertificateErrors.Add(ChainValidationResult.Untrusted);
-            filter.IgnorableServerCertificateErrors.Add(ChainValidationResult.InvalidName);
-            filter.IgnorableServerCertificateErrors.Add(ChainValidationResult.Expired);
             string requestUrl = new Uri(rootUri,
                 "api/app/packagemanager/package?package=" +
                 Uri.EscapeDataString(packageFile.Name)).AbsoluteUri;
@@ -252,7 +188,7 @@ namespace ESP32AIControl.UWP
             Debug.WriteLine("OTA Device Portal install: url=" + requestUrl +
                 "; file=" + packageFile.Path + "; size=" + properties.Size);
 
-            using (var client = new WdpHttpClient(filter))
+            using (var client = new WdpHttpClient())
             using (var request = new WdpHttpRequestMessage(WdpHttpMethod.Post, new Uri(requestUrl)))
             using (var multipart = new WdpHttpMultipartFormDataContent())
             using (var fileStream = await packageFile.OpenAsync(FileAccessMode.Read))
@@ -260,10 +196,6 @@ namespace ESP32AIControl.UWP
             {
                 fileContent.Headers.ContentType =
                     new WdpHttpMediaTypeHeaderValue("application/octet-stream");
-                string basicToken = Convert.ToBase64String(Encoding.UTF8.GetBytes(
-                    userName.Trim() + ":" + password));
-                request.Headers.Authorization =
-                    new WdpHttpCredentialsHeaderValue("Basic", basicToken);
                 multipart.Add(fileContent, "package", packageFile.Name);
                 request.Content = multipart;
 
