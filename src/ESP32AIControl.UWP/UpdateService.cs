@@ -14,6 +14,9 @@ namespace ESP32AIControl.UWP
         [JsonProperty("schemaVersion")] public int SchemaVersion { get; set; }
         [JsonProperty("channel")] public string Channel { get; set; }
         [JsonProperty("packageIdentity")] public string PackageIdentity { get; set; }
+        [JsonProperty("publisher")] public string Publisher { get; set; }
+        [JsonProperty("architecture")] public string Architecture { get; set; }
+        [JsonProperty("minOsVersion")] public string MinOsVersion { get; set; }
         [JsonProperty("version")] public string Version { get; set; }
         [JsonProperty("package")] public string Package { get; set; }
         [JsonProperty("sha256")] public string Sha256 { get; set; }
@@ -41,6 +44,8 @@ namespace ESP32AIControl.UWP
             if (manifest == null || manifest.SchemaVersion != 1 ||
                 manifest.Channel != "windows-10-mobile" ||
                 manifest.PackageIdentity != Package.Current.Id.Name ||
+                manifest.Publisher != "CN=ESP32AIControl" ||
+                manifest.Architecture != "ARM" ||
                 string.IsNullOrWhiteSpace(manifest.Version))
                 throw new InvalidDataException("Манифест обновления неверен или относится к другому приложению.");
 
