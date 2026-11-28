@@ -9,7 +9,7 @@ using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Media;
 using Windows.Storage;
 using Windows.UI.Core;
-using Windows.Media.SpeechRecognition;
+using Windows.Media.SpeechRecognition;\nusing Windows.UI.Xaml.Shapes;
 
 namespace ESP32AIControl.UWP
 {
@@ -19,7 +19,7 @@ namespace ESP32AIControl.UWP
         private readonly DashboardSnapshot _dashboardSnapshot = new DashboardSnapshot();
         private DashboardRenderer _dashboardRenderer;
         private UpdateManifest _pendingUpdateManifest;
-        private readonly MqttDeviceService _mqtt = new MqttDeviceService();
+        private readonly MqttDeviceService _mqtt = new MqttDeviceService();\n        private readonly HistoryStore _historyStore = new HistoryStore();
 
         public event EventHandler<DeviceCommandRequestedEventArgs> DeviceCommandRequested;
 
@@ -135,7 +135,13 @@ namespace ESP32AIControl.UWP
         {
             _dashboardSnapshot.Devices.Clear();
             if (devices != null)
-                foreach (var device in devices) _dashboardSnapshot.Devices.Add(device);
+                foreach (var device in devices)
+                {
+                    _dashboardSnapshot.Devices.Add(device);
+                    foreach (var widget in device.Widgets)
+                        if (widget.Type == "VALUE" || widget.Type == "STATUS")
+                            _historyStore.UpdateLatest(device.Id, widget.Id, widget.Value, widget.LastUpdatedUnixMs);
+                }
             if (PageTitle.Text == "Главная") _dashboardRenderer.Render();
         }
 
@@ -544,8 +550,164 @@ namespace ESP32AIControl.UWP
 
         private void History_Click(object sender, RoutedEventArgs e)
         {
-            SetSection("История", "История и графики", "История измерений и графики будут подключены к общей модели данных.");
+            ShowHistory();
             UpdateNavigation(HistoryNav);
+        }
+
+        private void ShowHistory()
+        {
+            SetSection("История", "История измерений", "Запись телеметрии MQTT, периоды хранения и графики значений.");
+            DashboardHost.Visibility = Visibility.Visible;
+            DashboardHost.Children.Clear();
+
+            var root = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
+            root.Children.Add(new TextBlock { Text = "Выберите датчик", FontSize = 18, FontWeight = Windows.UI.Text.FontWeights.SemiBold });
+            var devicePicker = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, PlaceholderText = "Устройство" };
+            var widgetPicker = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, PlaceholderText = "Датчик / значение" };
+            var devices = _dashboardSnapshot.Devices.ToList();
+            foreach (var device in devices)
+                devicePicker.Items.Add(new ComboBoxItem { Content = String.IsNullOrWhiteSpace(device.Name) ? device.Id : device.Name, Tag = device.Id });
+
+            var samplePicker = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
+            AddChoice(samplePicker, "1 сек", 1000); AddChoice(samplePicker, "5 сек", 5000);
+            AddChoice(samplePicker, "10 сек", 10000); AddChoice(samplePicker, "30 сек", 30000);
+            AddChoice(samplePicker, "1 мин", 60000); AddChoice(samplePicker, "5 мин", 300000);
+            AddChoice(samplePicker, "10 мин", 600000); AddChoice(samplePicker, "30 мин", 1800000);
+            AddChoice(samplePicker, "1 час", 3600000);
+            SelectChoice(samplePicker, _historyStore.SamplePeriodMs);
+            samplePicker.SelectionChanged += (s, a) => {
+                var item = samplePicker.SelectedItem as ComboBoxItem;
+                if (item != null) _historyStore.SetSamplePeriod(Convert.ToInt32(item.Tag));
+            };
+
+            var periodPicker = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
+            AddChoice(periodPicker, "1 час", 3600000L); AddChoice(periodPicker, "6 часов", 21600000L);
+            AddChoice(periodPicker, "12 часов", 43200000L); AddChoice(periodPicker, "Сегодня", 86400000L);
+            AddChoice(periodPicker, "3 дня", 259200000L); AddChoice(periodPicker, "7 дней", 604800000L);
+            AddChoice(periodPicker, "30 дней", 2592000000L); AddChoice(periodPicker, "Весь срок", 0L);
+            SelectChoice(periodPicker, _historyStore.DisplayPeriodMs);
+            periodPicker.SelectionChanged += (s, a) => {
+                var item = periodPicker.SelectedItem as ComboBoxItem;
+                if (item != null) _historyStore.SetDisplayPeriod(Convert.ToInt64(item.Tag));
+            };
+
+            var retentionPicker = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
+            AddChoice(retentionPicker, "1 день", 1); AddChoice(retentionPicker, "3 дня", 3);
+            AddChoice(retentionPicker, "7 дней", 7); AddChoice(retentionPicker, "14 дней", 14);
+            AddChoice(retentionPicker, "30 дней", 30); AddChoice(retentionPicker, "90 дней", 90);
+            AddChoice(retentionPicker, "180 дней", 180); AddChoice(retentionPicker, "365 дней", 365);
+            AddChoice(retentionPicker, "Всегда", 0);
+            SelectChoice(retentionPicker, _historyStore.RetentionDays);
+            retentionPicker.SelectionChanged += (s, a) => {
+                var item = retentionPicker.SelectedItem as ComboBoxItem;
+                if (item != null) _historyStore.SetRetentionDays(Convert.ToInt32(item.Tag));
+            };
+
+            var info = new TextBlock { Text = "История загружается из локального архива.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 8) };
+            var chart = new Canvas { Width = Math.Max(320, ActualWidth - 70), Height = 220, Background = new SolidColorBrush(Color.FromArgb(255, 35, 36, 42)) };
+            var chartScroll = new ScrollViewer { Content = chart, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled, Height = 230 };
+            var refresh = new Button { Content = "Обновить график", HorizontalAlignment = HorizontalAlignment.Stretch };
+            var clear = new Button { Content = "Очистить историю", HorizontalAlignment = HorizontalAlignment.Stretch };
+            var selectedDeviceId = "";
+            var selectedWidgetId = "";
+
+            Action refreshWidgets = () =>
+            {
+                widgetPicker.Items.Clear();
+                var selected = devicePicker.SelectedItem as ComboBoxItem;
+                selectedDeviceId = selected == null ? "" : Convert.ToString(selected.Tag);
+                var device = devices.FirstOrDefault(x => x.Id == selectedDeviceId);
+                if (device == null) return;
+                foreach (var widget in device.Widgets.Where(w => w.Type == "VALUE" || w.Type == "STATUS"))
+                {
+                    double number;
+                    if (Double.TryParse((widget.Value ?? "").Trim().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out number))
+                        widgetPicker.Items.Add(new ComboBoxItem { Content = String.IsNullOrWhiteSpace(widget.Title) ? widget.Id : widget.Title, Tag = widget.Id });
+                }
+                if (widgetPicker.Items.Count > 0) widgetPicker.SelectedIndex = 0;
+            };
+
+            Func<Task> loadGraph = async () =>
+            {
+                var d = devicePicker.SelectedItem as ComboBoxItem;
+                var w = widgetPicker.SelectedItem as ComboBoxItem;
+                if (d == null || w == null)
+                {
+                    info.Text = "Нет числовых датчиков. Подключитесь к MQTT и дождитесь числовых значений.";
+                    chart.Children.Clear();
+                    return;
+                }
+                selectedDeviceId = Convert.ToString(d.Tag);
+                selectedWidgetId = Convert.ToString(w.Tag);
+                long since = _historyStore.DisplaySince();
+                var points = await _historyStore.LoadAsync(selectedDeviceId, selectedWidgetId, since);
+                chart.Children.Clear();
+                if (points.Count == 0)
+                {
+                    info.Text = "Для выбранного датчика пока нет записей. Дождитесь следующего периода измерения.";
+                    return;
+                }
+                double min = points.Min(p => p.Value), max = points.Max(p => p.Value);
+                if (Math.Abs(max - min) < 0.000001) { max += 1; min -= 1; }
+                double left = 42, right = chart.Width - 12, top = 14, bottom = chart.Height - 28;
+                for (int i = 0; i < 5; i++)
+                {
+                    double y = top + (bottom - top) * i / 4.0;
+                    chart.Children.Add(new Line { X1 = left, X2 = right, Y1 = y, Y2 = y, Stroke = new SolidColorBrush(Color.FromArgb(70, 190, 190, 200)), StrokeThickness = 1 });
+                    var label = new TextBlock { Text = (max - (max - min) * i / 4.0).ToString("0.##", CultureInfo.InvariantCulture), FontSize = 10, Foreground = new SolidColorBrush(Color.FromArgb(255, 190, 190, 200)) };
+                    Canvas.SetLeft(label, 2); Canvas.SetTop(label, y - 8); chart.Children.Add(label);
+                }
+                for (int i = 1; i < points.Count; i++)
+                {
+                    double x1 = left + (right - left) * (i - 1) / Math.Max(1.0, points.Count - 1);
+                    double x2 = left + (right - left) * i / Math.Max(1.0, points.Count - 1);
+                    double y1 = bottom - (points[i - 1].Value - min) * (bottom - top) / (max - min);
+                    double y2 = bottom - (points[i].Value - min) * (bottom - top) / (max - min);
+                    chart.Children.Add(new Line { X1 = x1, Y1 = y1, X2 = x2, Y2 = y2, Stroke = new SolidColorBrush(Color.FromArgb(255, 117, 190, 255)), StrokeThickness = 2 });
+                }
+                info.Text = "Точек: " + points.Count + " • минимум: " + min.ToString("0.###", CultureInfo.InvariantCulture) +
+                    " • максимум: " + max.ToString("0.###", CultureInfo.InvariantCulture) +
+                    " • последнее: " + points[points.Count - 1].RawValue;
+                var device = devices.FirstOrDefault(x => x.Id == selectedDeviceId);
+                var widget = device == null ? null : device.Widgets.FirstOrDefault(x => x.Id == selectedWidgetId);
+                if (widget != null && !String.IsNullOrWhiteSpace(widget.Unit)) info.Text += " " + widget.Unit;
+            };
+
+            devicePicker.SelectionChanged += (s, a) => { refreshWidgets(); };
+            widgetPicker.SelectionChanged += async (s, a) => { await loadGraph(); };
+            refresh.Click += async (s, a) => await loadGraph();
+            clear.Click += async (s, a) =>
+            {
+                var dialog = new ContentDialog { Title = "Очистить историю?", Content = "Все сохранённые измерения будут удалены.", PrimaryButtonText = "Очистить", CloseButtonText = "Отмена" };
+                if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+                {
+                    await _historyStore.ClearAsync();
+                    await loadGraph();
+                }
+            };
+            if (devicePicker.Items.Count > 0) devicePicker.SelectedIndex = 0;
+            refreshWidgets();
+
+            root.Children.Add(new TextBlock { Text = "Устройство" }); root.Children.Add(devicePicker);
+            root.Children.Add(new TextBlock { Text = "Показатель" }); root.Children.Add(widgetPicker);
+            root.Children.Add(new TextBlock { Text = "Период графика" }); root.Children.Add(periodPicker);
+            root.Children.Add(new TextBlock { Text = "Интервал записи" }); root.Children.Add(samplePicker);
+            root.Children.Add(new TextBlock { Text = "Срок хранения" }); root.Children.Add(retentionPicker);
+            root.Children.Add(new TextBlock { Text = "Запись выполняется независимо от частоты MQTT; по умолчанию каждые 10 секунд.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 4) });
+            root.Children.Add(refresh); root.Children.Add(info); root.Children.Add(chartScroll); root.Children.Add(clear);
+            DashboardHost.Children.Add(new ScrollViewer { Content = root, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+            var ignored = loadGraph();
+        }
+
+        private static void AddChoice(ComboBox picker, string label, object value)
+        {
+            picker.Items.Add(new ComboBoxItem { Content = label, Tag = value });
+        }
+
+        private static void SelectChoice(ComboBox picker, object value)
+        {
+            foreach (var entry in picker.Items.OfType<ComboBoxItem>())
+                if (Convert.ToString(entry.Tag) == Convert.ToString(value)) { picker.SelectedItem = entry; return; }
         }
 
         private void Pending_Click(object sender, RoutedEventArgs e)
