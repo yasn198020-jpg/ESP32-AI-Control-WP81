@@ -23,6 +23,7 @@ namespace ESP32AIControl.UWP
         private UpdateManifest _pendingUpdateManifest;
         private readonly MqttDeviceService _mqtt = new MqttDeviceService();\n        private readonly HistoryStore _historyStore = new HistoryStore();
         private readonly DelayedCommandStore _delayedCommandStore = new DelayedCommandStore();
+        private readonly ScenarioAutomationStore _scenarioStore = new ScenarioAutomationStore();
         private readonly DispatcherTimer _delayedCommandTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         private bool _delayedCommandTickRunning;
 
@@ -149,7 +150,31 @@ namespace ESP32AIControl.UWP
                         if (widget.Type == "VALUE" || widget.Type == "STATUS")
                             _historyStore.UpdateLatest(device.Id, widget.Id, widget.Value, widget.LastUpdatedUnixMs);
                 }
+            var triggered = _scenarioStore.Evaluate(_dashboardSnapshot.Devices);
+            if (triggered.Count > 0) _ = ExecuteScenariosAsync(triggered);
             if (PageTitle.Text == "Главная") _dashboardRenderer.Render();
+        }
+
+        private async Task ExecuteScenariosAsync(IList<AutomationScenario> scenarios)
+        {
+            foreach (var scenario in scenarios)
+            {
+                if (scenario.NotificationEnabled)
+                {
+                    var first = scenario.Conditions.FirstOrDefault();
+                    var sensor = first == null ? null : _dashboardSnapshot.Devices.SelectMany(x => x.Widgets).FirstOrDefault(x => x.Id == first.WidgetId);
+                    string message = (scenario.Message ?? "Условие выполнено").Replace("{value}", sensor == null ? "" : sensor.Value);
+                    await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () => StatusText.Text = "Сценарий «" + scenario.Title + "»: " + message);
+                }
+                if (scenario.ActionType == "MQTT_CONTROL")
+                {
+                    foreach (var action in scenario.Actions)
+                    {
+                        bool sent = await _mqtt.SendControlAsync(action.DeviceId, action.WidgetId, action.Value);
+                        if (!sent) break;
+                    }
+                }
+            }
         }
 
         private async void Update_Click(object sender, RoutedEventArgs e)
@@ -976,7 +1001,152 @@ namespace ESP32AIControl.UWP
             finally { _delayedCommandTickRunning = false; }
         }
 
-        private void Scenarios_Click(object sender, RoutedEventArgs e) { SetSection("Сценарии", "Сценарии", "Перенос сценариев будет выполнен отдельным этапом."); }
+        private void Scenarios_Click(object sender, RoutedEventArgs e)
+        {
+            SetSection("Сценарии", "Автоматизация", "Условия по датчикам и действия для устройств.");
+            ShowScenarios();
+        }
+
+        private void ShowScenarios()
+        {
+            DashboardHost.Visibility = Visibility.Visible;
+            DashboardHost.Children.Clear();
+            var root = new StackPanel { Margin = new Thickness(0, 10, 0, 0) };
+            var add = new Button { Content = "+ Добавить сценарий" };
+            add.Click += (s, e) => ShowScenarioEditor(null);
+            root.Children.Add(add);
+            var scenarios = _scenarioStore.GetAll();
+            if (scenarios.Count == 0) root.Children.Add(new TextBlock { Text = "Сценариев пока нет. Добавьте условия датчиков и действия устройств.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 10, 0, 10) });
+            foreach (var scenario in scenarios)
+            {
+                var body = new StackPanel();
+                var card = new Border { Margin = new Thickness(0, 8, 0, 8), Padding = new Thickness(12), Background = new SolidColorBrush(Color.FromArgb(255, 42, 44, 54)), Child = body };
+                body.Children.Add(new TextBlock { Text = scenario.Title, FontSize = 19, FontWeight = Windows.UI.Text.FontWeights.SemiBold });
+                foreach (var condition in scenario.Conditions)
+                {
+                    var widget = _dashboardSnapshot.Devices.SelectMany(x => x.Widgets).FirstOrDefault(x => x.Id == condition.WidgetId);
+                    body.Children.Add(new TextBlock { Text = (condition.Connector == "OR" ? "ИЛИ " : "") + (widget == null ? condition.WidgetId : widget.Title) + " " + condition.Operator + " " + condition.Threshold.ToString(CultureInfo.InvariantCulture), TextWrapping = TextWrapping.Wrap });
+                }
+                body.Children.Add(new TextBlock { Text = scenario.ActionType == "MQTT_CONTROL" ? "MQTT-действий: " + scenario.Actions.Count : "Только уведомление" });
+                body.Children.Add(new TextBlock { Text = scenario.Enabled ? "Включён" : "Выключен" });
+                var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+                var toggle = new Button { Content = scenario.Enabled ? "Выключить" : "Включить", Tag = scenario.Id };
+                toggle.Click += (s, e) => { _scenarioStore.SetEnabled(Convert.ToString(((Button)s).Tag), !scenario.Enabled); ShowScenarios(); };
+                var edit = new Button { Content = "Изменить", Tag = scenario.Id, Margin = new Thickness(6, 0, 0, 0) };
+                edit.Click += (s, e) => ShowScenarioEditor(_scenarioStore.GetAll().FirstOrDefault(x => x.Id == Convert.ToString(((Button)s).Tag)));
+                var remove = new Button { Content = "Удалить", Tag = scenario.Id, Margin = new Thickness(6, 0, 0, 0) };
+                remove.Click += async (s, e) =>
+                {
+                    var dialog = new ContentDialog { Title = "Удалить сценарий?", Content = scenario.Title, PrimaryButtonText = "Удалить", CloseButtonText = "Отмена" };
+                    if (await dialog.ShowAsync() == ContentDialogResult.Primary) { _scenarioStore.Delete(Convert.ToString(((Button)s).Tag)); ShowScenarios(); }
+                };
+                buttons.Children.Add(toggle); buttons.Children.Add(edit); buttons.Children.Add(remove);
+                body.Children.Add(buttons); root.Children.Add(card);
+            }
+            DashboardHost.Children.Add(new ScrollViewer { Content = root, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+        }
+
+        private void ShowScenarioEditor(AutomationScenario existing)
+        {
+            var sensors = _dashboardSnapshot.Devices.SelectMany(d => d.Widgets.Where(w => w.Type == "VALUE" || w.Type == "STATUS").Select(w => new { Device = d, Widget = w })).ToList();
+            var controls = _dashboardSnapshot.Devices.SelectMany(d => d.Widgets.Where(w => w.Type == "TOGGLE" || w.Type == "BUTTON" || w.Type == "INPUT").Select(w => new { Device = d, Widget = w })).ToList();
+            DashboardHost.Children.Clear();
+            var root = new StackPanel { Margin = new Thickness(0, 10, 0, 0) };
+            var title = new TextBox { Header = "Название", Text = existing == null ? "Температура высокая" : existing.Title };
+            var message = new TextBox { Header = "Текст уведомления", Text = existing == null ? "Условие выполнено: {value}" : existing.Message };
+            var sensorPicker = new ComboBox { Header = "Датчик", MinWidth = 220 };
+            foreach (var x in sensors) sensorPicker.Items.Add(new ComboBoxItem { Content = x.Widget.Title + " (" + x.Device.Name + ")", Tag = x.Widget.Id });
+            if (sensorPicker.Items.Count > 0) sensorPicker.SelectedIndex = 0;
+            var operatorPicker = new ComboBox { Header = "Оператор" };
+            foreach (var op in new[] { ">", ">=", "<", "<=", "=" }) operatorPicker.Items.Add(new ComboBoxItem { Content = op, Tag = op });
+            operatorPicker.SelectedIndex = 0;
+            var threshold = new TextBox { Header = "Порог", Text = "25" };
+            var connector = new ComboBox { Header = "Связь со следующим условием" };
+            connector.Items.Add(new ComboBoxItem { Content = "И", Tag = "AND" });
+            connector.Items.Add(new ComboBoxItem { Content = "ИЛИ", Tag = "OR" });
+            connector.SelectedIndex = 0;
+            var conditionsPanel = new StackPanel();
+            var conditions = new List<AutomationCondition>();
+            Action renderConditions = () =>
+            {
+                conditionsPanel.Children.Clear();
+                foreach (var c in conditions)
+                {
+                    var found = sensors.FirstOrDefault(x => x.Widget.Id == c.WidgetId);
+                    conditionsPanel.Children.Add(new TextBlock { Text = (c.Connector == "OR" ? "ИЛИ " : "") + (found == null ? c.WidgetId : found.Widget.Title) + " " + c.Operator + " " + c.Threshold.ToString(CultureInfo.InvariantCulture) });
+                }
+            };
+            var addCondition = new Button { Content = "Добавить условие" };
+            addCondition.Click += (s, e) =>
+            {
+                var selected = sensorPicker.SelectedItem as ComboBoxItem;
+                double value;
+                if (selected == null || !Double.TryParse(threshold.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out value)) { StatusText.Text = "Выберите датчик и числовой порог."; return; }
+                var op = operatorPicker.SelectedItem as ComboBoxItem;
+                var join = connector.SelectedItem as ComboBoxItem;
+                conditions.Add(new AutomationCondition { WidgetId = Convert.ToString(selected.Tag), Operator = op == null ? ">" : Convert.ToString(op.Tag), Threshold = value, Connector = conditions.Count == 0 ? "AND" : (join == null ? "AND" : Convert.ToString(join.Tag)) });
+                renderConditions();
+            };
+            var actionType = new ComboBox { Header = "Тип сценария" };
+            actionType.Items.Add(new ComboBoxItem { Content = "Только уведомление", Tag = "NOTIFICATION" });
+            actionType.Items.Add(new ComboBoxItem { Content = "Управление MQTT", Tag = "MQTT_CONTROL" });
+            SelectChoice(actionType, existing == null ? "NOTIFICATION" : existing.ActionType);
+            var controlPicker = new ComboBox { Header = "Элемент управления", MinWidth = 220 };
+            foreach (var x in controls) controlPicker.Items.Add(new ComboBoxItem { Content = x.Widget.Title + " (" + x.Device.Name + ")", Tag = x.Device.Id + "|" + x.Widget.Id });
+            if (controlPicker.Items.Count > 0) controlPicker.SelectedIndex = 0;
+            var actionValue = new TextBox { Header = "Значение действия", Text = "1" };
+            var actionsPanel = new StackPanel();
+            var actions = new List<AutomationAction>();
+            Action renderActions = () =>
+            {
+                actionsPanel.Children.Clear();
+                foreach (var a in actions)
+                {
+                    var found = controls.FirstOrDefault(x => x.Device.Id == a.DeviceId && x.Widget.Id == a.WidgetId);
+                    actionsPanel.Children.Add(new TextBlock { Text = (found == null ? a.DeviceId + "/" + a.WidgetId : found.Widget.Title) + " → " + a.Value });
+                }
+            };
+            var addAction = new Button { Content = "Добавить действие" };
+            addAction.Click += (s, e) =>
+            {
+                var selected = controlPicker.SelectedItem as ComboBoxItem;
+                if (selected == null || String.IsNullOrWhiteSpace(actionValue.Text)) { StatusText.Text = "Выберите элемент управления и значение."; return; }
+                var ids = Convert.ToString(selected.Tag).Split('|');
+                if (ids.Length == 2) actions.Add(new AutomationAction { DeviceId = ids[0], WidgetId = ids[1], Value = actionValue.Text.Trim() });
+                renderActions();
+            };
+            if (existing != null)
+            {
+                conditions.AddRange(existing.Conditions.Select(x => new AutomationCondition { WidgetId = x.WidgetId, Operator = x.Operator, Threshold = x.Threshold, Connector = x.Connector }));
+                actions.AddRange(existing.Actions.Select(x => new AutomationAction { DeviceId = x.DeviceId, WidgetId = x.WidgetId, Value = x.Value }));
+                renderConditions(); renderActions();
+            }
+            root.Children.Add(new TextBlock { Text = existing == null ? "Новый сценарий" : "Редактирование сценария", FontSize = 21 });
+            root.Children.Add(title); root.Children.Add(sensorPicker); root.Children.Add(operatorPicker); root.Children.Add(threshold); root.Children.Add(connector); root.Children.Add(addCondition); root.Children.Add(conditionsPanel);
+            root.Children.Add(actionType); root.Children.Add(message); root.Children.Add(controlPicker); root.Children.Add(actionValue); root.Children.Add(addAction); root.Children.Add(actionsPanel);
+            var enabled = new CheckBox { Content = "Сценарий включён", IsChecked = existing == null ? true : existing.Enabled };
+            var notifications = new CheckBox { Content = "Показывать уведомление", IsChecked = existing == null ? true : existing.NotificationEnabled };
+            root.Children.Add(enabled); root.Children.Add(notifications);
+            var save = new Button { Content = "Сохранить сценарий", Margin = new Thickness(0, 10, 0, 0) };
+            save.Click += (s, e) =>
+            {
+                if (String.IsNullOrWhiteSpace(title.Text) || conditions.Count == 0) { StatusText.Text = "Укажите название и добавьте условие."; return; }
+                var kindItem = actionType.SelectedItem as ComboBoxItem;
+                string kind = kindItem == null ? "NOTIFICATION" : Convert.ToString(kindItem.Tag);
+                if (kind == "MQTT_CONTROL" && actions.Count == 0) { StatusText.Text = "Добавьте хотя бы одно действие."; return; }
+                var scenario = existing ?? new AutomationScenario();
+                scenario.Title = title.Text.Trim(); scenario.Message = message.Text; scenario.ActionType = kind;
+                scenario.Enabled = enabled.IsChecked == true; scenario.NotificationEnabled = notifications.IsChecked == true;
+                scenario.Conditions = conditions.Select(x => new AutomationCondition { WidgetId = x.WidgetId, Operator = x.Operator, Threshold = x.Threshold, Connector = x.Connector }).ToList();
+                scenario.Actions = actions.Select(x => new AutomationAction { DeviceId = x.DeviceId, WidgetId = x.WidgetId, Value = x.Value }).ToList();
+                _scenarioStore.Save(scenario); ShowScenarios(); StatusText.Text = "Сценарий сохранён.";
+            };
+            var cancel = new Button { Content = "Назад", Margin = new Thickness(0, 6, 0, 0) };
+            cancel.Click += (s, e) => ShowScenarios();
+            root.Children.Add(save); root.Children.Add(cancel);
+            DashboardHost.Children.Add(new ScrollViewer { Content = root, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+        }
+
         private void Voice_Click(object sender, RoutedEventArgs e) { SetSection("Голос", "Настройки голоса", "Настройки распознавания и синтеза речи."); }
         private void Journal_Click(object sender, RoutedEventArgs e) { SetSection("Журнал", "Журнал", "Системные события и диагностика подключения."); }
         private void MqttSettings_Click(object sender, RoutedEventArgs e)
