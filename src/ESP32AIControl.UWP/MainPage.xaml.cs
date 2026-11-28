@@ -192,9 +192,9 @@ namespace ESP32AIControl.UWP
 
                 StatusText.Text = "Отправка пакета установщику Lumia…";
                 UpdateProgressBar.IsIndeterminate = true;
-                UpdateProgressText.Text = "Передача пакета Device Portal. Не закрывайте приложение…";
+                UpdateProgressText.Text = "Передача пакета Device Portal по локальной сети. Не закрывайте приложение…";
                 string installMessage = await UpdateService.InstallViaDevicePortalAsync(
-                    file, portal.Address, portal.UserName, portal.Password);
+                    file, portal.Address);
 
                 UpdateProgressBar.IsIndeterminate = false;
                 UpdateProgressBar.Value = 100;
@@ -224,8 +224,6 @@ namespace ESP32AIControl.UWP
         private Task<DevicePortalCredentials> RequestDevicePortalCredentialsAsync()
         {
             PortalAddressBox.Text = UpdateService.GetDevicePortalAddress();
-            PortalUserBox.Text = UpdateService.GetDevicePortalUserName();
-            PortalPasswordBox.Password = UpdateService.GetDevicePortalPassword();
             _portalCredentialsCompletion = new TaskCompletionSource<DevicePortalCredentials>();
             DevicePortalOverlay.Visibility = Visibility.Visible;
             return _portalCredentialsCompletion.Task;
@@ -240,23 +238,18 @@ namespace ESP32AIControl.UWP
 
         private void PortalContinue_Click(object sender, RoutedEventArgs e)
         {
-            if (string.IsNullOrWhiteSpace(PortalAddressBox.Text) ||
-                string.IsNullOrWhiteSpace(PortalUserBox.Text) ||
-                string.IsNullOrEmpty(PortalPasswordBox.Password))
+            if (string.IsNullOrWhiteSpace(PortalAddressBox.Text))
             {
-                StatusText.Text = "Для установки укажите адрес Lumia, логин и пароль Device Portal.";
+                StatusText.Text = "Укажите IP-адрес Lumia в локальной сети.";
                 return;
             }
 
             try
             {
-                UpdateService.SaveDevicePortalCredentials(
-                    PortalAddressBox.Text, PortalUserBox.Text, PortalPasswordBox.Password);
+                UpdateService.SaveDevicePortalAddress(PortalAddressBox.Text);
                 var result = new DevicePortalCredentials
                 {
                     Address = PortalAddressBox.Text.Trim(),
-                    UserName = PortalUserBox.Text.Trim(),
-                    Password = PortalPasswordBox.Password
                 };
                 DevicePortalOverlay.Visibility = Visibility.Collapsed;
                 if (_portalCredentialsCompletion != null)
@@ -264,7 +257,7 @@ namespace ESP32AIControl.UWP
             }
             catch (Exception ex)
             {
-                StatusText.Text = "Не удалось сохранить параметры Device Portal: " + ex.Message;
+                StatusText.Text = "Не удалось сохранить адрес Device Portal: " + ex.Message;
             }
         }
 
