@@ -134,6 +134,8 @@ namespace ESP32AIControl.UWP
         private ushort _packetId;
         private readonly Dictionary<string, long> _lastDeviceMessageAt =
             new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, Tuple<string, long>> _lastStatusEvents =
+            new Dictionary<string, Tuple<string, long>>(StringComparer.OrdinalIgnoreCase);
         private Task _runTask = Task.CompletedTask;
         private bool _connected;
         private bool _disposed;
@@ -429,6 +431,7 @@ namespace ESP32AIControl.UWP
                     foreach (var id in known) _devices[id].Online = false;
                     PublishSnapshotLocked();
                 }
+                _helloStartedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                 Task.Run(async () =>
                 {
                     await Task.Delay(TimeSpan.FromSeconds(60));
@@ -447,7 +450,6 @@ namespace ESP32AIControl.UWP
                         PublishSnapshotLocked();
                     }
                 });
-                _helloStartedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                 return;
             }
             if (!topic.StartsWith(root + "/", StringComparison.OrdinalIgnoreCase)) return;
@@ -500,6 +502,23 @@ namespace ESP32AIControl.UWP
                         if (token != null) value = token.Type == JTokenType.String ? (string)token : token.ToString(Formatting.None);
                         else value = payload;
                         var widget = device.Widgets.FirstOrDefault(x => x.Id == widgetId);
+                        if (leaf == "event")
+                        {
+                            string eventKey = deviceId + "/" + widgetId;
+                            Tuple<string, long> previous;
+                            long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                            if (_lastStatusEvents.TryGetValue(eventKey, out previous) &&
+                                previous.Item1 == "status" && previous.Item2 <= now &&
+                                now - previous.Item2 <= 750 &&
+                                String.Equals(previous.Item3, value, StringComparison.Ordinal))
+                                return;
+                            _lastStatusEvents[eventKey] = Tuple.Create("event", now, value);
+                        }
+                        else
+                        {
+                            string statusKey = deviceId + "/" + widgetId;
+                            _lastStatusEvents[statusKey] = Tuple.Create("status", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), value);
+                        }
                         if (widget == null) { widget = new WidgetModel { Id = widgetId, Title = widgetId }; device.Widgets.Add(widget); }
                         widget.Value = value;
                         widget.LastUpdatedUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
