@@ -69,6 +69,7 @@
     <Compile Include="Core\Marfa\MarfaCoreDiagnostics.cs" />
     <Compile Include="Core\Marfa\MarfaAnalyticalEngine.cs" />
     <Compile Include="Core\\Marfa\\MarfaCommandEngine.cs" />
+    <Compile Include="Core\\Marfa\\IoTScenarioLanguage.cs" />
     <ApplicationDefinition Include="App.xaml"><Generator>MSBuild:Compile</Generator><SubType>Designer</SubType></ApplicationDefinition>
     <Page Include="MainPage.xaml"><Generator>MSBuild:Compile</Generator><SubType>Designer</SubType></Page>
     <AppxManifest Include="Package.appxmanifest"><SubType>Designer</SubType></AppxManifest>
