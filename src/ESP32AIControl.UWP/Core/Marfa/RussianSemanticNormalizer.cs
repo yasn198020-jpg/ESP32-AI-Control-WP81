@@ -271,7 +271,7 @@ namespace ESP32AIControl.UWP.Core.Marfa
         {
             if (String.IsNullOrWhiteSpace(value)) return value ?? "";
             string semantic = EmojiSemanticText.Normalize(value);
-            return String.Join(" ", Regex.Split(semantic.ToLower(new CultureInfo("ru-RU")).Replace('ё','е'), @"\s+")
+            return String.Join(" ", Regex.Split(semantic.ToLowerInvariant().Replace('ё','е'), @"\s+")
                 .Where(x => !String.IsNullOrWhiteSpace(x)).Select(NormalizeToken)).Trim();
         }
         public static IList<string> Tokens(string value)
