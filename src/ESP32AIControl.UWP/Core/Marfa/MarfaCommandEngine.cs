@@ -333,7 +333,7 @@ namespace ESP32AIControl.UWP.Core.Marfa
         private LocalCommandResult ParseSmartRule(string text, IList<MarfaDevice> devices)
         {
             var thresholdMatch = Regex.Match(text,
-                @"(?:выше|больше|превысит|достигнет|ниже|меньше|опустится)\\s+(-?\\d+(?:[.,]\\d+)?)");
+                @"(?:выше|больше|превысит|достигнет|ниже|меньше|опустится)\s+(-?\d+(?:[.,]\d+)?)");
             if (!thresholdMatch.Success)
                 return Result(LocalCommandAction.CLARIFY, "Укажите порог условия, например: «если температура выше 25 градусов, открой форточку».");
 
