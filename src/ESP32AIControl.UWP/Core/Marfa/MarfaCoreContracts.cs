@@ -79,9 +79,4 @@ namespace ESP32AIControl.UWP.Core.Marfa
     {
         IList<string> RefineControlCandidatesBeforeClarification(IList<string> candidateIds, string desiredValue, IList<MarfaDevice> devices);
     }
-    public static class MarfaCoreDiagnostics
-    {
-        public static Action<string> Sink { get; set; }
-        public static void Log(string message) { try { var sink = Sink; if (sink != null) sink(message); } catch { } }
-    }
 }
