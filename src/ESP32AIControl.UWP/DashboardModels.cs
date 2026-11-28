@@ -132,9 +132,12 @@ namespace ESP32AIControl.UWP
         private readonly Dictionary<string, PendingCommand> _pendingCommands =
             new Dictionary<string, PendingCommand>(StringComparer.OrdinalIgnoreCase);
         private ushort _packetId;
+        private readonly Dictionary<string, long> _lastDeviceMessageAt =
+            new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
         private Task _runTask = Task.CompletedTask;
         private bool _connected;
         private bool _disposed;
+        private long _helloStartedAt;
 
         public event Action<bool> ConnectionChanged;
         public event Action<string> Log;
@@ -348,6 +351,7 @@ namespace ESP32AIControl.UWP
                 if (packet == null || packet.Length == 0) throw new InvalidOperationException("MQTT broker closed connection.");
                 int type = packet[0] >> 4;
                 if (type == 3) await HandlePublishAsync(packet, token);
+                else if (type == 4) { /* PUBACK for QoS 1 outbound messages */ }
                 else if (type == 13) { /* PINGRESP */ }
                 else if (type == 14) throw new InvalidOperationException("MQTT broker sent DISCONNECT.");
             }
@@ -404,16 +408,49 @@ namespace ESP32AIControl.UWP
             ushort id = 0;
             if (qos > 0) { id = (ushort)((packet[offset++] << 8) | packet[offset++]); }
             string payload = Encoding.UTF8.GetString(packet, offset, packet.Length - offset);
-            ProcessMessage(topic, payload);
+            bool retained = (packet[0] & 0x01) != 0;
+            ProcessMessage(topic, payload, retained);
             if (qos == 1) await SendPacketAsync(0x40, new byte[] { (byte)(id >> 8), (byte)id }, token);
         }
 
-        private void ProcessMessage(string topic, string payload)
+        private void ProcessMessage(string topic, string payload, bool retained = false)
         {
             string root = "/" + _settings.Prefix;
-            if (topic.TrimEnd('/') == root && String.Equals(payload.Trim(), "HELLO", StringComparison.OrdinalIgnoreCase))
+            if (String.Equals(topic.TrimEnd('/'), root, StringComparison.OrdinalIgnoreCase) &&
+                String.Equals(payload.Trim(), "HELLO", StringComparison.OrdinalIgnoreCase))
+            {
+                // A shared HELLO starts a discovery window. Devices that answer
+                // with any MQTT traffic are marked online; silent devices are
+                // marked offline after the same 60-second grace period as Android.
+                List<string> known;
+                lock (_stateLock)
+                {
+                    known = _devices.Keys.ToList();
+                    foreach (var id in known) _devices[id].Online = false;
+                    PublishSnapshotLocked();
+                }
+                Task.Run(async () =>
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(60));
+                    lock (_stateLock)
+                    {
+                        foreach (var id in known)
+                        {
+                            long last;
+                            if (!_lastDeviceMessageAt.TryGetValue(id, out last) ||
+                                last < _helloStartedAt)
+                            {
+                                DeviceModel device;
+                                if (_devices.TryGetValue(id, out device)) device.Online = false;
+                            }
+                        }
+                        PublishSnapshotLocked();
+                    }
+                });
+                _helloStartedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                 return;
-            if (!topic.StartsWith(root + "/", StringComparison.Ordinal)) return;
+            }
+            if (!topic.StartsWith(root + "/", StringComparison.OrdinalIgnoreCase)) return;
             string[] parts = topic.Substring(root.Length).Trim('/').Split('/');
             if (parts.Length < 2) return;
             string deviceId = parts[0];
@@ -426,6 +463,7 @@ namespace ESP32AIControl.UWP
                     _devices.Add(deviceId, device);
                 }
                 device.Online = true;
+                _lastDeviceMessageAt[deviceId] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                 string leaf = parts[parts.Length - 1];
                 try
                 {
@@ -480,6 +518,29 @@ namespace ESP32AIControl.UWP
                     {
                         string state = json == null ? payload.Trim().Trim('"') : ((string)json["status"] ?? payload);
                         device.Online = !String.Equals(state, "offline", StringComparison.OrdinalIgnoreCase);
+                        if (!device.Online)
+                        {
+                            // Retained Last-Will messages can be stale after a broker restart.
+                            // Give the device 60 seconds to produce fresh traffic before
+                            // accepting the offline state.
+                            long observedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                            Task.Run(async () =>
+                            {
+                                await Task.Delay(TimeSpan.FromSeconds(60));
+                                lock (_stateLock)
+                                {
+                                    long last;
+                                    DeviceModel current;
+                                    if (_devices.TryGetValue(deviceId, out current) &&
+                                        _lastDeviceMessageAt.TryGetValue(deviceId, out last) &&
+                                        last <= observedAt)
+                                    {
+                                        current.Online = false;
+                                        PublishSnapshotLocked();
+                                    }
+                                }
+                            });
+                        }
                     }
                 }
                 catch (Exception ex) { WriteLog("MQTT parse " + topic + ": " + ex.Message); }
@@ -489,10 +550,25 @@ namespace ESP32AIControl.UWP
 
         private async Task<bool> PublishAsync(string topic, string payload)
         {
-            if (!IsConnected) return false;
-            var body = new List<byte>(); AddString(body, topic);
+            if (!IsConnected || _lifetime == null) return false;
+            var body = new List<byte>();
+            AddString(body, topic);
+            ushort packetId;
+            lock (_stateLock)
+            {
+                unchecked { _packetId++; }
+                if (_packetId == 0) _packetId = 1;
+                packetId = _packetId;
+            }
+            // MQTT 3.1.1 QoS 1 PUBLISH: packet identifier precedes payload.
+            body.Add((byte)(packetId >> 8));
+            body.Add((byte)packetId);
             body.AddRange(Encoding.UTF8.GetBytes(payload ?? ""));
-            try { await SendPacketAsync(0x30, body.ToArray(), _lifetime.Token); return true; }
+            try
+            {
+                await SendPacketAsync(0x32, body.ToArray(), _lifetime.Token);
+                return true;
+            }
             catch (Exception ex) { WriteLog("MQTT publish: " + ex.Message); return false; }
         }
 
