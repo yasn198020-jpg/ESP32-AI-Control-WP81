@@ -147,7 +147,8 @@ namespace ESP32AIControl.UWP
                 UseTls = settings.UseTls
             };
             _lifetime = new CancellationTokenSource();
-            await Task.Run(() => ConnectionLoopAsync(_lifetime.Token));
+            var token = _lifetime.Token;
+            Task.Run(() => ConnectionLoopAsync(token));
         }
 
         public void Stop()
@@ -184,7 +185,12 @@ namespace ESP32AIControl.UWP
                     WriteLog("MQTT: соединение установлено.");
                     await SendPacketAsync(0x82, BuildSubscribe("/" + _settings.Prefix + "/#"), token);
                     await PublishAsync("/" + _settings.Prefix, "HELLO");
-                    await Task.WhenAll(ReadLoopAsync(token), KeepAliveLoopAsync(token));
+                    using (var session = CancellationTokenSource.CreateLinkedTokenSource(token))
+                    {
+                        var keepAlive = KeepAliveLoopAsync(session.Token);
+                        try { await ReadLoopAsync(session.Token); }
+                        finally { session.Cancel(); try { await keepAlive; } catch { } }
+                    }
                 }
                 catch (OperationCanceledException) { break; }
                 catch (Exception ex) { WriteLog("MQTT: " + ex.Message); }
@@ -207,8 +213,7 @@ namespace ESP32AIControl.UWP
             CloseSocket();
             _socket = new StreamSocket();
             var protection = _settings.UseTls ? SocketProtectionLevel.Tls12 : SocketProtectionLevel.PlainSocket;
-            await _socket.ConnectAsync(new HostName(_settings.Host), _settings.Port.ToString(), protection)
-                .AsTask(token);
+            await _socket.ConnectAsync(new HostName(_settings.Host), _settings.Port.ToString(), protection);
             _reader = new DataReader(_socket.InputStream) { InputStreamOptions = InputStreamOptions.Partial };
             _writer = new DataWriter(_socket.OutputStream) { UnicodeEncoding = UnicodeEncoding.Utf8 };
             var connect = BuildConnect();
@@ -264,23 +269,28 @@ namespace ESP32AIControl.UWP
         private async Task<byte[]> ReadPacketAsync(CancellationToken token)
         {
             if (_reader == null) throw new InvalidOperationException("MQTT input stream is closed.");
-            if (await _reader.LoadAsync(1).AsTask(token) != 1) return null;
+            if (await _reader.LoadAsync(1) != 1) return null;
             byte header = _reader.ReadByte();
             int remaining = 0, multiplier = 1, encoded;
             do
             {
-                if (await _reader.LoadAsync(1).AsTask(token) != 1) throw new InvalidOperationException("MQTT packet length truncated.");
+                if (await _reader.LoadAsync(1) != 1) throw new InvalidOperationException("MQTT packet length truncated.");
                 encoded = _reader.ReadByte();
                 remaining += (encoded & 127) * multiplier;
                 multiplier *= 128;
                 if (multiplier > 128 * 128 * 128 * 128) throw new InvalidOperationException("Invalid MQTT packet length.");
             } while ((encoded & 128) != 0);
             if (remaining > 1024 * 1024) throw new InvalidOperationException("MQTT packet exceeds 1 MB.");
-            if (remaining > 0 && await _reader.LoadAsync((uint)remaining).AsTask(token) < remaining)
+            if (remaining > 0 && await _reader.LoadAsync((uint)remaining) < remaining)
                 throw new InvalidOperationException("MQTT packet payload truncated.");
             var result = new byte[remaining + 1];
             result[0] = header;
-            if (remaining > 0) _reader.ReadBytes(result, 1, remaining);
+            if (remaining > 0)
+            {
+                var body = new byte[remaining];
+                _reader.ReadBytes(body);
+                Buffer.BlockCopy(body, 0, result, 1, remaining);
+            }
             return result;
         }
 
@@ -356,7 +366,6 @@ namespace ESP32AIControl.UWP
                         string state = json == null ? payload.Trim().Trim('"') : ((string)json["status"] ?? payload);
                         device.Online = !String.Equals(state, "offline", StringComparison.OrdinalIgnoreCase);
                     }
-                    device.Widgets = new ObservableCollection<WidgetModel>(device.Widgets.OrderBy(x => x.Page).ThenBy(x => x.Order));
                 }
                 catch (Exception ex) { WriteLog("MQTT parse " + topic + ": " + ex.Message); }
                 PublishSnapshotLocked();
@@ -383,8 +392,8 @@ namespace ESP32AIControl.UWP
                 do { int digit = length % 128; length /= 128; if (length > 0) digit |= 128; packet.Add((byte)digit); } while (length > 0);
                 if (body != null) packet.AddRange(body);
                 _writer.WriteBytes(packet.ToArray());
-                await _writer.StoreAsync().AsTask(token);
-                await _writer.FlushAsync().AsTask(token);
+                await _writer.StoreAsync();
+                await _writer.FlushAsync();
             }
             finally { _writeLock.Release(); }
         }
