@@ -92,6 +92,24 @@
       },
       "group": "build",
       "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "WP10: Build + Sign + Publish OTA",
+      "type": "shell",
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}\\scripts\\deploy-wp10-usb.ps1",
+        "-SkipDeploy",
+        "-Publish"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": "$msCompile"
     }
   ]
 }
