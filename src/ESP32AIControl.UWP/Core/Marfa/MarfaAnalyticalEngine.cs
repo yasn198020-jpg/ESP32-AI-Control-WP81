@@ -314,7 +314,6 @@ namespace ESP32AIControl.UWP.Core.Marfa
             }
         }
         private static string EntityName(EntityKind k) { return k == EntityKind.GENERIC ? "объект" : k.ToString().ToLowerInvariant(); }
-        private static Kind DetectKind(string s) { if (ContainsAny(s,"температур","темп","градус","жарко","холодно")) return Kind.TEMPERATURE; if (ContainsAny(s,"влажност","влажн")) return Kind.HUMIDITY; if (ContainsAny(s,"давлен")) return Kind.PRESSURE; return Kind.VALUE; }
 
         private static IList<string> MatchingContextPages(string text, IList<MarfaDevice> devices, string desired)
         {
