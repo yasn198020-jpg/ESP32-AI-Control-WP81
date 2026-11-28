@@ -277,7 +277,7 @@ namespace ESP32AIControl.UWP.Core.Marfa
                 Reply = ControlReply(a, c.Widget.Title, delay, 1) };
         }
 
-        private static Candidate ResolveReference(string text, IList<MarfaDevice> devices)
+        private Candidate ResolveReference(string text, IList<MarfaDevice> devices)
         {
             var all = devices.SelectMany(d => (d.Widgets ?? new List<MarfaWidgetState>())
                 .Where(w => w.Type == MarfaWidgetType.TOGGLE || w.Type == MarfaWidgetType.BUTTON || w.Type == MarfaWidgetType.INPUT)
@@ -286,7 +286,12 @@ namespace ESP32AIControl.UWP.Core.Marfa
             if (ContainsAny(text, "первую", "первая", "первый", "первое", "номер один")) return all.ElementAtOrDefault(0);
             if (ContainsAny(text, "вторую", "вторая", "второй", "второе", "номер два")) return all.ElementAtOrDefault(1);
             if (ContainsAny(text, "третью", "третья", "третий", "третье", "номер три")) return all.ElementAtOrDefault(2);
-            return null;
+            var last = dialog.LastTarget;
+            if (last == null) return null;
+            var lastDevice = devices.FirstOrDefault(x => x.Id == last.DeviceId);
+            var lastWidget = lastDevice == null ? null : lastDevice.Widgets.FirstOrDefault(x => x.Id == last.WidgetId);
+            return lastDevice == null || lastWidget == null ? null :
+                new Candidate { Device = lastDevice, Widget = lastWidget, Score = 100 };
         }
 
         private static bool HasReference(string text)
