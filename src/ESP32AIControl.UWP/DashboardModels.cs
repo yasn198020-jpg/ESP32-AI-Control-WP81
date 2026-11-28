@@ -704,6 +704,7 @@ namespace ESP32AIControl.UWP
         private int _samplePeriodMs = 10000;
         private int _retentionDays = 30;
         private long _displayPeriodMs = 86400000;
+        private long _lastCompactAt;
 
         public HistoryStore()
         {
@@ -916,7 +917,15 @@ namespace ESP32AIControl.UWP
                     }
                     catch { }
                 }
-                lock (_sync) { _cache.Clear(); _cache.AddRange(loaded.OrderBy(p => p.Timestamp)); }
+                lock (_sync) { _cache.Clear(); _cache.AddRange(loaded.OrderBy(p => p.Timestamp).TakeLastCompat(5000)); }
+                if (cutoff > 0 && loaded.Count > 0)
+                {
+                    var compacted = loaded.OrderBy(p => p.Timestamp).Select(point => new JObject {
+                        ["t"] = point.Timestamp, ["d"] = point.DeviceId, ["w"] = point.WidgetId,
+                        ["r"] = point.RawValue, ["v"] = point.Value
+                    }.ToString(Formatting.None));
+                    await Windows.Storage.FileIO.WriteTextAsync(_file, String.Join("\n", compacted) + "\n");
+                }
                 _loaded = true;
             }
             finally { _fileGate.Release(); }
@@ -950,6 +959,11 @@ namespace ESP32AIControl.UWP
                 }
                 if (points.Count == 0) return;
                 foreach (var point in points) await AppendPointAsync(point);
+                if (RetentionDays > 0 && now - _lastCompactAt > 21600000L)
+                {
+                    _lastCompactAt = now;
+                    var compactTask = CompactArchiveAsync();
+                }
             }
             catch { }
         }
