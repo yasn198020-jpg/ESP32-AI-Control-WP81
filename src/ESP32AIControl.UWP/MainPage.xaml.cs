@@ -636,7 +636,7 @@ namespace ESP32AIControl.UWP
                 };
                 if (await confirmRule.ShowAsync() != ContentDialogResult.Primary)
                 {
-                    output.Text += "\\nСоздание сценария отменено.";
+                    output.Text += "\nСоздание сценария отменено.";
                     return;
                 }
                 _scenarioStore.Save(new AutomationScenario
@@ -666,7 +666,7 @@ namespace ESP32AIControl.UWP
                         }
                     }
                 });
-                output.Text += "\\nСценарий сохранён. Марфа будет отслеживать условие по данным ESP32.";
+                output.Text += "\nСценарий сохранён. Марфа будет отслеживать условие по данным ESP32.";
                 return;
             }
 
