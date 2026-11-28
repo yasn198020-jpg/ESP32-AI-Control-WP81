@@ -759,42 +759,87 @@ namespace ESP32AIControl.UWP
             return String.Join(" ", new string(chars).Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries));
         }
 
+        private sealed class TrainedCommandRepositoryAdapter : ITrainedCommandRepository
+        {
+            private readonly TrainedVoiceCommandStore _store;
+            public TrainedCommandRepositoryAdapter(TrainedVoiceCommandStore store) { _store = store; }
+            public IList<ESP32AIControl.UWP.Core.Marfa.TrainedVoiceCommand> Load()
+            {
+                return _store.Load().Select(x => new ESP32AIControl.UWP.Core.Marfa.TrainedVoiceCommand
+                {
+                    Phrase = x.Phrase, DeviceId = x.DeviceId, WidgetId = x.WidgetId, Value = x.Value,
+                    Variants = (x.Variants ?? new List<string>()).ToList()
+                }).ToList();
+            }
+        }
+
         private async Task ExecuteTrainedVoiceCommandAsync(string recognizedText, TextBlock output)
         {
-            string normalized = NormalizeVoicePhrase(recognizedText);
-            var commands = _trainedCommandStore.Load();
-            var matches = commands.Where(command =>
-                (command.Variants ?? new List<string>()).Concat(new[] { command.Phrase })
-                    .Any(variant => NormalizeVoicePhrase(variant) == normalized)).ToList();
-
+            var matcher = new TrainedCommandMatcher(new TrainedCommandRepositoryAdapter(_trainedCommandStore));
+            var matches = matcher.MatchAll(recognizedText);
             if (matches.Count == 0)
             {
                 await ExecuteNaturalMarfaCommandAsync(recognizedText, output);
                 return;
             }
-            if (matches.Count > 1)
+
+            var resolved = new List<Tuple<ESP32AIControl.UWP.Core.Marfa.TrainedVoiceCommand, DeviceModel, WidgetModel>>();
+            foreach (var match in matches)
             {
-                output.Text += "\nНайдено несколько одинаковых команд. Уточните обученные фразы.";
+                var device = _dashboardSnapshot.Devices.FirstOrDefault(x => x.Id == match.DeviceId);
+                var widget = device == null ? null : device.Widgets.FirstOrDefault(x => x.Id == match.WidgetId);
+                if (device == null || widget == null)
+                {
+                    output.Text += "\nУстройство или виджет команды «" + match.Phrase + "» сейчас не найден.";
+                    return;
+                }
+                resolved.Add(Tuple.Create(match, device, widget));
+            }
+
+            bool reads = resolved.All(x => x.Item1.Value == TrainedCommandConstants.ReadValue);
+            bool controls = resolved.All(x => x.Item1.Value != TrainedCommandConstants.ReadValue);
+            if (!reads && !controls)
+            {
+                output.Text += "\nВ одной обученной фразе смешаны чтение датчика и управление. Разделите её на две команды.";
+                return;
+            }
+            if (reads)
+            {
+                foreach (var item in resolved)
+                    output.Text += "\n" + item.Item3.Title + ": " +
+                        MarfaSpeechTextFormatter.FormatTemperatureForSpeech(item.Item3.Value, item.Item3.Unit, item.Item3.Title);
                 return;
             }
 
-            var match = matches[0];
-            var device = _dashboardSnapshot.Devices.FirstOrDefault(x => x.Id == match.DeviceId);
-            var widget = device == null ? null : device.Widgets.FirstOrDefault(x => x.Id == match.WidgetId);
-            if (device == null || widget == null)
+            if (resolved.Count > 1)
             {
-                output.Text += "\nУстройство или виджет сейчас не найден в MQTT-конфигурации.";
-                return;
-            }
-            if (match.Value == "__READ_VALUE__")
-            {
-                output.Text += "\nТекущее значение: " + widget.Value + (String.IsNullOrWhiteSpace(widget.Unit) ? "" : " " + widget.Unit);
-                return;
+                var confirm = new ContentDialog
+                {
+                    Title = "Подтвердить обученную команду",
+                    Content = "Одна фраза управляет элементами: " +
+                        String.Join(", ", resolved.Select(x => x.Item3.Title ?? x.Item2.Name)),
+                    PrimaryButtonText = "Выполнить",
+                    CloseButtonText = "Отмена"
+                };
+                if (await confirm.ShowAsync() != ContentDialogResult.Primary)
+                {
+                    output.Text += "\nОбученная команда отменена.";
+                    return;
+                }
             }
 
-            output.Text += "\nОтправляю команду устройству…";
-            bool sent = await _mqtt.SendControlAsync(match.DeviceId, match.WidgetId, match.Value);
-            output.Text += sent ? "\nКоманда отправлена. Ожидаю подтверждение MQTT." : "\nНе удалось отправить: проверьте MQTT-соединение.";
+            int sent = 0;
+            foreach (var item in resolved)
+            {
+                bool ok = await _mqtt.SendControlAsync(item.Item1.DeviceId, item.Item1.WidgetId, item.Item1.Value);
+                if (!ok)
+                {
+                    output.Text += "\nНе удалось отправить команду. Остальные действия остановлены.";
+                    break;
+                }
+                sent++;
+            }
+            output.Text += "\nОтправлено обученных действий: " + sent + " из " + resolved.Count + ".";
         }
 
         private readonly TrainedVoiceCommandStore _trainedCommandStore = new TrainedVoiceCommandStore();
