@@ -219,7 +219,7 @@ namespace ESP32AIControl.UWP
             var connect = BuildConnect();
             await SendPacketAsync(0x10, connect, token);
             var response = await ReadPacketAsync(token);
-            if (response == null || response.Length < 2 || (response[0] >> 4) != 2 || response[1] != 0)
+            if (response == null || response.Length < 4 || (response[0] >> 4) != 2 || response[3] != 0)
                 throw new InvalidOperationException("Брокер отклонил MQTT CONNECT.");
         }
 
