@@ -66,8 +66,9 @@ if ($Publish) {
         $manifest.version = $packageVersion
         $manifest.package = 'app.appxbundle'
         $manifest.sha256 = $sha256
-        $manifest.enabled = $false
-        $manifest.releaseNotes = "Debug build $packageVersion published locally; OTA remains disabled pending device testing."
+        # Keep OTA enabled on every publication.
+        $manifest.enabled = $true
+        $manifest.releaseNotes = "Debug build $packageVersion published; OTA updates are enabled."
         $manifest | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $versionPath -Encoding UTF8
         & git.exe -C $tempRoot add app.appxbundle version.json
         if ($LASTEXITCODE -ne 0) { throw 'git add failed.' }
@@ -77,7 +78,7 @@ if ($Publish) {
         if ($LASTEXITCODE -ne 0) { throw 'git push failed. Package was committed locally but not published remotely.' }
         Write-Host "Published $packageVersion to OTA repository." -ForegroundColor Green
         Write-Host "SHA-256: $sha256" -ForegroundColor Green
-        Write-Host 'OTA enabled remains false.' -ForegroundColor Yellow
+        Write-Host 'OTA enabled: true.' -ForegroundColor Green
     }
     finally {
         if (Test-Path $tempRoot) { Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue }
