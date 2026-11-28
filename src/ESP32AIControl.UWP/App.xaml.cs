@@ -10,6 +10,7 @@ namespace ESP32AIControl.UWP
         {
             InitializeComponent();
             Suspending += OnSuspending;
+            Resuming += OnResuming;
         }
 
         protected override void OnLaunched(LaunchActivatedEventArgs e)
@@ -29,7 +30,24 @@ namespace ESP32AIControl.UWP
 
         private void OnSuspending(object sender, Windows.ApplicationModel.SuspendingEventArgs e)
         {
-            // Persistent services and state will be connected in later migration stages.
+            var deferral = e.SuspendingOperation.GetDeferral();
+            try
+            {
+                var frame = Window.Current.Content as Frame;
+                var page = frame == null ? null : frame.Content as MainPage;
+                if (page != null) page.OnAppSuspending();
+            }
+            finally
+            {
+                deferral.Complete();
+            }
+        }
+
+        private void OnResuming(object sender, object e)
+        {
+            var frame = Window.Current.Content as Frame;
+            var page = frame == null ? null : frame.Content as MainPage;
+            if (page != null) page.OnAppResuming();
         }
     }
 }
