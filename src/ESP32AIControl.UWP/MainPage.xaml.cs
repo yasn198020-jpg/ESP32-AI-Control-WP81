@@ -329,14 +329,15 @@ namespace ESP32AIControl.UWP
             DashboardHost.Visibility = Visibility.Visible;
             DashboardHost.Children.Clear();
 
-            var panel = new StackPanel { Spacing = 8, Margin = new Thickness(0, 12, 0, 0) };
+            var panel = new StackPanel { Margin = new Thickness(0, 12, 0, 0) };
             var host = new TextBox { Header = "Адрес брокера", PlaceholderText = "192.168.1.10", Text = ReadMqttSetting("host", "") };
             var port = new TextBox { Header = "Порт", Text = ReadMqttSetting("port", "1883") };
             var prefix = new TextBox { Header = "MQTT prefix", Text = ReadMqttSetting("prefix", "IoTManager") };
             var username = new TextBox { Header = "Пользователь", Text = ReadMqttSetting("username", "") };
-            var password = new PasswordBox { Header = "Пароль", Password = ReadMqttSetting("password", "") };
+            var passwordLabel = new TextBlock { Text = "Пароль", Margin = new Thickness(0, 8, 0, 2) };
+            var password = new PasswordBox { PlaceholderText = "Пароль", Password = ReadMqttSetting("password", "") };
             var tls = new CheckBox { Content = "Использовать TLS", IsChecked = ReadMqttSetting("tls", "false") == "true" };
-            var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal };
             var connect = new Button { Content = "Подключить", MinWidth = 120 };
             var disconnect = new Button { Content = "Отключить", MinWidth = 110 };
             var hello = new Button { Content = "Отправить HELLO", MinWidth = 130 };
@@ -370,9 +371,10 @@ namespace ESP32AIControl.UWP
                 bool sent = await _mqtt.SendHelloAsync();
                 StatusText.Text = sent ? "HELLO отправлен." : "HELLO не отправлен: нет соединения.";
             };
+            connect.Margin = new Thickness(0, 8, 6, 0); disconnect.Margin = new Thickness(0, 8, 6, 0); hello.Margin = new Thickness(0, 8, 0, 0);
             buttons.Children.Add(connect); buttons.Children.Add(disconnect); buttons.Children.Add(hello);
             panel.Children.Add(host); panel.Children.Add(port); panel.Children.Add(prefix);
-            panel.Children.Add(username); panel.Children.Add(password); panel.Children.Add(tls);
+            panel.Children.Add(username); panel.Children.Add(passwordLabel); panel.Children.Add(password); panel.Children.Add(tls);
             panel.Children.Add(buttons);
             DashboardHost.Children.Add(panel);
         }
