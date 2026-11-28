@@ -223,7 +223,7 @@ namespace ESP32AIControl.UWP
             _socket = new StreamSocket();
             var protection = _settings.UseTls ? SocketProtectionLevel.Tls12 : SocketProtectionLevel.PlainSocket;
             await _socket.ConnectAsync(new HostName(_settings.Host), _settings.Port.ToString(), protection);
-            _reader = new DataReader(_socket.InputStream) { InputStreamOptions = InputStreamOptions.Partial };
+            _reader = new DataReader(_socket.InputStream) { InputStreamOptions = InputStreamOptions.None };
             _writer = new DataWriter(_socket.OutputStream) { UnicodeEncoding = UnicodeEncoding.Utf8 };
             var connect = BuildConnect();
             await SendPacketAsync(0x10, connect, token);
