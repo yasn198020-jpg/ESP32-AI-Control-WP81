@@ -3,6 +3,7 @@ using System.IO;
 using System.Diagnostics;
 using System.Net.Http;
 using System.Security.Cryptography;
+using System.Text;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Windows.ApplicationModel;
@@ -16,6 +17,7 @@ using WdpHttpRequestMessage = Windows.Web.Http.HttpRequestMessage;
 using WdpHttpMultipartFormDataContent = Windows.Web.Http.HttpMultipartFormDataContent;
 using WdpHttpStreamContent = Windows.Web.Http.HttpStreamContent;
 using WdpHttpMediaTypeHeaderValue = Windows.Web.Http.Headers.HttpMediaTypeHeaderValue;
+using WdpHttpCredentialsHeaderValue = Windows.Web.Http.Headers.HttpCredentialsHeaderValue;
 
 namespace ESP32AIControl.UWP
 {
@@ -228,9 +230,6 @@ namespace ESP32AIControl.UWP
             filter.IgnorableServerCertificateErrors.Add(ChainValidationResult.Untrusted);
             filter.IgnorableServerCertificateErrors.Add(ChainValidationResult.InvalidName);
             filter.IgnorableServerCertificateErrors.Add(ChainValidationResult.Expired);
-            filter.ServerCredential = new PasswordCredential(
-                rootUri.AbsoluteUri, "auto-" + userName.Trim(), password);
-
             string requestUrl = new Uri(rootUri,
                 "api/app/packagemanager/package?package=" +
                 Uri.EscapeDataString(packageFile.Name)).AbsoluteUri;
@@ -246,6 +245,10 @@ namespace ESP32AIControl.UWP
             {
                 fileContent.Headers.ContentType =
                     new WdpHttpMediaTypeHeaderValue("application/octet-stream");
+                string basicToken = Convert.ToBase64String(Encoding.UTF8.GetBytes(
+                    "auto-" + userName.Trim() + ":" + password));
+                request.Headers.Authorization =
+                    new WdpHttpCredentialsHeaderValue("Basic", basicToken);
                 multipart.Add(fileContent, "package", packageFile.Name);
                 request.Content = multipart;
 
