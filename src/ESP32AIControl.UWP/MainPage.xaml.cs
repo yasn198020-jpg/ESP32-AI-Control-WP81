@@ -9,6 +9,7 @@ using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Media;
 using Windows.Storage;
 using Windows.UI.Core;
+using Windows.Media.SpeechRecognition;
 
 namespace ESP32AIControl.UWP
 {
@@ -298,8 +299,118 @@ namespace ESP32AIControl.UWP
 
         private void Marfa_Click(object sender, RoutedEventArgs e)
         {
-            SetSection("Марфа", "Марфа", "Экран и состояние голосового помощника. Само распознавание пока не подключено.");
+            ShowMarfa();
             UpdateNavigation(MarfaNav);
+        }
+
+        private void ShowMarfa()
+        {
+            SetSection("Марфа", "Голосовое управление", "Распознавание русской речи и выполнение обученных команд.");
+            DashboardHost.Visibility = Visibility.Visible;
+            DashboardHost.Children.Clear();
+
+            var root = new StackPanel { Margin = new Thickness(0, 10, 0, 0) };
+            root.Children.Add(new TextBlock { Text = "Марфа", FontSize = 24, FontWeight = Windows.UI.Text.FontWeights.SemiBold });
+            root.Children.Add(new TextBlock { Text = "Нажмите кнопку и произнесите одну из сохранённых фраз. Для распознавания требуется установленный русский речевой пакет Windows.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 12) });
+            var recognized = new TextBlock { Text = "Ожидание команды…", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 8) };
+            var listen = new Button { Content = "🎙 Слушать команду", HorizontalAlignment = HorizontalAlignment.Stretch, MinHeight = 48 };
+            listen.Click += async (s, a) =>
+            {
+                listen.IsEnabled = false;
+                recognized.Text = "Слушаю…";
+                try
+                {
+                    using (var recognizer = new SpeechRecognizer())
+                    {
+                        recognizer.Constraints.Add(new DictationGrammarConstraint());
+                        var compile = await recognizer.CompileConstraintsAsync();
+                        if (compile.Status != SpeechRecognitionResultStatus.Success)
+                        {
+                            recognized.Text = "Не удалось подготовить распознавание: " + compile.Status +
+                                ". Проверьте, установлен ли русский речевой пакет Windows.";
+                            return;
+                        }
+                        var result = await recognizer.RecognizeWithUIAsync();
+                        if (result.Status != SpeechRecognitionResultStatus.Success || String.IsNullOrWhiteSpace(result.Text))
+                        {
+                            recognized.Text = "Речь не распознана: " + result.Status;
+                            return;
+                        }
+                        recognized.Text = "Распознано: «" + result.Text + "»";
+                        await ExecuteTrainedVoiceCommandAsync(result.Text, recognized);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    recognized.Text = "Ошибка распознавания: " + ex.Message;
+                }
+                finally { listen.IsEnabled = true; }
+            };
+            root.Children.Add(listen);
+            root.Children.Add(recognized);
+            root.Children.Add(new Border { Height = 1, Margin = new Thickness(0, 10, 0, 10), Background = new SolidColorBrush(Color.FromArgb(255, 70, 70, 78)) });
+            root.Children.Add(new TextBlock { Text = "Доступные обученные команды", FontSize = 18, FontWeight = Windows.UI.Text.FontWeights.SemiBold });
+            var commands = _trainedCommandStore.Load();
+            if (commands.Count == 0)
+                root.Children.Add(new TextBlock { Text = "Сначала создайте команды в разделе «Команды».", TextWrapping = TextWrapping.Wrap });
+            foreach (var command in commands)
+            {
+                var device = _dashboardSnapshot.Devices.FirstOrDefault(x => x.Id == command.DeviceId);
+                var widget = device == null ? null : device.Widgets.FirstOrDefault(x => x.Id == command.WidgetId);
+                root.Children.Add(new TextBlock {
+                    Text = "• " + command.Phrase + " — " + (device == null ? command.DeviceId : device.Name) +
+                        " / " + (widget == null ? command.WidgetId : widget.Title),
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 5, 0, 5)
+                });
+            }
+            DashboardHost.Children.Add(new ScrollViewer { Content = root, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+        }
+
+        private static string NormalizeVoicePhrase(string value)
+        {
+            if (String.IsNullOrWhiteSpace(value)) return "";
+            var chars = value.Trim().ToLowerInvariant().Select(ch =>
+                Char.IsLetterOrDigit(ch) || Char.IsWhiteSpace(ch) ? ch : ' ').ToArray();
+            return String.Join(" ", new string(chars).Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries));
+        }
+
+        private async Task ExecuteTrainedVoiceCommandAsync(string recognizedText, TextBlock output)
+        {
+            string normalized = NormalizeVoicePhrase(recognizedText);
+            var commands = _trainedCommandStore.Load();
+            var matches = commands.Where(command =>
+                (command.Variants ?? new List<string>()).Concat(new[] { command.Phrase })
+                    .Any(variant => NormalizeVoicePhrase(variant) == normalized)).ToList();
+
+            if (matches.Count == 0)
+            {
+                output.Text += "\nКоманда не найдена. Добавьте эту фразу или её вариант в разделе «Команды».";
+                return;
+            }
+            if (matches.Count > 1)
+            {
+                output.Text += "\nНайдено несколько одинаковых команд. Уточните обученные фразы.";
+                return;
+            }
+
+            var match = matches[0];
+            var device = _dashboardSnapshot.Devices.FirstOrDefault(x => x.Id == match.DeviceId);
+            var widget = device == null ? null : device.Widgets.FirstOrDefault(x => x.Id == match.WidgetId);
+            if (device == null || widget == null)
+            {
+                output.Text += "\nУстройство или виджет сейчас не найден в MQTT-конфигурации.";
+                return;
+            }
+            if (match.Value == "__READ_VALUE__")
+            {
+                output.Text += "\nТекущее значение: " + widget.Value + (String.IsNullOrWhiteSpace(widget.Unit) ? "" : " " + widget.Unit);
+                return;
+            }
+
+            output.Text += "\nОтправляю команду устройству…";
+            bool sent = await _mqtt.SendControlAsync(match.DeviceId, match.WidgetId, match.Value);
+            output.Text += sent ? "\nКоманда отправлена. Ожидаю подтверждение MQTT." : "\nНе удалось отправить: проверьте MQTT-соединение.";
         }
 
         private readonly TrainedVoiceCommandStore _trainedCommandStore = new TrainedVoiceCommandStore();
