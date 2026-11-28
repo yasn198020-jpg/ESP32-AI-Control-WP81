@@ -23,7 +23,8 @@ namespace ESP32AIControl.UWP
         private readonly DashboardSnapshot _dashboardSnapshot = new DashboardSnapshot();
         private DashboardRenderer _dashboardRenderer;
         private UpdateManifest _pendingUpdateManifest;
-        private readonly MqttDeviceService _mqtt = new MqttDeviceService();\n        private readonly HistoryStore _historyStore = new HistoryStore();
+        private readonly MqttDeviceService _mqtt = new MqttDeviceService();
+        private readonly HistoryStore _historyStore = new HistoryStore();
         private readonly DelayedCommandStore _delayedCommandStore = new DelayedCommandStore();
         private readonly ScenarioAutomationStore _scenarioStore = new ScenarioAutomationStore();
         private readonly DispatcherTimer _delayedCommandTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
