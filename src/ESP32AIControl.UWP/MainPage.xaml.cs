@@ -642,7 +642,7 @@ namespace ESP32AIControl.UWP
                     row.Children.Add(new TextBlock {
                         Text = (widget == null ? config.WidgetId : widget.Title) + " • " +
                             (config.Mode == "change" ? "изменение" : config.Mode == "interval" ? "интервал" : "изменение + интервал") +
-                            " • " + TimeSpan.FromMilliseconds(config.IntervalMs).ToString(@"h\\:mm"),
+                            " • " + TimeSpan.FromMilliseconds(config.IntervalMs).ToString(@"h\:mm"),
                         TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center
                     });
                     var removeConfig = new Button { Content = "Удалить", Margin = new Thickness(8, 0, 0, 0) };
