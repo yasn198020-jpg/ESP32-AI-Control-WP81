@@ -43,6 +43,10 @@ namespace ESP32AIControl.UWP
                 page => { StatusText.Text = "Страница: " + page; },
                 (device, widget, value) => DeviceCommandRequested?.Invoke(this,
                     new DeviceCommandRequestedEventArgs(device, widget, value)));
+            object showUpdated;
+            if (ApplicationData.Current.LocalSettings.Values.TryGetValue("show_last_updated", out showUpdated))
+                _dashboardRenderer.ShowLastUpdated = Convert.ToBoolean(showUpdated);
+            _diagnostics.Add("App", "Приложение запущено.");
             _mqtt.ConnectionChanged += connected =>
             {
                 var ignored = Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
