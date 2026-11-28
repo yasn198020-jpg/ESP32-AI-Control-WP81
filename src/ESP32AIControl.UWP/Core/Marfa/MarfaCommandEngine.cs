@@ -93,6 +93,12 @@ namespace ESP32AIControl.UWP.Core.Marfa
             var followUp = ParseFollowUp(text, devices);
             if (followUp != null) return Remember(followUp, text);
 
+            if (LooksLikeSmartRule(text))
+            {
+                var smartRule = ParseSmartRule(text, devices);
+                if (smartRule != null) return Remember(smartRule, text);
+            }
+
             ActionSpec action = DetectAction(text);
             long delay = ParseTime(text);
             if (action != null)
@@ -144,12 +150,6 @@ namespace ESP32AIControl.UWP.Core.Marfa
                     Reply = ControlReply(action, selected.Widget.Title, delay, actions.Count)
                 };
                 return Remember(result, text);
-            }
-
-            if (LooksLikeSmartRule(text))
-            {
-                var smartRule = ParseSmartRule(text, devices);
-                if (smartRule != null) return Remember(smartRule, text);
             }
 
             if (IsValueQuestion(text))
