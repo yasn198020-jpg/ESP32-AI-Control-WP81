@@ -76,6 +76,7 @@
                         <Button Content="UDP устройства" Style="{StaticResource MenuItemButtonStyle}" Click="UdpSettings_Click"/>
                         <Button Content="Настройки приложения" Style="{StaticResource MenuItemButtonStyle}" Click="AppSettings_Click"/>
                         <Button Content="Размер текста" Style="{StaticResource MenuItemButtonStyle}" Click="TextSize_Click"/>
+                        <Button Content="Обновление приложения" Style="{StaticResource MenuItemButtonStyle}" Click="Update_Click"/>
                     </StackPanel>
                 </ScrollViewer>
             </Border>
@@ -92,6 +93,9 @@
                                    TextWrapping="Wrap"/>
                         <TextBlock x:Name="StatusText" Text="Ожидание конфигурации устройств."
                                    Foreground="{StaticResource SecondaryTextBrush}" FontSize="13"/>
+                        <Button x:Name="UpdateDownloadButton" Content="Скачать и установить"
+                                Visibility="Collapsed" HorizontalAlignment="Left"
+                                Margin="0,12,0,0" Click="DownloadUpdate_Click"/>
                         <StackPanel x:Name="DashboardHost"/>
                     </StackPanel>
                 </ScrollViewer>

@@ -54,6 +54,7 @@
     <Compile Include="DashboardModels.cs" />
     <Compile Include="DashboardRenderer.cs" />
     <Compile Include="DeviceCommandRequestedEventArgs.cs" />
+    <Compile Include="UpdateService.cs" />
     <ApplicationDefinition Include="App.xaml"><Generator>MSBuild:Compile</Generator><SubType>Designer</SubType></ApplicationDefinition>
     <Page Include="MainPage.xaml"><Generator>MSBuild:Compile</Generator><SubType>Designer</SubType></Page>
     <AppxManifest Include="Package.appxmanifest"><SubType>Designer</SubType></AppxManifest>
@@ -61,6 +62,9 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
+    <SDKReference Include="WindowsMobile, Version=10.0.15063.0">
+      <Name>Windows Mobile Extensions for the UWP</Name>
+    </SDKReference>
     <PackageReference Include="Microsoft.NETCore.UniversalWindowsPlatform" Version="6.2.14" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
