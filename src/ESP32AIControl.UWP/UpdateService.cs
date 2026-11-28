@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using System.Net;
+using System.Net.Sockets;
 using System.Diagnostics;
 using System.Net.Http;
 using System.Security.Cryptography;
@@ -219,6 +221,19 @@ namespace ESP32AIControl.UWP
                 !string.Equals(rootUri.Scheme, "https", StringComparison.OrdinalIgnoreCase) ||
                 !string.IsNullOrEmpty(rootUri.UserInfo))
                 throw new InvalidDataException("Укажите адрес Device Portal в формате https://IP[:порт].");
+
+            IPAddress portalIp;
+            if (!IPAddress.TryParse(rootUri.Host, out portalIp) ||
+                portalIp.AddressFamily != AddressFamily.InterNetwork)
+                throw new InvalidDataException("Для защиты пароля укажите локальный IPv4-адрес Lumia, а не имя сайта.");
+
+            byte[] ipBytes = portalIp.GetAddressBytes();
+            bool isPrivateLan =
+                ipBytes[0] == 10 ||
+                (ipBytes[0] == 172 && ipBytes[1] >= 16 && ipBytes[1] <= 31) ||
+                (ipBytes[0] == 192 && ipBytes[1] == 168);
+            if (!isPrivateLan)
+                throw new InvalidDataException("Device Portal разрешён только по частному адресу локальной сети (10.x, 172.16–31.x или 192.168.x).");
 
             var properties = await packageFile.GetBasicPropertiesAsync();
             if (properties.Size == 0)
