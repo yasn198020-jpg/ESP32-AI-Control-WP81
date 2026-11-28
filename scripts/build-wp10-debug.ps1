@@ -62,7 +62,7 @@ $identityNode.SetAttribute('Version', $nextVersion)
 try {
     $manifestDoc.Save($manifestPath)
     Write-Host "Temporarily setting manifest package version to $nextVersion" -ForegroundColor Cyan
-    & $msbuild $project /restore /t:Build /p:Configuration=Debug /p:Platform=ARM /p:VisualStudioVersion=15.0 /p:TargetPlatformVersion=10.0.15063.0 /p:RuntimeIdentifiers=win10%3Bwin10-arm%3Bwin10-x86 /p:AppxPackageSigningEnabled=false /p:AppxAutoIncrementPackageRevision=false /v:minimal
+    & $msbuild $project /restore /t:Build /p:Configuration=Debug /p:Platform=ARM /p:PlatformTarget=ARM /p:VisualStudioVersion=15.0 /p:TargetPlatformVersion=10.0.15063.0 /p:RuntimeIdentifiers=win10%3Bwin10-arm%3Bwin10-x86 /p:AppxPackageSigningEnabled=false /p:AppxAutoIncrementPackageRevision=false /v:minimal
     if ($LASTEXITCODE -ne 0) { throw "MSBuild failed with exit code $LASTEXITCODE" }
 }
 finally {
