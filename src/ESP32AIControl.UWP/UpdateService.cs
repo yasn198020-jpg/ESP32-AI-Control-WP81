@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Windows.ApplicationModel;
+using Windows.Phone.Management.Deployment;
 using Windows.Storage;
 
 namespace ESP32AIControl.UWP
@@ -13,10 +14,11 @@ namespace ESP32AIControl.UWP
     {
         [JsonProperty("schemaVersion")] public int SchemaVersion { get; set; }
         [JsonProperty("channel")] public string Channel { get; set; }
+        [JsonProperty("platform")] public string Platform { get; set; }
         [JsonProperty("packageIdentity")] public string PackageIdentity { get; set; }
         [JsonProperty("publisher")] public string Publisher { get; set; }
-        [JsonProperty("architecture")] public string Architecture { get; set; }
         [JsonProperty("minOsVersion")] public string MinOsVersion { get; set; }
+        [JsonProperty("architecture")] public string Architecture { get; set; }
         [JsonProperty("version")] public string Version { get; set; }
         [JsonProperty("package")] public string Package { get; set; }
         [JsonProperty("sha256")] public string Sha256 { get; set; }
@@ -35,6 +37,7 @@ namespace ESP32AIControl.UWP
     public static class UpdateService
     {
         public const string ManifestUrl = "https://raw.githubusercontent.com/yasn198020-jpg/ESP32-AI-Control-Updates/windows-10-mobile/version.json";
+        private const string PackageBaseUrl = "https://raw.githubusercontent.com/yasn198020-jpg/ESP32-AI-Control-Updates/windows-10-mobile/";
         private static readonly HttpClient Client = new HttpClient();
 
         public static async Task<UpdateCheckResult> CheckAsync()
@@ -43,11 +46,13 @@ namespace ESP32AIControl.UWP
             var manifest = JsonConvert.DeserializeObject<UpdateManifest>(json);
             if (manifest == null || manifest.SchemaVersion != 1 ||
                 manifest.Channel != "windows-10-mobile" ||
+                manifest.Platform != "Windows 10 Mobile" ||
                 manifest.PackageIdentity != Package.Current.Id.Name ||
                 manifest.Publisher != "CN=ESP32AIControl" ||
                 manifest.Architecture != "ARM" ||
+                manifest.MinOsVersion != "10.0.10586.0" ||
                 string.IsNullOrWhiteSpace(manifest.Version))
-                throw new InvalidDataException("Манифест обновления неверен или относится к другому приложению.");
+                throw new InvalidDataException("Манифест обновления не соответствует этому приложению или устройству.");
 
             Version available;
             if (!Version.TryParse(manifest.Version, out available))
@@ -64,28 +69,78 @@ namespace ESP32AIControl.UWP
             };
         }
 
-        public static async Task<StorageFile> DownloadAndVerifyAsync(UpdateManifest manifest)
+        public static async Task<StorageFile> DownloadAndVerifyAsync(
+            UpdateManifest manifest, Action<long, long> progress = null)
         {
             if (manifest == null || !manifest.Enabled ||
-                string.IsNullOrWhiteSpace(manifest.Package) ||
-                string.IsNullOrWhiteSpace(manifest.Sha256) || manifest.Sha256.Length != 64)
-                throw new InvalidDataException("Пакет ещё не опубликован или SHA-256 не задан.");
-            if (manifest.Package.Contains("..") || manifest.Package.Contains("/") ||
-                manifest.Package.Contains("\\"))
-                throw new InvalidDataException("Недопустимое имя пакета.");
+                manifest.Package != "app.appxbundle" ||
+                !IsSha256(manifest.Sha256))
+                throw new InvalidDataException("Пакет ещё не опубликован или данные манифеста неверны.");
 
-            var uri = new Uri("https://raw.githubusercontent.com/yasn198020-jpg/ESP32-AI-Control-Updates/windows-10-mobile/" + manifest.Package);
-            byte[] data = await Client.GetByteArrayAsync(uri);
-            using (var sha = SHA256.Create())
+            var uri = new Uri(PackageBaseUrl + manifest.Package);
+            using (var response = await Client.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead))
             {
-                string actual = BitConverter.ToString(sha.ComputeHash(data)).Replace("-", "").ToLowerInvariant();
+                response.EnsureSuccessStatusCode();
+                long total = response.Content.Headers.ContentLength ?? -1;
+                var file = await ApplicationData.Current.LocalFolder.CreateFileAsync(
+                    "ESP32AIControl-update.appxbundle", CreationCollisionOption.ReplaceExisting);
+
+                using (var input = await response.Content.ReadAsStreamAsync())
+                using (var output = await file.OpenStreamForWriteAsync())
+                {
+                    var buffer = new byte[64 * 1024];
+                    long received = 0;
+                    int count;
+                    while ((count = await input.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                    {
+                        await output.WriteAsync(buffer, 0, count);
+                        received += count;
+                        if (progress != null) progress(received, total);
+                    }
+                    await output.FlushAsync();
+                }
+
+                string actual;
+                using (var input = await file.OpenStreamForReadAsync())
+                using (var sha = SHA256.Create())
+                {
+                    actual = await Task.Run(() =>
+                        BitConverter.ToString(sha.ComputeHash(input)).Replace("-", "").ToLowerInvariant());
+                }
+
                 if (!string.Equals(actual, manifest.Sha256, StringComparison.OrdinalIgnoreCase))
-                    throw new InvalidDataException("SHA-256 не совпадает. Пакет отклонён.");
+                {
+                    await file.DeleteAsync();
+                    throw new InvalidDataException("SHA-256 пакета не совпадает. Файл удалён.");
+                }
+                return file;
             }
-            var file = await ApplicationData.Current.LocalFolder.CreateFileAsync(
-                "ESP32AIControl-update.appxbundle", CreationCollisionOption.ReplaceExisting);
-            await FileIO.WriteBytesAsync(file, data);
-            return file;
+        }
+
+        public static async Task<PackageInstallResult> InstallAsync(
+            StorageFile packageFile, Action<uint> progress = null)
+        {
+            if (packageFile == null) throw new ArgumentNullException("packageFile");
+
+            var operation = InstallationManager.AddPackageAsync(
+                "ESP32-AI-Control", new Uri(packageFile.Path));
+
+            if (progress != null)
+                operation.Progress = (op, value) => progress(value);
+
+            return await operation;
+        }
+
+        private static bool IsSha256(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value) || value.Length != 64) return false;
+            for (int i = 0; i < value.Length; i++)
+            {
+                char c = value[i];
+                if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') ||
+                      (c >= 'A' && c <= 'F'))) return false;
+            }
+            return true;
         }
     }
 }
