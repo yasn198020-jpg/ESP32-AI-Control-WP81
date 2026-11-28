@@ -13,6 +13,7 @@ using Windows.Storage;
 using Windows.UI.Core;
 using Windows.Media.SpeechRecognition;
 using Windows.UI.Xaml.Shapes;
+using Windows.UI.Notifications;
 
 namespace ESP32AIControl.UWP
 {
@@ -165,7 +166,19 @@ namespace ESP32AIControl.UWP
                     var first = scenario.Conditions.FirstOrDefault();
                     var sensor = first == null ? null : _dashboardSnapshot.Devices.SelectMany(x => x.Widgets).FirstOrDefault(x => x.Id == first.WidgetId);
                     string message = (scenario.Message ?? "Условие выполнено").Replace("{value}", sensor == null ? "" : sensor.Value);
-                    await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () => StatusText.Text = "Сценарий «" + scenario.Title + "»: " + message);
+                    await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
+                    {
+                        StatusText.Text = "Сценарий «" + scenario.Title + "»: " + message;
+                        try
+                        {
+                            var toastXml = ToastNotificationManager.GetTemplateContent(ToastTemplateType.ToastText02);
+                            var textNodes = toastXml.GetElementsByTagName("text");
+                            textNodes.Item(0).AppendChild(toastXml.CreateTextNode(scenario.Title));
+                            textNodes.Item(1).AppendChild(toastXml.CreateTextNode(message));
+                            ToastNotificationManager.CreateToastNotifier().Show(new ToastNotification(toastXml));
+                        }
+                        catch { }
+                    });
                 }
                 if (scenario.ActionType == "MQTT_CONTROL")
                 {
