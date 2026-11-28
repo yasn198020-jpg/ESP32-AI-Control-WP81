@@ -140,11 +140,17 @@ namespace ESP32AIControl.UWP
             if (settings.Port < 1 || settings.Port > 65535) throw new ArgumentOutOfRangeException("Port");
 
             Stop();
+            string cleanHost = settings.Host.Trim();
+            bool tls = settings.UseTls;
+            if (cleanHost.StartsWith("mqtts://", StringComparison.OrdinalIgnoreCase)) { cleanHost = cleanHost.Substring(8); tls = true; }
+            else if (cleanHost.StartsWith("mqtt://", StringComparison.OrdinalIgnoreCase)) cleanHost = cleanHost.Substring(7);
+            else if (cleanHost.StartsWith("tcp://", StringComparison.OrdinalIgnoreCase)) cleanHost = cleanHost.Substring(6);
+            else if (cleanHost.StartsWith("ssl://", StringComparison.OrdinalIgnoreCase)) { cleanHost = cleanHost.Substring(6); tls = true; }
             _settings = new MqttConnectionSettings {
-                Host = settings.Host.Trim(), Port = settings.Port,
+                Host = cleanHost.TrimEnd('/'), Port = settings.Port,
                 Prefix = settings.Prefix.Trim().Trim('/'),
                 Username = settings.Username ?? "", Password = settings.Password ?? "",
-                UseTls = settings.UseTls
+                UseTls = tls
             };
             _lifetime = new CancellationTokenSource();
             var token = _lifetime.Token;
@@ -228,7 +234,7 @@ namespace ESP32AIControl.UWP
             var body = new List<byte>();
             AddString(body, "MQTT"); body.Add(4);
             byte flags = 0x02;
-            if (!String.IsNullOrEmpty(_settings.Username)) flags |= 0x80;
+            if (!String.IsNullOrEmpty(_settings.Username) || !String.IsNullOrEmpty(_settings.Password)) flags |= 0x80;
             if (!String.IsNullOrEmpty(_settings.Password)) flags |= 0x40;
             body.Add(flags); body.Add(0); body.Add(45);
             AddString(body, "ESP32AIControl-UWP-" + Guid.NewGuid().ToString("N").Substring(0, 12));
