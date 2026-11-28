@@ -564,3 +564,98 @@ namespace ESP32AIControl.UWP
         }
     }
 }
+
+
+namespace ESP32AIControl.UWP
+{
+    // Persistent equivalent of Android TrainedCommandStore.
+    public sealed class TrainedVoiceCommand
+    {
+        public string Phrase { get; set; }
+        public string DeviceId { get; set; }
+        public string WidgetId { get; set; }
+        public string Value { get; set; }
+        public List<string> Variants { get; set; }
+
+        public TrainedVoiceCommand()
+        {
+            Phrase = ""; DeviceId = ""; WidgetId = ""; Value = "1";
+            Variants = new List<string>();
+        }
+    }
+
+    public sealed class TrainedVoiceCommandStore
+    {
+        private const string StorageKey = "trained_voice_commands";
+
+        public IList<TrainedVoiceCommand> Load()
+        {
+            try
+            {
+                var raw = Windows.Storage.ApplicationData.Current.LocalSettings.Values[StorageKey] as string;
+                if (String.IsNullOrWhiteSpace(raw)) return new List<TrainedVoiceCommand>();
+                var array = JArray.Parse(raw);
+                var result = new List<TrainedVoiceCommand>();
+                foreach (var item in array.OfType<JObject>())
+                {
+                    var phrase = ((string)item["phrase"] ?? "").Trim();
+                    if (phrase.Length == 0) continue;
+                    var variants = item["variants"] is JArray
+                        ? ((JArray)item["variants"]).Values<string>().Where(x => !String.IsNullOrWhiteSpace(x)).Select(x => x.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToList()
+                        : new List<string>();
+                    if (variants.Count == 0) variants.Add(phrase);
+                    result.Add(new TrainedVoiceCommand {
+                        Phrase = phrase, DeviceId = (string)item["deviceId"] ?? "",
+                        WidgetId = (string)item["widgetId"] ?? "", Value = (string)item["value"] ?? "1",
+                        Variants = variants
+                    });
+                }
+                return result;
+            }
+            catch { return new List<TrainedVoiceCommand>(); }
+        }
+
+        public void Save(IEnumerable<TrainedVoiceCommand> commands)
+        {
+            var array = new JArray();
+            foreach (var command in commands ?? Enumerable.Empty<TrainedVoiceCommand>())
+                array.Add(new JObject {
+                    ["phrase"] = command.Phrase ?? "",
+                    ["deviceId"] = command.DeviceId ?? "",
+                    ["widgetId"] = command.WidgetId ?? "",
+                    ["value"] = command.Value ?? "",
+                    ["variants"] = new JArray((command.Variants ?? new List<string>()).Distinct(StringComparer.OrdinalIgnoreCase))
+                });
+            Windows.Storage.ApplicationData.Current.LocalSettings.Values[StorageKey] = array.ToString(Formatting.None);
+        }
+
+        public void Add(TrainedVoiceCommand command)
+        {
+            var all = Load().Where(x => !(String.Equals(x.Phrase, command.Phrase, StringComparison.OrdinalIgnoreCase)
+                && x.DeviceId == command.DeviceId && x.WidgetId == command.WidgetId)).ToList();
+            command.Variants = (command.Variants ?? new List<string>()).Concat(new[] { command.Phrase })
+                .Where(x => !String.IsNullOrWhiteSpace(x)).Select(x => x.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            all.Add(command);
+            Save(all);
+        }
+
+        public void Remove(TrainedVoiceCommand command)
+        {
+            Save(Load().Where(x => !(x.Phrase == command.Phrase && x.DeviceId == command.DeviceId
+                && x.WidgetId == command.WidgetId && x.Value == command.Value)));
+        }
+
+        public void AddVariant(string phrase, string variant)
+        {
+            phrase = (phrase ?? "").Trim(); variant = (variant ?? "").Trim();
+            if (phrase.Length == 0 || variant.Length == 0) return;
+            var all = Load();
+            foreach (var command in all.Where(x => String.Equals(x.Phrase, phrase, StringComparison.OrdinalIgnoreCase)))
+                if (!command.Variants.Contains(variant, StringComparer.OrdinalIgnoreCase)) command.Variants.Add(variant);
+            Save(all);
+        }
+
+        public void Clear() { Windows.Storage.ApplicationData.Current.LocalSettings.Values.Remove(StorageKey); }
+    }
+}
