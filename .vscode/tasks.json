@@ -1,22 +1,100 @@
 {
-  "version":"2.0.0",
-  "tasks":[
+  "version": "2.0.0",
+  "tasks": [
     {
-      "label":"WP8.1: Build Debug ARM",
-      "type":"shell",
-      "command":"powershell.exe",
-      "args":["-NoProfile","-ExecutionPolicy","Bypass","-File","${workspaceFolder}\\.vscode\\build-debug.ps1","-BuildConfiguration","Debug"],
-      "options":{"cwd":"${workspaceFolder}"},
-      "group":{"kind":"build","isDefault":true},
-      "problemMatcher":"$msCompile"
+      "label": "WP8.1: Build Debug ARM",
+      "type": "shell",
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}\\.vscode\\build-debug.ps1",
+        "-BuildConfiguration",
+        "Debug"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": "$msCompile"
     },
     {
-      "label":"WP8.1: Build Release ARM",
-      "type":"shell",
-      "command":"powershell.exe",
-      "args":["-NoProfile","-ExecutionPolicy","Bypass","-File","${workspaceFolder}\\.vscode\\build-debug.ps1","-BuildConfiguration","Release"],
-      "options":{"cwd":"${workspaceFolder}"},
-      "problemMatcher":"$msCompile"
+      "label": "WP8.1: Build Release ARM",
+      "type": "shell",
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}\\.vscode\\build-debug.ps1",
+        "-BuildConfiguration",
+        "Release"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "WP10: Build + Sign ARM",
+      "type": "shell",
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}\\scripts\\deploy-wp10-usb.ps1",
+        "-SkipDeploy"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "build",
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "WP10: Deploy to Lumia 830 USB",
+      "type": "shell",
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}\\scripts\\deploy-wp10-usb.ps1",
+        "-SkipBuild"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "WP10: Build + Sign + Deploy Lumia 830",
+      "type": "shell",
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}\\scripts\\deploy-wp10-usb.ps1"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": "$msCompile"
     }
   ]
 }
