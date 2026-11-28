@@ -918,7 +918,7 @@ namespace ESP32AIControl.UWP
                     catch { }
                 }
                 lock (_sync) { _cache.Clear(); _cache.AddRange(loaded.OrderBy(p => p.Timestamp).TakeLastCompat(5000)); }
-                if (cutoff > 0 && loaded.Count > 0)
+                if (cutoff > 0)
                 {
                     var compacted = loaded.OrderBy(p => p.Timestamp).Select(point => new JObject {
                         ["t"] = point.Timestamp, ["d"] = point.DeviceId, ["w"] = point.WidgetId,
