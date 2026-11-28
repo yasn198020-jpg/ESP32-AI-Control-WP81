@@ -33,7 +33,7 @@ namespace ESP32AIControl.UWP.Core.Marfa
             public long DelayMs;
         }
 
-        private const long MaxDelayMs = 30L * 24L * 60L * 60L * 1000L;
+        private const long MaxDelayMs = 7L * 24L * 60L * 60L * 1000L;
         private readonly MarfaAnalyticalEngine analytical = new MarfaAnalyticalEngine();
         private readonly DialogContext dialog = new DialogContext();
         private readonly IMarfaScenarioAdvisor scenarioAdvisor;
@@ -403,27 +403,55 @@ namespace ESP32AIControl.UWP.Core.Marfa
         private static long ParseTime(string text)
         {
             var relative = Regex.Match(text, @"(?:через|спустя)\s+(.+)");
-            if (!relative.Success) return 0;
-            string tail = relative.Groups[1].Value;
-            if (ContainsAny(tail, "полчаса", "полчасика")) return 30L * 60000L;
-            if (ContainsAny(tail, "полтора часа", "полтора час")) return 90L * 60000L;
-            double minutes = 0; bool found = false;
-            foreach (Match m in Regex.Matches(tail, @"(\d+(?:[.,]\d+)?)\s*(час(?:а|ов)?|ч|минут(?:а|ы)?|мин)"))
+            if (relative.Success)
             {
-                double n; if (!Double.TryParse(m.Groups[1].Value.Replace(',', '.'), NumberStyles.Number, CultureInfo.InvariantCulture, out n)) continue;
-                minutes += m.Groups[2].Value.StartsWith("ч") ? n * 60 : n; found = true;
-            }
-            if (!found)
-            {
-                var word = Regex.Match(tail, @"\b(один|одна|одно|два|две|три|четыре|пять|десять|пятнадцать|двадцать|тридцать|сорок|пятьдесят|шестьдесят)\s+(час(?:а|ов)?|ч|минут(?:а|ы)?|мин)\b");
-                if (word.Success)
+                string tail = relative.Groups[1].Value;
+                if (ContainsAny(tail, "полчаса", "полчасика")) return 30L * 60000L;
+                if (ContainsAny(tail, "полтора часа", "полтора час")) return 90L * 60000L;
+                double minutes = 0; bool found = false;
+                foreach (Match m in Regex.Matches(tail, @"(\d+(?:[.,]\d+)?)\s*(час(?:а|ов)?|ч|минут(?:а|ы)?|мин|секунд(?:а|ы)?|сек)"))
                 {
-                    var nums = new Dictionary<string, int> { {"один",1},{"одна",1},{"одно",1},{"два",2},{"две",2},{"три",3},{"четыре",4},{"пять",5},{"десять",10},{"пятнадцать",15},{"двадцать",20},{"тридцать",30},{"сорок",40},{"пятьдесят",50},{"шестьдесят",60} };
-                    int n; if (nums.TryGetValue(word.Groups[1].Value, out n)) { minutes = word.Groups[2].Value.StartsWith("ч") ? n * 60 : n; found = true; }
+                    double n;
+                    if (!Double.TryParse(m.Groups[1].Value.Replace(',', '.'), NumberStyles.Number, CultureInfo.InvariantCulture, out n)) continue;
+                    string unit = m.Groups[2].Value;
+                    minutes += unit.StartsWith("ч") ? n * 60.0 : unit.StartsWith("сек") || unit == "сек" ? n / 60.0 : n;
+                    found = true;
+                }
+                if (!found)
+                {
+                    var word = Regex.Match(tail, @"\b(один|одна|одно|два|две|три|четыре|пять|шесть|семь|восемь|девять|десять|одиннадцать|двенадцать|пятнадцать|двадцать|тридцать|сорок|пятьдесят|шестьдесят)\s+(час(?:а|ов)?|ч|минут(?:а|ы)?|мин)\b");
+                    if (word.Success)
+                    {
+                        var nums = new Dictionary<string, int> {
+                            {"один",1},{"одна",1},{"одно",1},{"два",2},{"две",2},{"три",3},{"четыре",4},{"пять",5},
+                            {"шесть",6},{"семь",7},{"восемь",8},{"девять",9},{"десять",10},{"одиннадцать",11},
+                            {"двенадцать",12},{"пятнадцать",15},{"двадцать",20},{"тридцать",30},{"сорок",40},
+                            {"пятьдесят",50},{"шестьдесят",60}
+                        };
+                        int n;
+                        if (nums.TryGetValue(word.Groups[1].Value, out n))
+                        { minutes = word.Groups[2].Value.StartsWith("ч") ? n * 60.0 : n; found = true; }
+                    }
+                }
+                if (!found || minutes <= 0) return 0;
+                return (long)Math.Min(MaxDelayMs, minutes * 60000.0);
+            }
+
+            var absolute = Regex.Match(text, @"\b(?:в|к)\s+(\d{1,2})(?::(\d{2}))?(?:\s*(?:час(?:а|ов)?|ч))?\b");
+            if (absolute.Success)
+            {
+                int hour, minute = 0;
+                if (Int32.TryParse(absolute.Groups[1].Value, out hour) &&
+                    (absolute.Groups[2].Value.Length == 0 || Int32.TryParse(absolute.Groups[2].Value, out minute)) &&
+                    hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59)
+                {
+                    DateTime now = DateTime.Now;
+                    DateTime target = new DateTime(now.Year, now.Month, now.Day, hour, minute, 0);
+                    if (target <= now) target = target.AddDays(1);
+                    return (long)Math.Min(MaxDelayMs, (target - now).TotalMilliseconds);
                 }
             }
-            if (!found || minutes <= 0) return 0;
-            return (long)Math.Min(MaxDelayMs, minutes * 60000.0);
+            return 0;
         }
 
         private static string BuildClarification(IList<Candidate> candidates, ActionSpec action)
