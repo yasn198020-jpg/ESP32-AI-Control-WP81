@@ -964,7 +964,7 @@ namespace ESP32AIControl.UWP
             var widgetPicker = new ComboBox { Header = "Элемент управления", MinWidth = 240 };
             var valueBox = new TextBox { Header = "Значение команды", PlaceholderText = "Например: 1, 0 или 23.5" };
             var delayBox = new TextBox { Header = "Выполнить через (минут)", Text = "5" };
-            var info = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = new SolidColorBrush(Color.FromArgb(255, 170, 175, 190)) };
+            var info = new TextBlock { Text = "Важно: команда отправляется в назначенное время, только если приложение активно и MQTT подключён. Если Windows приостановит приложение, отправка произойдёт после возвращения в приложение и восстановления MQTT.", TextWrapping = TextWrapping.Wrap, Foreground = new SolidColorBrush(Color.FromArgb(255, 170, 175, 190)), Margin = new Thickness(0, 8, 0, 0) };
             var listPanel = new StackPanel();
             var addButton = new Button { Content = "Запланировать команду", HorizontalAlignment = HorizontalAlignment.Stretch };
             var devices = _dashboardSnapshot.Devices.ToList();
