@@ -3,6 +3,13 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using Windows.Networking;
+using Windows.Networking.Sockets;
+using Windows.Storage.Streams;
 
 namespace ESP32AIControl.UWP
 {
@@ -80,5 +87,348 @@ namespace ESP32AIControl.UWP
     {
         public ObservableCollection<DeviceModel> Devices { get; private set; }
         public DashboardSnapshot() { Devices = new ObservableCollection<DeviceModel>(); }
+    }
+}
+
+
+namespace ESP32AIControl.UWP
+{
+    // MQTT 3.1.1 transport used by the UWP application. The implementation is
+    // deliberately independent of the UI so the same runtime serves phone and PC.
+    public sealed class MqttConnectionSettings
+    {
+        public string Host { get; set; }
+        public int Port { get; set; }
+        public string Prefix { get; set; }
+        public string Username { get; set; }
+        public string Password { get; set; }
+        public bool UseTls { get; set; }
+
+        public MqttConnectionSettings()
+        {
+            Host = ""; Port = 1883; Prefix = "IoTManager";
+            Username = ""; Password = ""; UseTls = false;
+        }
+    }
+
+    public sealed class MqttDeviceService : IDisposable
+    {
+        private readonly SemaphoreSlim _writeLock = new SemaphoreSlim(1, 1);
+        private readonly object _stateLock = new object();
+        private StreamSocket _socket;
+        private DataReader _reader;
+        private DataWriter _writer;
+        private CancellationTokenSource _lifetime;
+        private MqttConnectionSettings _settings;
+        private readonly Dictionary<string, DeviceModel> _devices =
+            new Dictionary<string, DeviceModel>(StringComparer.OrdinalIgnoreCase);
+        private ushort _packetId;
+        private bool _connected;
+        private bool _disposed;
+
+        public event Action<bool> ConnectionChanged;
+        public event Action<string> Log;
+        public event Action<IList<DeviceModel>> DevicesChanged;
+
+        public bool IsConnected { get { lock (_stateLock) return _connected; } }
+
+        public async Task StartAsync(MqttConnectionSettings settings)
+        {
+            if (settings == null) throw new ArgumentNullException("settings");
+            if (String.IsNullOrWhiteSpace(settings.Host)) throw new ArgumentException("Не указан адрес MQTT-брокера.");
+            if (String.IsNullOrWhiteSpace(settings.Prefix)) throw new ArgumentException("Не указан MQTT prefix.");
+            if (settings.Port < 1 || settings.Port > 65535) throw new ArgumentOutOfRangeException("Port");
+
+            Stop();
+            _settings = new MqttConnectionSettings {
+                Host = settings.Host.Trim(), Port = settings.Port,
+                Prefix = settings.Prefix.Trim().Trim('/'),
+                Username = settings.Username ?? "", Password = settings.Password ?? "",
+                UseTls = settings.UseTls
+            };
+            _lifetime = new CancellationTokenSource();
+            await Task.Run(() => ConnectionLoopAsync(_lifetime.Token));
+        }
+
+        public void Stop()
+        {
+            if (_lifetime != null) { _lifetime.Cancel(); _lifetime.Dispose(); _lifetime = null; }
+            CloseSocket();
+            SetConnected(false);
+        }
+
+        public async Task<bool> SendControlAsync(string deviceId, string widgetId, string value)
+        {
+            if (!IsConnected || String.IsNullOrWhiteSpace(deviceId) || String.IsNullOrWhiteSpace(widgetId))
+                return false;
+            var payload = JsonConvert.SerializeObject(new { status = value ?? "" });
+            return await PublishAsync("/" + _settings.Prefix + "/" + deviceId + "/" + widgetId + "/control", payload);
+        }
+
+        public async Task<bool> SendHelloAsync()
+        {
+            if (!IsConnected) return false;
+            return await PublishAsync("/" + _settings.Prefix, "HELLO");
+        }
+
+        private async Task ConnectionLoopAsync(CancellationToken token)
+        {
+            var delay = 2000;
+            while (!token.IsCancellationRequested)
+            {
+                try
+                {
+                    await OpenConnectionAsync(token);
+                    delay = 2000;
+                    SetConnected(true);
+                    WriteLog("MQTT: соединение установлено.");
+                    await SendPacketAsync(0x82, BuildSubscribe("/" + _settings.Prefix + "/#"), token);
+                    await PublishAsync("/" + _settings.Prefix, "HELLO");
+                    await Task.WhenAll(ReadLoopAsync(token), KeepAliveLoopAsync(token));
+                }
+                catch (OperationCanceledException) { break; }
+                catch (Exception ex) { WriteLog("MQTT: " + ex.Message); }
+                finally
+                {
+                    SetConnected(false);
+                    CloseSocket();
+                }
+                if (!token.IsCancellationRequested)
+                {
+                    WriteLog("MQTT: повторное подключение через " + (delay / 1000) + " с.");
+                    try { await Task.Delay(delay, token); } catch (OperationCanceledException) { break; }
+                    delay = Math.Min(delay * 2, 30000);
+                }
+            }
+        }
+
+        private async Task OpenConnectionAsync(CancellationToken token)
+        {
+            CloseSocket();
+            _socket = new StreamSocket();
+            var protection = _settings.UseTls ? SocketProtectionLevel.Tls12 : SocketProtectionLevel.PlainSocket;
+            await _socket.ConnectAsync(new HostName(_settings.Host), _settings.Port.ToString(), protection)
+                .AsTask(token);
+            _reader = new DataReader(_socket.InputStream) { InputStreamOptions = InputStreamOptions.Partial };
+            _writer = new DataWriter(_socket.OutputStream) { UnicodeEncoding = UnicodeEncoding.Utf8 };
+            var connect = BuildConnect();
+            await SendPacketAsync(0x10, connect, token);
+            var response = await ReadPacketAsync(token);
+            if (response == null || response.Length < 2 || (response[0] >> 4) != 2 || response[1] != 0)
+                throw new InvalidOperationException("Брокер отклонил MQTT CONNECT.");
+        }
+
+        private byte[] BuildConnect()
+        {
+            var body = new List<byte>();
+            AddString(body, "MQTT"); body.Add(4);
+            byte flags = 0x02;
+            if (!String.IsNullOrEmpty(_settings.Username)) flags |= 0x80;
+            if (!String.IsNullOrEmpty(_settings.Password)) flags |= 0x40;
+            body.Add(flags); body.Add(0); body.Add(45);
+            AddString(body, "ESP32AIControl-UWP-" + Guid.NewGuid().ToString("N").Substring(0, 12));
+            if ((flags & 0x80) != 0) AddString(body, _settings.Username);
+            if ((flags & 0x40) != 0) AddString(body, _settings.Password);
+            return body.ToArray();
+        }
+
+        private static byte[] BuildSubscribe(string topic)
+        {
+            var body = new List<byte>();
+            body.Add(0); body.Add(1); AddString(body, topic); body.Add(1);
+            return body.ToArray();
+        }
+
+        private async Task ReadLoopAsync(CancellationToken token)
+        {
+            while (!token.IsCancellationRequested)
+            {
+                var packet = await ReadPacketAsync(token);
+                if (packet == null || packet.Length == 0) throw new InvalidOperationException("MQTT broker closed connection.");
+                int type = packet[0] >> 4;
+                if (type == 3) await HandlePublishAsync(packet, token);
+                else if (type == 13) { /* PINGRESP */ }
+                else if (type == 14) throw new InvalidOperationException("MQTT broker sent DISCONNECT.");
+            }
+        }
+
+        private async Task KeepAliveLoopAsync(CancellationToken token)
+        {
+            while (!token.IsCancellationRequested)
+            {
+                await Task.Delay(25000, token);
+                await SendPacketAsync(0xC0, new byte[0], token);
+            }
+        }
+
+        private async Task<byte[]> ReadPacketAsync(CancellationToken token)
+        {
+            if (_reader == null) throw new InvalidOperationException("MQTT input stream is closed.");
+            if (await _reader.LoadAsync(1).AsTask(token) != 1) return null;
+            byte header = _reader.ReadByte();
+            int remaining = 0, multiplier = 1, encoded;
+            do
+            {
+                if (await _reader.LoadAsync(1).AsTask(token) != 1) throw new InvalidOperationException("MQTT packet length truncated.");
+                encoded = _reader.ReadByte();
+                remaining += (encoded & 127) * multiplier;
+                multiplier *= 128;
+                if (multiplier > 128 * 128 * 128 * 128) throw new InvalidOperationException("Invalid MQTT packet length.");
+            } while ((encoded & 128) != 0);
+            if (remaining > 1024 * 1024) throw new InvalidOperationException("MQTT packet exceeds 1 MB.");
+            if (remaining > 0 && await _reader.LoadAsync((uint)remaining).AsTask(token) < remaining)
+                throw new InvalidOperationException("MQTT packet payload truncated.");
+            var result = new byte[remaining + 1];
+            result[0] = header;
+            if (remaining > 0) _reader.ReadBytes(result, 1, remaining);
+            return result;
+        }
+
+        private async Task HandlePublishAsync(byte[] packet, CancellationToken token)
+        {
+            int offset = 1;
+            int remaining = 0, multiplier = 1, digit;
+            do { digit = packet[offset++]; remaining += (digit & 127) * multiplier; multiplier *= 128; } while ((digit & 128) != 0);
+            int topicLength = (packet[offset++] << 8) | packet[offset++];
+            string topic = Encoding.UTF8.GetString(packet, offset, topicLength); offset += topicLength;
+            int qos = (packet[0] >> 1) & 3;
+            ushort id = 0;
+            if (qos > 0) { id = (ushort)((packet[offset++] << 8) | packet[offset++]); }
+            string payload = Encoding.UTF8.GetString(packet, offset, packet.Length - offset);
+            ProcessMessage(topic, payload);
+            if (qos == 1) await SendPacketAsync(0x40, new byte[] { (byte)(id >> 8), (byte)id }, token);
+        }
+
+        private void ProcessMessage(string topic, string payload)
+        {
+            string root = "/" + _settings.Prefix;
+            if (topic.TrimEnd('/') == root && String.Equals(payload.Trim(), "HELLO", StringComparison.OrdinalIgnoreCase))
+                return;
+            if (!topic.StartsWith(root + "/", StringComparison.Ordinal)) return;
+            string[] parts = topic.Substring(root.Length).Trim('/').Split('/');
+            if (parts.Length < 2) return;
+            string deviceId = parts[0];
+            lock (_stateLock)
+            {
+                DeviceModel device;
+                if (!_devices.TryGetValue(deviceId, out device))
+                {
+                    device = new DeviceModel { Id = deviceId, Name = deviceId, Online = true };
+                    _devices.Add(deviceId, device);
+                }
+                device.Online = true;
+                string leaf = parts[parts.Length - 1];
+                try
+                {
+                    JObject json = null;
+                    if (payload.TrimStart().StartsWith("{")) json = JObject.Parse(payload);
+                    if (leaf == "config" && parts.Length == 2 && json != null)
+                    {
+                        string configTopic = (string)json["topic"] ?? "";
+                        string widgetId = configTopic.Trim('/').Split('/').LastOrDefault();
+                        if (String.IsNullOrWhiteSpace(widgetId)) return;
+                        var widget = device.Widgets.FirstOrDefault(x => x.Id == widgetId);
+                        if (widget == null) { widget = new WidgetModel { Id = widgetId }; device.Widgets.Add(widget); }
+                        widget.Title = (string)json["descr"] ?? (string)json["label"] ?? (string)json["name"] ?? widgetId;
+                        widget.Type = (string)json["widget"] ?? "status";
+                        widget.DefinitionName = widget.Type;
+                        widget.Page = (string)json["page"] ?? "";
+                        widget.Order = (int?)json["order"] ?? 0;
+                        widget.ConfigJson = json.ToString(Formatting.None);
+                        widget.Unit = (string)json["unit"] ?? "";
+                    }
+                    else if ((leaf == "status" || leaf == "event") && parts.Length >= 3)
+                    {
+                        string widgetId = leaf == "event" && json != null
+                            ? ((string)json["id"] ?? parts[parts.Length - 2]) : parts[parts.Length - 2];
+                        string value = "";
+                        JToken token = json == null ? null : json[leaf == "event" ? "val" : "status"];
+                        if (token != null) value = token.Type == JTokenType.String ? (string)token : token.ToString(Formatting.None);
+                        else value = payload;
+                        var widget = device.Widgets.FirstOrDefault(x => x.Id == widgetId);
+                        if (widget == null) { widget = new WidgetModel { Id = widgetId, Title = widgetId }; device.Widgets.Add(widget); }
+                        widget.Value = value;
+                        widget.LastUpdatedUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                        if (leaf == "status") widget.CommandState = "confirmed";
+                    }
+                    else if (leaf == "state" && parts.Length == 2)
+                    {
+                        string state = json == null ? payload.Trim().Trim('"') : ((string)json["status"] ?? payload);
+                        device.Online = !String.Equals(state, "offline", StringComparison.OrdinalIgnoreCase);
+                    }
+                    device.Widgets = new ObservableCollection<WidgetModel>(device.Widgets.OrderBy(x => x.Page).ThenBy(x => x.Order));
+                }
+                catch (Exception ex) { WriteLog("MQTT parse " + topic + ": " + ex.Message); }
+                PublishSnapshotLocked();
+            }
+        }
+
+        private async Task<bool> PublishAsync(string topic, string payload)
+        {
+            if (!IsConnected) return false;
+            var body = new List<byte>(); AddString(body, topic);
+            body.AddRange(Encoding.UTF8.GetBytes(payload ?? ""));
+            try { await SendPacketAsync(0x30, body.ToArray(), _lifetime.Token); return true; }
+            catch (Exception ex) { WriteLog("MQTT publish: " + ex.Message); return false; }
+        }
+
+        private async Task SendPacketAsync(byte header, byte[] body, CancellationToken token)
+        {
+            await _writeLock.WaitAsync(token);
+            try
+            {
+                if (_writer == null) throw new InvalidOperationException("MQTT output stream is closed.");
+                var packet = new List<byte> { header };
+                int length = body == null ? 0 : body.Length;
+                do { int digit = length % 128; length /= 128; if (length > 0) digit |= 128; packet.Add((byte)digit); } while (length > 0);
+                if (body != null) packet.AddRange(body);
+                _writer.WriteBytes(packet.ToArray());
+                await _writer.StoreAsync().AsTask(token);
+                await _writer.FlushAsync().AsTask(token);
+            }
+            finally { _writeLock.Release(); }
+        }
+
+        private static void AddString(List<byte> target, string value)
+        {
+            byte[] bytes = Encoding.UTF8.GetBytes(value ?? "");
+            target.Add((byte)(bytes.Length >> 8)); target.Add((byte)bytes.Length); target.AddRange(bytes);
+        }
+
+        private void SetConnected(bool value)
+        {
+            bool changed;
+            lock (_stateLock) { changed = _connected != value; _connected = value; }
+            if (changed && ConnectionChanged != null) ConnectionChanged(value);
+        }
+
+        private void PublishSnapshotLocked()
+        {
+            if (DevicesChanged == null) return;
+            var copy = _devices.Values.Select(d => new DeviceModel {
+                Id = d.Id, Name = d.Name, Online = d.Online,
+                Widgets = new ObservableCollection<WidgetModel>(d.Widgets.Select(w => new WidgetModel {
+                    Id=w.Id, Title=w.Title, Type=w.Type, DefinitionName=w.DefinitionName, Value=w.Value,
+                    Unit=w.Unit, Page=w.Page, Order=w.Order, LastUpdatedUnixMs=w.LastUpdatedUnixMs,
+                    ConfigJson=w.ConfigJson, CommandState=w.CommandState, ExpectedCommandValue=w.ExpectedCommandValue
+                }))
+            }).ToList();
+            DevicesChanged(copy);
+        }
+
+        private void WriteLog(string message) { if (Log != null) Log(message); }
+
+        private void CloseSocket()
+        {
+            if (_reader != null) { _reader.Dispose(); _reader = null; }
+            if (_writer != null) { _writer.Dispose(); _writer = null; }
+            if (_socket != null) { _socket.Dispose(); _socket = null; }
+        }
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true; Stop(); _writeLock.Dispose();
+        }
     }
 }
