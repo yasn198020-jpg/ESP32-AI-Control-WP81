@@ -513,7 +513,16 @@ namespace ESP32AIControl.UWP
         private void SetConnected(bool value)
         {
             bool changed;
-            lock (_stateLock) { changed = _connected != value; _connected = value; }
+            lock (_stateLock)
+            {
+                changed = _connected != value;
+                _connected = value;
+                if (changed && !value)
+                {
+                    foreach (var device in _devices.Values) device.Online = false;
+                    PublishSnapshotLocked();
+                }
+            }
             if (changed && ConnectionChanged != null) ConnectionChanged(value);
         }
 
