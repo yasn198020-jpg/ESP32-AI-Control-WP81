@@ -142,14 +142,34 @@ namespace ESP32AIControl.UWP
             UpdateDownloadButton.IsEnabled = false;
             try
             {
-                StatusText.Text = "Загрузка пакета и проверка SHA-256…";
-                StorageFile file = await UpdateService.DownloadAndVerifyAsync(_pendingUpdateManifest);
-                StatusText.Text = "Пакет загружен и проверен: " + file.Name +
-                    ". Установка пока не запускается: совместимый API Windows 10 Mobile проверяется отдельно.";
+                StatusText.Text = "Загрузка пакета…";
+                StorageFile file = await UpdateService.DownloadAndVerifyAsync(
+                    _pendingUpdateManifest,
+                    (received, total) =>
+                    {
+                        StatusText.Text = total > 0
+                            ? "Загрузка: " + (received / 1024 / 1024) + " из " +
+                              (total / 1024 / 1024) + " МБ"
+                            : "Загружено: " + (received / 1024 / 1024) + " МБ";
+                    });
+
+                StatusText.Text = "SHA-256 совпадает. Запуск системной установки…";
+                var installResult = await UpdateService.InstallAsync(
+                    file,
+                    value => StatusText.Text = "Установка Windows: " + value + "%");
+
+                string state = installResult.InstallState.ToString();
+                if (state == "Installed")
+                    StatusText.Text = "Обновление установлено. Приложение может быть закрыто системой; запустите его снова.";
+                else
+                    StatusText.Text = "Состояние установки: " + state + ". " +
+                        (string.IsNullOrWhiteSpace(installResult.ErrorText)
+                            ? "Система не подтвердила завершение установки."
+                            : installResult.ErrorText);
             }
             catch (Exception ex)
             {
-                StatusText.Text = "Загрузка отклонена: " + ex.Message;
+                StatusText.Text = "Не удалось установить обновление: " + ex.Message;
             }
             finally
             {
