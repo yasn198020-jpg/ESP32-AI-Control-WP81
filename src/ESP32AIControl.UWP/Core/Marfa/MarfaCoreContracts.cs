@@ -56,7 +56,7 @@ namespace ESP32AIControl.UWP.Core.Marfa
         public string ActionValue { get; set; }
         public IList<LocalCommandActionItem> ActionItems { get; set; }
         public bool NeedsConfirmation { get; set; }
-        public object ScenarioPlan { get; set; }
+        public ScenarioCommandPlan ScenarioPlan { get; set; }
         public IList<LocalCommandResult> SubResults { get; set; }
         public LocalCommandResult()
         {
