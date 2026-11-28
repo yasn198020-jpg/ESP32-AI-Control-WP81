@@ -673,6 +673,12 @@ namespace ESP32AIControl.UWP
                 if (widget != null && !String.IsNullOrWhiteSpace(widget.Unit)) info.Text += " " + widget.Unit;
             };
 
+            periodPicker.SelectionChanged += async (s, a) =>
+            {
+                var item = periodPicker.SelectedItem as ComboBoxItem;
+                if (item != null) _historyStore.SetDisplayPeriod(Convert.ToInt64(item.Tag));
+                await loadGraph();
+            };
             devicePicker.SelectionChanged += (s, a) => { refreshWidgets(); };
             widgetPicker.SelectionChanged += async (s, a) => { await loadGraph(); };
             refresh.Click += async (s, a) => await loadGraph();
