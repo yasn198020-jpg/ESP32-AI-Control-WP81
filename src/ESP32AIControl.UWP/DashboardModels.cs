@@ -659,3 +659,257 @@ namespace ESP32AIControl.UWP
         public void Clear() { Windows.Storage.ApplicationData.Current.LocalSettings.Values.Remove(StorageKey); }
     }
 }
+
+
+namespace ESP32AIControl.UWP
+{
+    public sealed class HistoryPoint
+    {
+        public long Timestamp { get; set; }
+        public string DeviceId { get; set; }
+        public string WidgetId { get; set; }
+        public string RawValue { get; set; }
+        public double Value { get; set; }
+    }
+
+    // File-backed telemetry history. MQTT callbacks only update the latest-value
+    // cache; a sampler writes points at the configured interval, like Android.
+    public sealed class HistoryStore : IDisposable
+    {
+        private const string FileName = "telemetry-history.jsonl";
+        private readonly object _sync = new object();
+        private readonly System.Collections.Generic.Dictionary<string, HistoryPoint> _latest =
+            new System.Collections.Generic.Dictionary<string, HistoryPoint>(StringComparer.OrdinalIgnoreCase);
+        private readonly System.Collections.Generic.List<HistoryPoint> _cache =
+            new System.Collections.Generic.List<HistoryPoint>();
+        private readonly System.Threading.SemaphoreSlim _fileGate = new System.Threading.SemaphoreSlim(1, 1);
+        private System.Threading.Timer _sampler;
+        private Windows.Storage.StorageFile _file;
+        private bool _loaded;
+        private bool _disposed;
+        private int _samplePeriodMs = 10000;
+        private int _retentionDays = 30;
+        private long _displayPeriodMs = 86400000;
+
+        public HistoryStore()
+        {
+            try
+            {
+                var settings = Windows.Storage.ApplicationData.Current.LocalSettings.Values;
+                if (settings.ContainsKey("history_sample_period_ms"))
+                    Int32.TryParse(Convert.ToString(settings["history_sample_period_ms"]), out _samplePeriodMs);
+                if (settings.ContainsKey("history_retention_days"))
+                    Int32.TryParse(Convert.ToString(settings["history_retention_days"]), out _retentionDays);
+                if (settings.ContainsKey("history_display_period_ms"))
+                    Int64.TryParse(Convert.ToString(settings["history_display_period_ms"]), out _displayPeriodMs);
+            }
+            catch { }
+            _samplePeriodMs = NormalizeSamplePeriod(_samplePeriodMs);
+            _retentionDays = NormalizeRetention(_retentionDays);
+            _displayPeriodMs = NormalizeDisplayPeriod(_displayPeriodMs);
+            _sampler = new System.Threading.Timer(SampleTick, null, _samplePeriodMs, _samplePeriodMs);
+        }
+
+        public int SamplePeriodMs { get { lock (_sync) return _samplePeriodMs; } }
+        public int RetentionDays { get { lock (_sync) return _retentionDays; } }
+        public long DisplayPeriodMs { get { lock (_sync) return _displayPeriodMs; } }
+
+        public void UpdateLatest(string deviceId, string widgetId, string rawValue, long timestamp)
+        {
+            if (String.IsNullOrWhiteSpace(deviceId) || String.IsNullOrWhiteSpace(widgetId)) return;
+            double number;
+            string normalized = (rawValue ?? "").Trim().Replace(',', '.');
+            if (!Double.TryParse(normalized, NumberStyles.Any, CultureInfo.InvariantCulture, out number) ||
+                Double.IsNaN(number) || Double.IsInfinity(number)) return;
+            var point = new HistoryPoint {
+                Timestamp = timestamp > 0 ? timestamp : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                DeviceId = deviceId, WidgetId = widgetId, RawValue = rawValue ?? "", Value = number
+            };
+            lock (_sync) _latest[deviceId + "/" + widgetId] = point;
+        }
+
+        public void SetSamplePeriod(int milliseconds)
+        {
+            int value = NormalizeSamplePeriod(milliseconds);
+            lock (_sync) _samplePeriodMs = value;
+            Windows.Storage.ApplicationData.Current.LocalSettings.Values["history_sample_period_ms"] = value;
+            if (_sampler != null) _sampler.Change(value, value);
+        }
+
+        public void SetRetentionDays(int days)
+        {
+            int value = NormalizeRetention(days);
+            lock (_sync) _retentionDays = value;
+            Windows.Storage.ApplicationData.Current.LocalSettings.Values["history_retention_days"] = value;
+            PruneCache();
+        }
+
+        public void SetDisplayPeriod(long milliseconds)
+        {
+            long value = NormalizeDisplayPeriod(milliseconds);
+            lock (_sync) _displayPeriodMs = value;
+            Windows.Storage.ApplicationData.Current.LocalSettings.Values["history_display_period_ms"] = value;
+        }
+
+        public long DisplaySince()
+        {
+            long period;
+            lock (_sync) period = _displayPeriodMs;
+            if (period == 0) return 0;
+            if (period == 86400000)
+            {
+                DateTime now = DateTime.Now;
+                return new DateTimeOffset(now.Year, now.Month, now.Day, 0, 0, 0, DateTimeOffset.Now.Offset).ToUnixTimeMilliseconds();
+            }
+            return DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - period;
+        }
+
+        public async Task<IList<HistoryPoint>> LoadAsync(string deviceId, string widgetId, long since)
+        {
+            await EnsureLoadedAsync();
+            lock (_sync)
+            {
+                return _cache.Where(p => p.DeviceId == deviceId && p.WidgetId == widgetId && (since <= 0 || p.Timestamp >= since))
+                    .OrderBy(p => p.Timestamp).TakeLastCompat(5000).ToList();
+            }
+        }
+
+        public async Task<int> CountAsync()
+        {
+            await EnsureLoadedAsync();
+            lock (_sync) return _cache.Count;
+        }
+
+        public async Task ClearAsync()
+        {
+            await _fileGate.WaitAsync();
+            try
+            {
+                lock (_sync) { _cache.Clear(); _latest.Clear(); }
+                if (_file != null) await Windows.Storage.FileIO.WriteTextAsync(_file, "");
+            }
+            finally { _fileGate.Release(); }
+        }
+
+        private async Task EnsureLoadedAsync()
+        {
+            if (_loaded) return;
+            await _fileGate.WaitAsync();
+            try
+            {
+                if (_loaded) return;
+                var folder = await Windows.Storage.ApplicationData.Current.LocalFolder.CreateFolderAsync(
+                    "history", Windows.Storage.CreationCollisionOption.OpenIfExists);
+                _file = await folder.CreateFileAsync(FileName, Windows.Storage.CreationCollisionOption.OpenIfExists);
+                string text = await Windows.Storage.FileIO.ReadTextAsync(_file);
+                long cutoff = RetentionCutoff();
+                var loaded = new System.Collections.Generic.List<HistoryPoint>();
+                foreach (string line in text.Split(new[] { '\\r', '\\n' }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    try
+                    {
+                        JObject json = JObject.Parse(line);
+                        var point = new HistoryPoint {
+                            Timestamp = (long?)json["t"] ?? 0,
+                            DeviceId = (string)json["d"] ?? "",
+                            WidgetId = (string)json["w"] ?? "",
+                            RawValue = (string)json["r"] ?? "",
+                            Value = (double?)json["v"] ?? 0
+                        };
+                        if (point.Timestamp > 0 && (cutoff == 0 || point.Timestamp >= cutoff))
+                            loaded.Add(point);
+                    }
+                    catch { }
+                }
+                lock (_sync) { _cache.Clear(); _cache.AddRange(loaded.OrderBy(p => p.Timestamp)); }
+                _loaded = true;
+            }
+            finally { _fileGate.Release(); }
+        }
+
+        private async void SampleTick(object state)
+        {
+            if (_disposed) return;
+            try
+            {
+                System.Collections.Generic.List<HistoryPoint> points;
+                lock (_sync)
+                {
+                    points = _latest.Values.Select(p => new HistoryPoint {
+                        Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                        DeviceId = p.DeviceId, WidgetId = p.WidgetId,
+                        RawValue = p.RawValue, Value = p.Value
+                    }).ToList();
+                }
+                if (points.Count == 0) return;
+                await EnsureLoadedAsync();
+                await _fileGate.WaitAsync();
+                try
+                {
+                    foreach (var point in points)
+                    {
+                        lock (_sync) _cache.Add(point);
+                        JObject json = new JObject {
+                            ["t"] = point.Timestamp, ["d"] = point.DeviceId,
+                            ["w"] = point.WidgetId, ["r"] = point.RawValue, ["v"] = point.Value
+                        };
+                        await Windows.Storage.FileIO.AppendTextAsync(_file, json.ToString(Formatting.None) + "\n");
+                    }
+                    PruneCache();
+                }
+                finally { _fileGate.Release(); }
+            }
+            catch { }
+        }
+
+        private void PruneCache()
+        {
+            long cutoff = RetentionCutoff();
+            if (cutoff == 0) return;
+            lock (_sync) _cache.RemoveAll(p => p.Timestamp < cutoff);
+            // The archive is compacted on the next history load rather than
+            // blocking the MQTT receive path or the periodic sampler.
+        }
+
+        private long RetentionCutoff()
+        {
+            int days;
+            lock (_sync) days = _retentionDays;
+            return days <= 0 ? 0 : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - days * 86400000L;
+        }
+
+        private static int NormalizeSamplePeriod(int value)
+        {
+            int[] values = { 1000, 5000, 10000, 30000, 60000, 300000, 600000, 1800000, 3600000 };
+            return values.OrderBy(x => Math.Abs((long)x - value)).First();
+        }
+
+        private static int NormalizeRetention(int value)
+        {
+            int[] values = { 1, 3, 7, 14, 30, 90, 180, 365, 0 };
+            return values.OrderBy(x => Math.Abs((long)x - value)).First();
+        }
+
+        private static long NormalizeDisplayPeriod(long value)
+        {
+            long[] values = { 3600000L, 21600000L, 43200000L, 86400000L, 259200000L, 604800000L, 2592000000L, 0L };
+            return values.OrderBy(x => Math.Abs(x - value)).First();
+        }
+
+        public void Dispose()
+        {
+            _disposed = true;
+            if (_sampler != null) { _sampler.Dispose(); _sampler = null; }
+            _fileGate.Dispose();
+        }
+    }
+
+    internal static class HistoryListCompat
+    {
+        public static IEnumerable<T> TakeLastCompat<T>(this IEnumerable<T> source, int count)
+        {
+            var list = source as IList<T> ?? source.ToList();
+            return list.Skip(Math.Max(0, list.Count - count));
+        }
+    }
+}
