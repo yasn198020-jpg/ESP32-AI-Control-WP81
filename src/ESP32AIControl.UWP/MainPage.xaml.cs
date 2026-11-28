@@ -12,6 +12,7 @@ using Windows.UI.Xaml.Media;
 using Windows.Storage;
 using Windows.UI.Core;
 using Windows.Media.SpeechRecognition;
+using Windows.Media.SpeechSynthesis;
 using ESP32AIControl.UWP.Core.Marfa;
 using Windows.UI.Xaml.Shapes;
 using Windows.UI.Notifications;
@@ -33,6 +34,11 @@ namespace ESP32AIControl.UWP
         private readonly DelayedCommandStore _delayedCommandStore = new DelayedCommandStore();
         private readonly ScenarioAutomationStore _scenarioStore = new ScenarioAutomationStore();
         private readonly MarfaCommandEngine _marfaCommandEngine = new MarfaCommandEngine();
+        private SpeechRecognizer _marfaRecognizer;
+        private SpeechSynthesizer _marfaSynthesizer;
+        private MediaElement _marfaAudio;
+        private DateTimeOffset _marfaWakeUntil = DateTimeOffset.MinValue;
+        private bool _marfaProcessing;
         private readonly DispatcherTimer _delayedCommandTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         private bool _delayedCommandTickRunning;
         private bool _isSuspended;
@@ -430,49 +436,46 @@ namespace ESP32AIControl.UWP
 
         private void ShowMarfa()
         {
-            SetSection("Марфа", "Голосовое управление", "Распознавание русской речи и выполнение обученных команд.");
+            SetSection("Марфа", "Голосовое управление", "Непрерывное распознавание русской речи с активацией по слову «Марфа».");
             DashboardHost.Visibility = Visibility.Visible;
             DashboardHost.Children.Clear();
 
             var root = new StackPanel { Margin = new Thickness(0, 10, 0, 0) };
             root.Children.Add(new TextBlock { Text = "Марфа", FontSize = 24, FontWeight = Windows.UI.Text.FontWeights.SemiBold });
-            root.Children.Add(new TextBlock { Text = "Нажмите кнопку и произнесите команду обычным языком. Марфа анализирует текущую конфигурацию MQTT. Для распознавания требуется русский речевой пакет Windows.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 12) });
-            var recognized = new TextBlock { Text = "Ожидание команды…", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 8) };
-            var listen = new Button { Content = "🎙 Слушать команду", HorizontalAlignment = HorizontalAlignment.Stretch, MinHeight = 48 };
+            root.Children.Add(new TextBlock {
+                Text = "Запустите прослушивание. Скажите «Марфа», дождитесь ответа и произнесите команду. Для работы нужен установленный русский речевой пакет Windows. Прослушивание действует, пока приложение открыто.",
+                TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 12)
+            });
+            var recognized = new TextBlock { Text = "Прослушивание выключено.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 8) };
+            var listen = new Button { Content = "🎙 Запустить Марфу", HorizontalAlignment = HorizontalAlignment.Stretch, MinHeight = 48 };
+            _marfaAudio = new MediaElement { AutoPlay = false, Volume = 1.0 };
             listen.Click += async (s, a) =>
             {
                 listen.IsEnabled = false;
-                recognized.Text = "Слушаю…";
                 try
                 {
-                    using (var recognizer = new SpeechRecognizer())
+                    if (_marfaRecognizer == null)
                     {
-                        recognizer.Constraints.Add(new SpeechRecognitionTopicConstraint(SpeechRecognitionScenario.Dictation, "dictation"));
-                        var compile = await recognizer.CompileConstraintsAsync();
-                        if (compile.Status != SpeechRecognitionResultStatus.Success)
-                        {
-                            recognized.Text = "Не удалось подготовить распознавание: " + compile.Status +
-                                ". Проверьте, установлен ли русский речевой пакет Windows.";
-                            return;
-                        }
-                        var result = await recognizer.RecognizeWithUIAsync();
-                        if (result.Status != SpeechRecognitionResultStatus.Success || String.IsNullOrWhiteSpace(result.Text))
-                        {
-                            recognized.Text = "Речь не распознана: " + result.Status;
-                            return;
-                        }
-                        recognized.Text = "Распознано: «" + result.Text + "»";
-                        await ExecuteTrainedVoiceCommandAsync(result.Text, recognized);
+                        await StartMarfaContinuousAsync(recognized);
+                        listen.Content = "Остановить Марфу";
+                    }
+                    else
+                    {
+                        await StopMarfaContinuousAsync();
+                        listen.Content = "🎙 Запустить Марфу";
+                        recognized.Text = "Прослушивание выключено.";
                     }
                 }
                 catch (Exception ex)
                 {
-                    recognized.Text = "Ошибка распознавания: " + ex.Message;
+                    recognized.Text = "Ошибка голосового движка: " + ex.Message;
+                    await StopMarfaContinuousAsync();
                 }
                 finally { listen.IsEnabled = true; }
             };
             root.Children.Add(listen);
             root.Children.Add(recognized);
+            root.Children.Add(_marfaAudio);
             root.Children.Add(new Border { Height = 1, Margin = new Thickness(0, 10, 0, 10), Background = new SolidColorBrush(Color.FromArgb(255, 70, 70, 78)) });
             root.Children.Add(new TextBlock { Text = "Доступные обученные команды", FontSize = 18, FontWeight = Windows.UI.Text.FontWeights.SemiBold });
             var commands = _trainedCommandStore.Load();
@@ -490,6 +493,108 @@ namespace ESP32AIControl.UWP
                 });
             }
             DashboardHost.Children.Add(new ScrollViewer { Content = root, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+        }
+
+        private async Task StartMarfaContinuousAsync(TextBlock output)
+        {
+            var recognizer = new SpeechRecognizer(new Windows.Globalization.Language("ru-RU"));
+            recognizer.Constraints.Add(new SpeechRecognitionTopicConstraint(SpeechRecognitionScenario.Dictation, "marfa_dictation"));
+            var compile = await recognizer.CompileConstraintsAsync();
+            if (compile.Status != SpeechRecognitionResultStatus.Success)
+            {
+                recognizer.Dispose();
+                throw new InvalidOperationException("Не удалось подготовить русский речевой пакет: " + compile.Status);
+            }
+
+            recognizer.ContinuousRecognitionSession.AutoStopSilenceTimeout = TimeSpan.FromSeconds(5);
+            recognizer.ContinuousRecognitionSession.ResultGenerated += async (sender, args) =>
+            {
+                string phrase = args.Result == null ? "" : args.Result.Text;
+                if (String.IsNullOrWhiteSpace(phrase)) return;
+                await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, async () =>
+                {
+                    await HandleMarfaRecognizedTextAsync(phrase, output);
+                });
+            };
+            recognizer.ContinuousRecognitionSession.Completed += (sender, args) =>
+            {
+                if (args.Status != SpeechRecognitionResultStatus.Success)
+                    MarfaCoreDiagnostics.Log("MARFA speech session completed: " + args.Status);
+            };
+
+            _marfaRecognizer = recognizer;
+            _marfaWakeUntil = DateTimeOffset.MinValue;
+            await recognizer.ContinuousRecognitionSession.StartAsync();
+            output.Text = "Марфа слушает. Скажите «Марфа».";
+            MarfaCoreDiagnostics.Log("MARFA continuous speech recognition started (ru-RU).");
+        }
+
+        private async Task StopMarfaContinuousAsync()
+        {
+            var recognizer = _marfaRecognizer;
+            _marfaRecognizer = null;
+            _marfaWakeUntil = DateTimeOffset.MinValue;
+            if (recognizer != null)
+            {
+                try { await recognizer.ContinuousRecognitionSession.StopAsync(); } catch { }
+                recognizer.Dispose();
+            }
+        }
+
+        private async Task HandleMarfaRecognizedTextAsync(string phrase, TextBlock output)
+        {
+            if (_marfaProcessing) return;
+            string normalized = NormalizeVoicePhrase(phrase);
+            var wake = System.Text.RegularExpressions.Regex.Match(normalized, @"^\s*марфа\b\s*(.*)$");
+            string command = "";
+            if (wake.Success)
+            {
+                command = wake.Groups[1].Value.Trim();
+                if (command.Length == 0)
+                {
+                    _marfaWakeUntil = DateTimeOffset.UtcNow.AddSeconds(10);
+                    output.Text = "Распознано: «" + phrase + "». Марфа слушает команду.";
+                    await SpeakMarfaAsync("Слушаю");
+                    return;
+                }
+            }
+            else if (DateTimeOffset.UtcNow <= _marfaWakeUntil)
+            {
+                command = normalized;
+            }
+            else
+            {
+                MarfaCoreDiagnostics.Log("MARFA ignored speech without wake word: " + phrase);
+                return;
+            }
+
+            _marfaWakeUntil = DateTimeOffset.MinValue;
+            if (String.IsNullOrWhiteSpace(command)) return;
+            _marfaProcessing = true;
+            try
+            {
+                output.Text = "Распознано: «" + phrase + "»";
+                await ExecuteTrainedVoiceCommandAsync(command, output);
+            }
+            finally { _marfaProcessing = false; }
+        }
+
+        private async Task SpeakMarfaAsync(string text)
+        {
+            try
+            {
+                if (_marfaSynthesizer == null)
+                {
+                    _marfaSynthesizer = new SpeechSynthesizer();
+                    var russianVoice = SpeechSynthesizer.AllVoices.FirstOrDefault(v => v.Language.StartsWith("ru", StringComparison.OrdinalIgnoreCase));
+                    if (russianVoice != null) _marfaSynthesizer.Voice = russianVoice;
+                }
+                if (_marfaAudio == null) return;
+                var stream = await _marfaSynthesizer.SynthesizeTextToStreamAsync(text);
+                _marfaAudio.SetSource(stream, stream.ContentType);
+                _marfaAudio.Play();
+            }
+            catch (Exception ex) { MarfaCoreDiagnostics.Log("MARFA TTS error: " + ex.Message); }
         }
 
         private IList<MarfaDevice> BuildMarfaDeviceSnapshot()
