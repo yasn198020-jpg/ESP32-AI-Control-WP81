@@ -1,4 +1,17 @@
+# Visual Studio / MSBuild
 **/bin/
 **/obj/
 **/AppPackages/
 .vs/
+
+# Windows 10 Mobile local build output and package inspection
+/src/ESP32AIControl.UWP/BuildOutput/
+/src/ESP32AIControl.UWP/BundleArtifacts/
+/src/ESP32AIControl.UWP/BundleInspect_*/
+/src/ESP32AIControl.UWP/Inspect_*/
+/src/ESP32AIControl.UWP/Verify_*/
+
+# Local diagnostics, backups and temporary files
+*.log
+*.bak
+*.before-*
