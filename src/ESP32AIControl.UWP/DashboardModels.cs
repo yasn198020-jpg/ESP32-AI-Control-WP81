@@ -21,7 +21,7 @@ namespace ESP32AIControl.UWP
         public string Id { get; set; }
         public string Name { get; set; }
         public bool Online { get; set; }
-        public ObservableCollection<WidgetModel> Widgets { get; private set; }
+        public ObservableCollection<WidgetModel> Widgets { get; set; }
 
         public DeviceModel()
         {
@@ -241,7 +241,7 @@ namespace ESP32AIControl.UWP
             object raw;
             int digits = config.TryGetValue("round", out raw) ? Convert.ToInt32(raw, CultureInfo.InvariantCulture) : -1;
             Func<decimal, decimal> round = input => digits >= 0 && digits <= 6
-                ? Decimal.Round(input, digits, MidpointRounding.AwayFromZero) : input;
+                ? System.Decimal.Round(input, digits, MidpointRounding.AwayFromZero) : input;
             value = round(value);
             decimal multiply = config.TryGetValue("multiply", out raw) ? Convert.ToDecimal(raw, CultureInfo.InvariantCulture) : 1m;
             value = value * multiply;
@@ -321,7 +321,7 @@ namespace ESP32AIControl.UWP
             var protection = _settings.UseTls ? SocketProtectionLevel.Tls12 : SocketProtectionLevel.PlainSocket;
             await _socket.ConnectAsync(new HostName(_settings.Host), _settings.Port.ToString(), protection);
             _reader = new DataReader(_socket.InputStream) { InputStreamOptions = InputStreamOptions.None };
-            _writer = new DataWriter(_socket.OutputStream) { UnicodeEncoding = UnicodeEncoding.Utf8 };
+            _writer = new DataWriter(_socket.OutputStream) { UnicodeEncoding = Windows.Storage.Streams.UnicodeEncoding.Utf8 };
             var connect = BuildConnect();
             await SendPacketAsync(0x10, connect, token);
             var response = await ReadPacketAsync(token);
@@ -421,7 +421,7 @@ namespace ESP32AIControl.UWP
             {
                 var body = new byte[remaining];
                 _reader.ReadBytes(body);
-                Buffer.BlockCopy(body, 0, result, 1 + lengthBytes.Count, remaining);
+                System.Buffer.BlockCopy(body, 0, result, 1 + lengthBytes.Count, remaining);
             }
             return result;
         }
