@@ -702,14 +702,28 @@ namespace ESP32AIControl.UWP
                     var label = new TextBlock { Text = (max - (max - min) * i / 4.0).ToString("0.##", CultureInfo.InvariantCulture), FontSize = 10, Foreground = new SolidColorBrush(Color.FromArgb(255, 190, 190, 200)) };
                     Canvas.SetLeft(label, 2); Canvas.SetTop(label, y - 8); chart.Children.Add(label);
                 }
+                var seriesBrush = new SolidColorBrush(Color.FromArgb(255, 117, 190, 255));
+                if (points.Count == 1)
+                {
+                    var dot = new Ellipse { Width = 8, Height = 8, Fill = seriesBrush };
+                    double onlyY = bottom - (points[0].Value - min) * (bottom - top) / (max - min);
+                    Canvas.SetLeft(dot, left - 4); Canvas.SetTop(dot, onlyY - 4); chart.Children.Add(dot);
+                }
                 for (int i = 1; i < points.Count; i++)
                 {
                     double x1 = left + (right - left) * (i - 1) / Math.Max(1.0, points.Count - 1);
                     double x2 = left + (right - left) * i / Math.Max(1.0, points.Count - 1);
                     double y1 = bottom - (points[i - 1].Value - min) * (bottom - top) / (max - min);
                     double y2 = bottom - (points[i].Value - min) * (bottom - top) / (max - min);
-                    chart.Children.Add(new Line { X1 = x1, Y1 = y1, X2 = x2, Y2 = y2, Stroke = new SolidColorBrush(Color.FromArgb(255, 117, 190, 255)), StrokeThickness = 2 });
+                    chart.Children.Add(new Line { X1 = x1, Y1 = y1, X2 = x2, Y2 = y2, Stroke = seriesBrush, StrokeThickness = 2 });
                 }
+                var firstTime = DateTimeOffset.FromUnixTimeMilliseconds(points[0].Timestamp).ToLocalTime().ToString("dd.MM HH:mm");
+                var lastTime = DateTimeOffset.FromUnixTimeMilliseconds(points[points.Count - 1].Timestamp).ToLocalTime().ToString("dd.MM HH:mm");
+                var startLabel = new TextBlock { Text = firstTime, FontSize = 10, Foreground = new SolidColorBrush(Color.FromArgb(255, 190, 190, 200)) };
+                var endLabel = new TextBlock { Text = lastTime, FontSize = 10, Foreground = new SolidColorBrush(Color.FromArgb(255, 190, 190, 200)) };
+                Canvas.SetLeft(startLabel, left); Canvas.SetTop(startLabel, bottom + 5);
+                Canvas.SetLeft(endLabel, Math.Max(left, right - 90)); Canvas.SetTop(endLabel, bottom + 5);
+                chart.Children.Add(startLabel); chart.Children.Add(endLabel);
                 info.Text = "Точек: " + points.Count + " • минимум: " + min.ToString("0.###", CultureInfo.InvariantCulture) +
                     " • максимум: " + max.ToString("0.###", CultureInfo.InvariantCulture) +
                     " • последнее: " + points[points.Count - 1].RawValue;
