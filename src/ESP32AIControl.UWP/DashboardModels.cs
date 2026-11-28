@@ -672,6 +672,14 @@ namespace ESP32AIControl.UWP
         public double Value { get; set; }
     }
 
+    public sealed class HistoryGraphConfig
+    {
+        public string DeviceId { get; set; }
+        public string WidgetId { get; set; }
+        public string Mode { get; set; }
+        public long IntervalMs { get; set; }
+    }
+
     // File-backed telemetry history. MQTT callbacks only update the latest-value
     // cache; a sampler writes points at the configured interval, like Android.
     public sealed class HistoryStore : IDisposable
@@ -682,6 +690,12 @@ namespace ESP32AIControl.UWP
             new System.Collections.Generic.Dictionary<string, HistoryPoint>(StringComparer.OrdinalIgnoreCase);
         private readonly System.Collections.Generic.List<HistoryPoint> _cache =
             new System.Collections.Generic.List<HistoryPoint>();
+        private readonly System.Collections.Generic.Dictionary<string, long> _configuredLastRecorded =
+            new System.Collections.Generic.Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        private readonly System.Collections.Generic.Dictionary<string, double> _configuredLastValue =
+            new System.Collections.Generic.Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+        private readonly System.Collections.Generic.List<HistoryGraphConfig> _graphConfigs =
+            new System.Collections.Generic.List<HistoryGraphConfig>();
         private readonly System.Threading.SemaphoreSlim _fileGate = new System.Threading.SemaphoreSlim(1, 1);
         private System.Threading.Timer _sampler;
         private Windows.Storage.StorageFile _file;
@@ -707,6 +721,17 @@ namespace ESP32AIControl.UWP
             _samplePeriodMs = NormalizeSamplePeriod(_samplePeriodMs);
             _retentionDays = NormalizeRetention(_retentionDays);
             _displayPeriodMs = NormalizeDisplayPeriod(_displayPeriodMs);
+            try
+            {
+                var raw = Convert.ToString(Windows.Storage.ApplicationData.Current.LocalSettings.Values["history_graph_configs"]);
+                if (!String.IsNullOrWhiteSpace(raw))
+                    foreach (var item in JArray.Parse(raw).OfType<JObject>())
+                        _graphConfigs.Add(new HistoryGraphConfig {
+                            DeviceId = (string)item["d"] ?? "", WidgetId = (string)item["w"] ?? "",
+                            Mode = (string)item["m"] ?? "change_interval", IntervalMs = (long?)item["i"] ?? 1800000L
+                        });
+            }
+            catch { }
             _sampler = new System.Threading.Timer(SampleTick, null, _samplePeriodMs, _samplePeriodMs);
         }
 
@@ -725,7 +750,56 @@ namespace ESP32AIControl.UWP
                 Timestamp = timestamp > 0 ? timestamp : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
                 DeviceId = deviceId, WidgetId = widgetId, RawValue = rawValue ?? "", Value = number
             };
-            lock (_sync) _latest[deviceId + "/" + widgetId] = point;
+            bool recordChange = false;
+            lock (_sync)
+            {
+                _latest[deviceId + "/" + widgetId] = point;
+                var config = _graphConfigs.FirstOrDefault(x => x.DeviceId == deviceId && x.WidgetId == widgetId);
+                if (config != null && (config.Mode == "change" || config.Mode == "change_interval"))
+                {
+                    double previous;
+                    recordChange = !_configuredLastValue.TryGetValue(deviceId + "/" + widgetId, out previous) || previous != number;
+                    if (recordChange) { _configuredLastValue[deviceId + "/" + widgetId] = number; _configuredLastRecorded[deviceId + "/" + widgetId] = point.Timestamp; }
+                }
+            }
+            if (recordChange) { var ignored = AppendPointAsync(point); }
+        }
+
+        public IList<HistoryGraphConfig> GraphConfigs()
+        {
+            lock (_sync) return _graphConfigs.Select(x => new HistoryGraphConfig {
+                DeviceId = x.DeviceId, WidgetId = x.WidgetId, Mode = x.Mode, IntervalMs = x.IntervalMs
+            }).ToList();
+        }
+
+        public void AddGraphConfig(HistoryGraphConfig config)
+        {
+            if (config == null || String.IsNullOrWhiteSpace(config.DeviceId) || String.IsNullOrWhiteSpace(config.WidgetId)) return;
+            lock (_sync)
+            {
+                _graphConfigs.RemoveAll(x => x.DeviceId == config.DeviceId && x.WidgetId == config.WidgetId);
+                _graphConfigs.Add(config);
+                _configuredLastRecorded.Remove(config.DeviceId + "/" + config.WidgetId);
+                _configuredLastValue.Remove(config.DeviceId + "/" + config.WidgetId);
+                var array = new JArray(_graphConfigs.Select(x => new JObject {
+                    ["d"] = x.DeviceId, ["w"] = x.WidgetId, ["m"] = x.Mode, ["i"] = x.IntervalMs
+                }));
+                Windows.Storage.ApplicationData.Current.LocalSettings.Values["history_graph_configs"] = array.ToString(Formatting.None);
+            }
+        }
+
+        public void RemoveGraphConfig(string deviceId, string widgetId)
+        {
+            lock (_sync)
+            {
+                _graphConfigs.RemoveAll(x => x.DeviceId == deviceId && x.WidgetId == widgetId);
+                _configuredLastRecorded.Remove(deviceId + "/" + widgetId);
+                _configuredLastValue.Remove(deviceId + "/" + widgetId);
+                var array = new JArray(_graphConfigs.Select(x => new JObject {
+                    ["d"] = x.DeviceId, ["w"] = x.WidgetId, ["m"] = x.Mode, ["i"] = x.IntervalMs
+                }));
+                Windows.Storage.ApplicationData.Current.LocalSettings.Values["history_graph_configs"] = array.ToString(Formatting.None);
+            }
         }
 
         public void SetSamplePeriod(int milliseconds)
@@ -833,34 +907,52 @@ namespace ESP32AIControl.UWP
             if (_disposed) return;
             try
             {
+                long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                 System.Collections.Generic.List<HistoryPoint> points;
                 lock (_sync)
                 {
                     points = _latest.Values.Select(p => new HistoryPoint {
-                        Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                        DeviceId = p.DeviceId, WidgetId = p.WidgetId,
+                        Timestamp = now, DeviceId = p.DeviceId, WidgetId = p.WidgetId,
                         RawValue = p.RawValue, Value = p.Value
                     }).ToList();
+                    foreach (var config in _graphConfigs.Where(x => x.Mode == "interval" || x.Mode == "change" || x.Mode == "change_interval"))
+                    {
+                        HistoryPoint current;
+                        if (!_latest.TryGetValue(config.DeviceId + "/" + config.WidgetId, out current)) continue;
+                        long last;
+                        if (!_configuredLastRecorded.TryGetValue(config.DeviceId + "/" + config.WidgetId, out last) || now - last >= config.IntervalMs)
+                        {
+                            points.Add(new HistoryPoint { Timestamp = now, DeviceId = current.DeviceId, WidgetId = current.WidgetId, RawValue = current.RawValue, Value = current.Value });
+                            _configuredLastRecorded[config.DeviceId + "/" + config.WidgetId] = now;
+                            _configuredLastValue[config.DeviceId + "/" + config.WidgetId] = current.Value;
+                        }
+                    }
                 }
                 if (points.Count == 0) return;
-                await EnsureLoadedAsync();
-                await _fileGate.WaitAsync();
-                try
-                {
-                    foreach (var point in points)
-                    {
-                        lock (_sync) _cache.Add(point);
-                        JObject json = new JObject {
-                            ["t"] = point.Timestamp, ["d"] = point.DeviceId,
-                            ["w"] = point.WidgetId, ["r"] = point.RawValue, ["v"] = point.Value
-                        };
-                        await Windows.Storage.FileIO.AppendTextAsync(_file, json.ToString(Formatting.None) + "\n");
-                    }
-                    PruneCache();
-                }
-                finally { _fileGate.Release(); }
+                foreach (var point in points) await AppendPointAsync(point);
             }
             catch { }
+        }
+
+        private async Task AppendPointAsync(HistoryPoint point)
+        {
+            await EnsureLoadedAsync();
+            await _fileGate.WaitAsync();
+            try
+            {
+                lock (_sync)
+                {
+                    _cache.Add(point);
+                    if (_cache.Count > 5000) _cache.RemoveRange(0, _cache.Count - 5000);
+                }
+                JObject json = new JObject {
+                    ["t"] = point.Timestamp, ["d"] = point.DeviceId,
+                    ["w"] = point.WidgetId, ["r"] = point.RawValue, ["v"] = point.Value
+                };
+                await Windows.Storage.FileIO.AppendTextAsync(_file, json.ToString(Formatting.None) + "\n");
+                PruneCache();
+            }
+            finally { _fileGate.Release(); }
         }
 
         private void PruneCache()
