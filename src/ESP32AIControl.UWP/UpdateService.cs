@@ -13,7 +13,6 @@ using Windows.Storage;
 using WdpHttpClient = Windows.Web.Http.HttpClient;
 using WdpHttpMethod = Windows.Web.Http.HttpMethod;
 using WdpHttpRequestMessage = Windows.Web.Http.HttpRequestMessage;
-using WdpHttpMultipartFormDataContent = Windows.Web.Http.HttpMultipartFormDataContent;
 using WdpHttpStreamContent = Windows.Web.Http.HttpStreamContent;
 using WdpHttpMediaTypeHeaderValue = Windows.Web.Http.Headers.HttpMediaTypeHeaderValue;
 
@@ -190,14 +189,14 @@ namespace ESP32AIControl.UWP
 
             using (var client = new WdpHttpClient())
             using (var request = new WdpHttpRequestMessage(WdpHttpMethod.Post, new Uri(requestUrl)))
-            using (var multipart = new WdpHttpMultipartFormDataContent())
             using (var fileStream = await packageFile.OpenAsync(FileAccessMode.Read))
             using (var fileContent = new WdpHttpStreamContent(fileStream))
             {
+                // Device Portal expects the package bytes as the raw request body,
+                // not multipart/form-data.
                 fileContent.Headers.ContentType =
                     new WdpHttpMediaTypeHeaderValue("application/octet-stream");
-                multipart.Add(fileContent, "package", packageFile.Name);
-                request.Content = multipart;
+                request.Content = fileContent;
 
                 using (var response = await client.SendRequestAsync(request))
                 {
