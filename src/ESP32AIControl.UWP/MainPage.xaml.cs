@@ -629,6 +629,28 @@ namespace ESP32AIControl.UWP
             var parsed = _marfaCommandEngine.Parse(recognizedText, BuildMarfaDeviceSnapshot());
             output.Text += "\n" + parsed.Reply;
 
+            if (parsed.Action == LocalCommandAction.CONTROL && parsed.ActionItems != null && parsed.ActionItems.Count > 0)
+            {
+                var scenarioPlan = IoTScenarioCommandPlanner.Plan(
+                    parsed.ActionItems,
+                    BuildMarfaDeviceSnapshot(),
+                    _marfaScenarioStore.GetAll());
+                parsed.ScenarioPlan = scenarioPlan;
+                if (!String.IsNullOrWhiteSpace(scenarioPlan.BlockedReason))
+                {
+                    output.Text += "\nКоманда остановлена: " + scenarioPlan.BlockedReason;
+                    MarfaCoreDiagnostics.Log("MARFA scenario planner blocked command: " + scenarioPlan.BlockedReason);
+                    return;
+                }
+                if (scenarioPlan.Actions != null && scenarioPlan.Actions.Count > 0)
+                    parsed.ActionItems = scenarioPlan.Actions;
+                if (scenarioPlan.Prerequisites != null && scenarioPlan.Prerequisites.Count > 0)
+                {
+                    output.Text += "\nПодготовка режима: " +
+                        String.Join("; ", scenarioPlan.Prerequisites.Select(x => x.Reason));
+                }
+            }
+
             if (parsed.Action == LocalCommandAction.SMART_RULE)
             {
                 var confirmRule = new ContentDialog
@@ -688,7 +710,11 @@ namespace ESP32AIControl.UWP
             var confirmation = new ContentDialog
             {
                 Title = "Подтвердить команду Марфы",
-                Content = parsed.Reply + "\n\nБудут отправлены команды: " + parsed.ActionItems.Count,
+                Content = parsed.Reply + "\n\nБудут отправлены команды: " + parsed.ActionItems.Count +
+                    ((parsed.ScenarioPlan != null && parsed.ScenarioPlan.Prerequisites != null && parsed.ScenarioPlan.Prerequisites.Count > 0)
+                        ? "\n\nПеред основной командой Марфа подготовит зависимости сценария:\n" +
+                            String.Join("\n", parsed.ScenarioPlan.Prerequisites.Select(x => "• " + x.Reason))
+                        : ""),
                 PrimaryButtonText = "Выполнить",
                 CloseButtonText = "Отмена"
             };
