@@ -57,6 +57,9 @@
     <Compile Include="DashboardRenderer.cs" />
     <Compile Include="DeviceCommandRequestedEventArgs.cs" />
     <Compile Include="UpdateService.cs" />
+    <Compile Include="Core\Marfa\MarfaCoreContracts.cs" />
+    <Compile Include="Core\Marfa\EmojiSemanticText.cs" />
+    <Compile Include="Core\Marfa\RussianSemanticNormalizer.cs" />
     <ApplicationDefinition Include="App.xaml"><Generator>MSBuild:Compile</Generator><SubType>Designer</SubType></ApplicationDefinition>
     <Page Include="MainPage.xaml"><Generator>MSBuild:Compile</Generator><SubType>Designer</SubType></Page>
     <AppxManifest Include="Package.appxmanifest"><SubType>Designer</SubType></AppxManifest>
