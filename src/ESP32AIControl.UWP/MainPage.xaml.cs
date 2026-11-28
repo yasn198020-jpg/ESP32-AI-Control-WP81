@@ -129,7 +129,7 @@ namespace ESP32AIControl.UWP
             }
         }
 
-        // Called by the future MQTT/device service when a fresh device snapshot arrives.
+        // Receives the live device snapshot from the shared MQTT runtime.
         public void SetDeviceSnapshot(IEnumerable<DeviceModel> devices)
         {
             _dashboardSnapshot.Devices.Clear();
