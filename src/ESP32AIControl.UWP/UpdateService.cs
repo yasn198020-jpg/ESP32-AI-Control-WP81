@@ -123,7 +123,7 @@ namespace ESP32AIControl.UWP
             if (packageFile == null) throw new ArgumentNullException("packageFile");
 
             var operation = InstallationManager.AddPackageAsync(
-                "ESP32-AI-Control", new Uri(packageFile.Path));
+                "ESP32-AI-Control", new Uri(packageFile.Path, UriKind.Absolute));
 
             if (progress != null)
                 operation.Progress = (op, value) => progress(value);
