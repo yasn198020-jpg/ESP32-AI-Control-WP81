@@ -445,7 +445,7 @@ namespace ESP32AIControl.UWP
                 {
                     using (var recognizer = new SpeechRecognizer())
                     {
-                        recognizer.Constraints.Add(new DictationGrammarConstraint());
+                        recognizer.Constraints.Add(new SpeechRecognitionTopicConstraint(SpeechRecognitionScenario.Dictation, "dictation"));
                         var compile = await recognizer.CompileConstraintsAsync();
                         if (compile.Status != SpeechRecognitionResultStatus.Success)
                         {
@@ -743,7 +743,8 @@ namespace ESP32AIControl.UWP
             var clear = new Button { Content = "Очистить историю", HorizontalAlignment = HorizontalAlignment.Stretch };
             var selectedDeviceId = "";
             var selectedWidgetId = "";
-            Action refreshGraphConfigs = () =>
+            Action refreshGraphConfigs = null;
+            refreshGraphConfigs = () =>
             {
                 graphConfigsPanel.Children.Clear();
                 var configs = _historyStore.GraphConfigs();
@@ -1296,7 +1297,7 @@ namespace ESP32AIControl.UWP
             var connect = new Button { Content = "Подключить", MinWidth = 120 };
             var disconnect = new Button { Content = "Отключить", MinWidth = 110 };
             var hello = new Button { Content = "Отправить HELLO", MinWidth = 130 };
-            connect.Click += async (sender, args) =>
+            connect.Click += async (buttonSender, args) =>
             {
                 int portNumber;
                 if (!Int32.TryParse(port.Text, out portNumber) || portNumber < 1 || portNumber > 65535)
@@ -1320,8 +1321,8 @@ namespace ESP32AIControl.UWP
                 }
                 catch (Exception ex) { StatusText.Text = "Ошибка MQTT: " + ex.Message; }
             };
-            disconnect.Click += (sender, args) => { _mqtt.Stop(); StatusText.Text = "MQTT отключён вручную."; };
-            hello.Click += async (sender, args) =>
+            disconnect.Click += (buttonSender, args) => { _mqtt.Stop(); StatusText.Text = "MQTT отключён вручную."; };
+            hello.Click += async (buttonSender, args) =>
             {
                 bool sent = await _mqtt.SendHelloAsync();
                 StatusText.Text = sent ? "HELLO отправлен." : "HELLO не отправлен: нет соединения.";
@@ -1450,9 +1451,10 @@ namespace ESP32AIControl.UWP
             {
                 try
                 {
-                    var setting = await Windows.Media.Capture.MediaCapture.InitializeAsync();
+                    var capture = new Windows.Media.Capture.MediaCapture();
+                    await capture.InitializeAsync();
                     StatusText.Text = "Микрофон доступен приложению.";
-                    setting.Dispose();
+                    capture.Dispose();
                 }
                 catch (Exception ex) { StatusText.Text = "Микрофон недоступен: " + ex.Message; }
             };
