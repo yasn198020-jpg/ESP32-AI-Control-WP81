@@ -261,7 +261,7 @@ namespace ESP32AIControl.UWP
                 fileContent.Headers.ContentType =
                     new WdpHttpMediaTypeHeaderValue("application/octet-stream");
                 string basicToken = Convert.ToBase64String(Encoding.UTF8.GetBytes(
-                    "auto-" + userName.Trim() + ":" + password));
+                    userName.Trim() + ":" + password));
                 request.Headers.Authorization =
                     new WdpHttpCredentialsHeaderValue("Basic", basicToken);
                 multipart.Add(fileContent, "package", packageFile.Name);
