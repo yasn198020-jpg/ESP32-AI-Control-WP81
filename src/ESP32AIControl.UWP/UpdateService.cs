@@ -6,8 +6,16 @@ using System.Security.Cryptography;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Windows.ApplicationModel;
-using Windows.Phone.Management.Deployment;
 using Windows.Storage;
+using Windows.Security.Credentials;
+using Windows.Security.Cryptography.Certificates;
+using Windows.Web.Http.Filters;
+using WdpHttpClient = Windows.Web.Http.HttpClient;
+using WdpHttpMethod = Windows.Web.Http.HttpMethod;
+using WdpHttpRequestMessage = Windows.Web.Http.HttpRequestMessage;
+using WdpHttpMultipartFormDataContent = Windows.Web.Http.HttpMultipartFormDataContent;
+using WdpHttpStreamContent = Windows.Web.Http.HttpStreamContent;
+using WdpHttpMediaTypeHeaderValue = Windows.Web.Http.Headers.HttpMediaTypeHeaderValue;
 
 namespace ESP32AIControl.UWP
 {
@@ -35,8 +43,18 @@ namespace ESP32AIControl.UWP
         public bool IsUpdateAvailable { get; set; }
     }
 
+    public sealed class DevicePortalCredentials
+    {
+        public string Address { get; set; }
+        public string UserName { get; set; }
+        public string Password { get; set; }
+    }
+
     public static class UpdateService
     {
+        private const string PortalCredentialResource = "ESP32AIControl.DevicePortal";
+        private const string PortalAddressKey = "DevicePortalAddress";
+        private const string PortalUserKey = "DevicePortalUser";
         public const string ManifestUrl = "https://raw.githubusercontent.com/yasn198020-jpg/ESP32-AI-Control-Updates/windows-10-mobile/version.json";
         private const string PackageBaseUrl = "https://raw.githubusercontent.com/yasn198020-jpg/ESP32-AI-Control-Updates/windows-10-mobile/";
         private static readonly HttpClient Client = new HttpClient();
@@ -118,68 +136,142 @@ namespace ESP32AIControl.UWP
             }
         }
 
-        public static async Task<PackageInstallResult> InstallAsync(
-            StorageFile packageFile, Action<uint> progress = null)
+        public static string GetDevicePortalAddress()
         {
-            if (packageFile == null) throw new ArgumentNullException("packageFile");
+            object value = ApplicationData.Current.LocalSettings.Values[PortalAddressKey];
+            return value == null ? "192.168.1.58" : value.ToString();
+        }
 
-            string packagePath = packageFile.Path;
-            string packageUriText = "(не создан)";
-            ulong packageSize = 0;
+        public static string GetDevicePortalUserName()
+        {
+            object value = ApplicationData.Current.LocalSettings.Values[PortalUserKey];
+            return value == null ? "" : value.ToString();
+        }
+
+        public static string GetDevicePortalPassword()
+        {
+            string userName = GetDevicePortalUserName();
+            if (string.IsNullOrWhiteSpace(userName)) return "";
 
             try
             {
-                if (string.IsNullOrWhiteSpace(packagePath))
-                    throw new InvalidDataException("У загруженного пакета отсутствует локальный путь.");
-
-                var properties = await packageFile.GetBasicPropertiesAsync();
-                packageSize = properties.Size;
-                if (packageSize == 0)
-                    throw new InvalidDataException("Загруженный пакет имеет нулевой размер.");
-
-                var packageUri = new Uri(packagePath, UriKind.Absolute);
-                packageUriText = packageUri.AbsoluteUri;
-
-                if (!packageUri.IsAbsoluteUri || !string.Equals(packageUri.Scheme, "file", StringComparison.OrdinalIgnoreCase))
-                    throw new InvalidDataException("Для локального пакета ожидался абсолютный file:// URI.");
-
-                Debug.WriteLine("OTA install preflight: path=" + packagePath +
-                    "; uri=" + packageUriText + "; size=" + packageSize);
-
-                var operation = InstallationManager.AddPackageAsync(
-                    "ESP32-AI-Control", packageUri);
-
-                if (progress != null)
-                    operation.Progress = (op, value) => progress(value);
-
-                var result = await operation;
-                string state = result.InstallState.ToString();
-                Debug.WriteLine("OTA install result: state=" + state +
-                    "; productId=" + result.ProductId + "; error=" + result.ErrorText);
-
-                if (state != "Installed")
+                var vault = new PasswordVault();
+                foreach (var credential in vault.FindAllByResource(PortalCredentialResource))
                 {
-                    throw new InvalidOperationException(
-                        "Системный установщик не подтвердил установку. " +
-                        "InstallState=" + state +
-                        "; ProductId=" + result.ProductId +
-                        "; ErrorText=" + (result.ErrorText ?? "(пусто)") +
-                        "; PackagePath=" + packagePath +
-                        "; PackageUri=" + packageUriText +
-                        "; PackageSize=" + packageSize + " байт.");
+                    if (string.Equals(credential.UserName, userName, StringComparison.Ordinal))
+                    {
+                        credential.RetrievePassword();
+                        return credential.Password;
+                    }
                 }
-
-                return result;
             }
             catch (Exception ex)
             {
-                Debug.WriteLine("OTA install exception: " + ex);
-                throw new InvalidOperationException(
-                    "Ошибка этапа системной установки. " +
-                    "PackagePath=" + (packagePath ?? "(пусто)") +
-                    "; PackageUri=" + packageUriText +
-                    "; PackageSize=" + packageSize + " байт. " +
-                    "Причина: " + ex.Message, ex);
+                Debug.WriteLine("Device Portal credential lookup failed: " + ex.Message);
+            }
+            return "";
+        }
+
+        public static void SaveDevicePortalCredentials(string address, string userName, string password)
+        {
+            if (string.IsNullOrWhiteSpace(address) ||
+                string.IsNullOrWhiteSpace(userName) ||
+                string.IsNullOrEmpty(password))
+                throw new ArgumentException("Укажите адрес Device Portal, логин и пароль.");
+
+            ApplicationData.Current.LocalSettings.Values[PortalAddressKey] = address.Trim();
+            ApplicationData.Current.LocalSettings.Values[PortalUserKey] = userName.Trim();
+
+            var vault = new PasswordVault();
+            try
+            {
+                foreach (var credential in vault.FindAllByResource(PortalCredentialResource))
+                    vault.Remove(credential);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("Device Portal credential cleanup: " + ex.Message);
+            }
+
+            vault.Add(new PasswordCredential(
+                PortalCredentialResource, userName.Trim(), password));
+        }
+
+        public static async Task<string> InstallViaDevicePortalAsync(
+            StorageFile packageFile, string address, string userName, string password)
+        {
+            if (packageFile == null) throw new ArgumentNullException("packageFile");
+            if (string.IsNullOrWhiteSpace(address) ||
+                string.IsNullOrWhiteSpace(userName) ||
+                string.IsNullOrEmpty(password))
+                throw new ArgumentException("Не заданы параметры подключения к Device Portal.");
+
+            string endpoint = address.Trim();
+            if (!endpoint.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                endpoint = "https://" + endpoint;
+            if (!endpoint.EndsWith("/", StringComparison.Ordinal))
+                endpoint += "/";
+
+            Uri rootUri;
+            if (!Uri.TryCreate(endpoint, UriKind.Absolute, out rootUri) ||
+                !string.Equals(rootUri.Scheme, "https", StringComparison.OrdinalIgnoreCase) ||
+                !string.IsNullOrEmpty(rootUri.UserInfo))
+                throw new InvalidDataException("Укажите адрес Device Portal в формате https://IP[:порт].");
+
+            var properties = await packageFile.GetBasicPropertiesAsync();
+            if (properties.Size == 0)
+                throw new InvalidDataException("Загруженный пакет имеет нулевой размер.");
+
+            var filter = new HttpBaseProtocolFilter();
+            // Lumia Device Portal uses a device-local self-signed HTTPS certificate.
+            // Ignore only certificate-chain/name errors for this explicitly configured endpoint.
+            filter.IgnorableServerCertificateErrors.Add(ChainValidationResult.Untrusted);
+            filter.IgnorableServerCertificateErrors.Add(ChainValidationResult.InvalidName);
+            filter.IgnorableServerCertificateErrors.Add(ChainValidationResult.Expired);
+            filter.ServerCredential = new PasswordCredential(
+                rootUri.AbsoluteUri, "auto-" + userName.Trim(), password);
+
+            string requestUrl = new Uri(rootUri,
+                "api/app/packagemanager/package?package=" +
+                Uri.EscapeDataString(packageFile.Name)).AbsoluteUri;
+
+            Debug.WriteLine("OTA Device Portal install: url=" + requestUrl +
+                "; file=" + packageFile.Path + "; size=" + properties.Size);
+
+            using (var client = new WdpHttpClient(filter))
+            using (var request = new WdpHttpRequestMessage(WdpHttpMethod.Post, new Uri(requestUrl)))
+            using (var multipart = new WdpHttpMultipartFormDataContent())
+            using (var fileStream = await packageFile.OpenAsync(FileAccessMode.Read))
+            using (var fileContent = new WdpHttpStreamContent(fileStream))
+            {
+                fileContent.Headers.ContentType =
+                    new WdpHttpMediaTypeHeaderValue("application/octet-stream");
+                multipart.Add(fileContent, "package", packageFile.Name);
+                request.Content = multipart;
+
+                using (var response = await client.SendRequestAsync(request))
+                {
+                    string responseBody = response.Content == null
+                        ? ""
+                        : await response.Content.ReadAsStringAsync();
+
+                    Debug.WriteLine("OTA Device Portal response: HTTP " +
+                        (int)response.StatusCode + " " + response.ReasonPhrase +
+                        "; body=" + responseBody);
+
+                    if ((int)response.StatusCode != 200)
+                    {
+                        throw new InvalidOperationException(
+                            "Device Portal отклонил установку: HTTP " +
+                            (int)response.StatusCode + " " + response.ReasonPhrase +
+                            ". " + (string.IsNullOrWhiteSpace(responseBody)
+                                ? "Ответ сервера пуст."
+                                : responseBody));
+                    }
+
+                    return "Device Portal принял пакет (HTTP 200). Windows выполняет установку. " +
+                        "Приложение может автоматически закрыться или перезапуститься.";
+                }
             }
         }
 
