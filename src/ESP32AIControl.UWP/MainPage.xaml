@@ -125,4 +125,27 @@
             </Grid>
         </Border>
     </Grid>
+
+
+        <!-- In-page credential panel: avoids ContentDialog/ContentDialog2 incompatibility on Windows 10 Mobile. -->
+        <Grid x:Name="DevicePortalOverlay" Grid.RowSpan="3" Background="#CC000000" Visibility="Collapsed">
+            <Border Background="{StaticResource PanelBrush}" Margin="16" Padding="16" VerticalAlignment="Center">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="560">
+                    <StackPanel>
+                        <TextBlock Text="Установка обновления" FontSize="22" FontWeight="SemiBold" Foreground="{StaticResource PrimaryTextBrush}" Margin="0,0,0,16"/>
+                        <TextBlock Text="Адрес Lumia (HTTPS)" Foreground="{StaticResource PrimaryTextBrush}" Margin="0,0,0,4"/>
+                        <TextBox x:Name="PortalAddressBox" PlaceholderText="Например, 192.168.1.58"/>
+                        <TextBlock Text="Логин Device Portal" Foreground="{StaticResource PrimaryTextBrush}" Margin="0,12,0,4"/>
+                        <TextBox x:Name="PortalUserBox" PlaceholderText="Имя пользователя Device Portal"/>
+                        <TextBlock Text="Пароль Device Portal" Foreground="{StaticResource PrimaryTextBrush}" Margin="0,12,0,4"/>
+                        <PasswordBox x:Name="PortalPasswordBox" PlaceholderText="Пароль Device Portal"/>
+                        <TextBlock Text="Пароль сохранится в защищённом хранилище Windows и будет использоваться только для подключения к Device Portal по локальной сети." TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource SecondaryTextBrush}" Margin="0,12,0,16"/>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button Content="Отмена" Click="PortalCancel_Click" Margin="0,0,8,0"/>
+                            <Button Content="Продолжить" Click="PortalContinue_Click"/>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Grid>
 </Page>
