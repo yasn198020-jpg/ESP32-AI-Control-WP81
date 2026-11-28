@@ -202,7 +202,15 @@ namespace ESP32AIControl.UWP
             }
             catch (Exception ex)
             {
-                StatusText.Text = "Не удалось установить обновление: " + ex.Message;
+                var details = ex.GetType().FullName +
+                    " (HRESULT 0x" + ex.HResult.ToString("X8") + "): " + ex.Message;
+                if (ex.InnerException != null)
+                    details += "\\nВнутренняя ошибка: " + ex.InnerException.GetType().FullName +
+                        " (HRESULT 0x" + ex.InnerException.HResult.ToString("X8") + "): " +
+                        ex.InnerException.Message;
+                StatusText.Text = "Не удалось установить обновление. " + details;
+                UpdateProgressText.Text = details;
+                UpdateProgressText.Visibility = Visibility.Visible;
             }
             finally
             {
