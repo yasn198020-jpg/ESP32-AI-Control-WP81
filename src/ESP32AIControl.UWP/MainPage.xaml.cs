@@ -249,7 +249,7 @@ namespace ESP32AIControl.UWP
             fields.Children.Add(passwordBox);
             fields.Children.Add(new TextBlock
             {
-                Text = "Пароль сохранится в защищённом хранилище Windows. Для REST-запроса приложение использует служебный префикс auto- к логину.",
+                Text = "Пароль сохранится в защищённом хранилище Windows и будет использоваться только для подключения к Device Portal по локальной сети.",
                 TextWrapping = Windows.UI.Xaml.TextWrapping.Wrap,
                 FontSize = 12,
                 Opacity = 0.75
