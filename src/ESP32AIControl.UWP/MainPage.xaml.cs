@@ -8,6 +8,7 @@ using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Media;
 using Windows.Storage;
+using Windows.UI.Core;
 
 namespace ESP32AIControl.UWP
 {
@@ -17,6 +18,7 @@ namespace ESP32AIControl.UWP
         private readonly DashboardSnapshot _dashboardSnapshot = new DashboardSnapshot();
         private DashboardRenderer _dashboardRenderer;
         private UpdateManifest _pendingUpdateManifest;
+        private readonly MqttDeviceService _mqtt = new MqttDeviceService();
 
         public event EventHandler<DeviceCommandRequestedEventArgs> DeviceCommandRequested;
 
@@ -27,8 +29,35 @@ namespace ESP32AIControl.UWP
                 page => { StatusText.Text = "Страница: " + page; },
                 (device, widget, value) => DeviceCommandRequested?.Invoke(this,
                     new DeviceCommandRequestedEventArgs(device, widget, value)));
+            _mqtt.ConnectionChanged += connected =>
+            {
+                var ignored = Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
+                {
+                    ConnectionIndicator.Foreground = new SolidColorBrush(connected
+                        ? Color.FromArgb(255, 76, 175, 80) : Color.FromArgb(255, 240, 90, 90));
+                    StatusText.Text = connected ? "MQTT подключён. Ожидание данных ESP32…" : "MQTT не подключён.";
+                });
+            };
+            _mqtt.Log += message =>
+            {
+                var ignored = Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () => StatusText.Text = message);
+            };
+            _mqtt.DevicesChanged += devices =>
+            {
+                var ignored = Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () => SetDeviceSnapshot(devices));
+            };
+            DeviceCommandRequested += async (sender, args) =>
+            {
+                bool sent = await _mqtt.SendControlAsync(args.Device.Id, args.Widget.Id, args.Value);
+                if (!sent)
+                {
+                    var ignored = Dispatcher.RunAsync(CoreDispatcherPriority.Normal,
+                        () => StatusText.Text = "Команда не отправлена: нет соединения MQTT.");
+                }
+            };
             ShowDashboard();
             UpdateNavigation(HomeNav);
+            TryRestoreMqttConnection();
             SizeChanged += MainPage_SizeChanged;
         }
 
@@ -294,7 +323,88 @@ namespace ESP32AIControl.UWP
         private void Scenarios_Click(object sender, RoutedEventArgs e) { SetSection("Сценарии", "Сценарии", "Перенос сценариев будет выполнен отдельным этапом."); }
         private void Voice_Click(object sender, RoutedEventArgs e) { SetSection("Голос", "Настройки голоса", "Настройки распознавания и синтеза речи."); }
         private void Journal_Click(object sender, RoutedEventArgs e) { SetSection("Журнал", "Журнал", "Системные события и диагностика подключения."); }
-        private void MqttSettings_Click(object sender, RoutedEventArgs e) { SetSection("MQTT", "Подключение MQTT", "Параметры MQTT и состояние соединения."); }
+        private void MqttSettings_Click(object sender, RoutedEventArgs e)
+        {
+            SetSection("MQTT", "Подключение MQTT", "Настройки брокера и состояние связи с ESP32.");
+            DashboardHost.Visibility = Visibility.Visible;
+            DashboardHost.Children.Clear();
+
+            var panel = new StackPanel { Spacing = 8, Margin = new Thickness(0, 12, 0, 0) };
+            var host = new TextBox { Header = "Адрес брокера", PlaceholderText = "192.168.1.10", Text = ReadMqttSetting("host", "") };
+            var port = new TextBox { Header = "Порт", Text = ReadMqttSetting("port", "1883") };
+            var prefix = new TextBox { Header = "MQTT prefix", Text = ReadMqttSetting("prefix", "IoTManager") };
+            var username = new TextBox { Header = "Пользователь", Text = ReadMqttSetting("username", "") };
+            var password = new PasswordBox { Header = "Пароль", Password = ReadMqttSetting("password", "") };
+            var tls = new CheckBox { Content = "Использовать TLS", IsChecked = ReadMqttSetting("tls", "false") == "true" };
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+            var connect = new Button { Content = "Подключить", MinWidth = 120 };
+            var disconnect = new Button { Content = "Отключить", MinWidth = 110 };
+            var hello = new Button { Content = "Отправить HELLO", MinWidth = 130 };
+            connect.Click += async (sender, args) =>
+            {
+                int portNumber;
+                if (!Int32.TryParse(port.Text, out portNumber) || portNumber < 1 || portNumber > 65535)
+                {
+                    StatusText.Text = "Порт должен быть числом от 1 до 65535.";
+                    return;
+                }
+                SaveMqttSetting("host", host.Text);
+                SaveMqttSetting("port", portNumber.ToString());
+                SaveMqttSetting("prefix", prefix.Text);
+                SaveMqttSetting("username", username.Text);
+                SaveMqttSetting("password", password.Password);
+                SaveMqttSetting("tls", tls.IsChecked == true ? "true" : "false");
+                try
+                {
+                    StatusText.Text = "Подключение к MQTT…";
+                    await _mqtt.StartAsync(new MqttConnectionSettings {
+                        Host = host.Text, Port = portNumber, Prefix = prefix.Text,
+                        Username = username.Text, Password = password.Password, UseTls = tls.IsChecked == true
+                    });
+                }
+                catch (Exception ex) { StatusText.Text = "Ошибка MQTT: " + ex.Message; }
+            };
+            disconnect.Click += (sender, args) => { _mqtt.Stop(); StatusText.Text = "MQTT отключён вручную."; };
+            hello.Click += async (sender, args) =>
+            {
+                bool sent = await _mqtt.SendHelloAsync();
+                StatusText.Text = sent ? "HELLO отправлен." : "HELLO не отправлен: нет соединения.";
+            };
+            buttons.Children.Add(connect); buttons.Children.Add(disconnect); buttons.Children.Add(hello);
+            panel.Children.Add(host); panel.Children.Add(port); panel.Children.Add(prefix);
+            panel.Children.Add(username); panel.Children.Add(password); panel.Children.Add(tls);
+            panel.Children.Add(buttons);
+            DashboardHost.Children.Add(panel);
+        }
+
+        private string ReadMqttSetting(string key, string fallback)
+        {
+            object value;
+            return ApplicationData.Current.LocalSettings.Values.TryGetValue("mqtt_" + key, out value)
+                ? Convert.ToString(value) : fallback;
+        }
+
+        private void SaveMqttSetting(string key, string value)
+        {
+            ApplicationData.Current.LocalSettings.Values["mqtt_" + key] = value ?? "";
+        }
+
+        private void TryRestoreMqttConnection()
+        {
+            string host = ReadMqttSetting("host", "");
+            int port;
+            if (String.IsNullOrWhiteSpace(host) || !Int32.TryParse(ReadMqttSetting("port", "1883"), out port))
+                return;
+            try
+            {
+                var ignored = _mqtt.StartAsync(new MqttConnectionSettings {
+                    Host = host, Port = port, Prefix = ReadMqttSetting("prefix", "IoTManager"),
+                    Username = ReadMqttSetting("username", ""), Password = ReadMqttSetting("password", ""),
+                    UseTls = ReadMqttSetting("tls", "false") == "true"
+                });
+            }
+            catch (Exception ex) { StatusText.Text = "Не удалось восстановить MQTT: " + ex.Message; }
+        }
         private void UdpSettings_Click(object sender, RoutedEventArgs e) { SetSection("UDP", "UDP устройства", "Обнаружение устройств в локальной сети."); }
         private void AppSettings_Click(object sender, RoutedEventArgs e) { SetSection("Настройки", "Настройки приложения", "Общие параметры приложения."); }
         private void TextSize_Click(object sender, RoutedEventArgs e) { SetSection("Размер текста", "Размер текста", "Масштаб интерфейса и читаемость на разных экранах."); }
