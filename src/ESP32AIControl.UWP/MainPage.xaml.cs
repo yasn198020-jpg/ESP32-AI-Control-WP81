@@ -316,7 +316,7 @@ namespace ESP32AIControl.UWP
             DashboardHost.Visibility = Visibility.Visible;
             DashboardHost.Children.Clear();
 
-            var root = new StackPanel { Margin = new Thickness(0, 10, 0, 0), Spacing = 8 };
+            var root = new StackPanel { Margin = new Thickness(0, 10, 0, 0) };
             var phrase = new TextBox { PlaceholderText = "Например: включи свет" };
             var variant = new TextBox { PlaceholderText = "Дополнительный вариант фразы (необязательно)" };
             var devicePicker = new ComboBox { PlaceholderText = "Выберите устройство", HorizontalAlignment = HorizontalAlignment.Stretch };
@@ -377,7 +377,7 @@ namespace ESP32AIControl.UWP
                 StatusText.Text = "Команда сохранена на этом устройстве.";
             };
             root.Children.Add(add);
-            root.Children.Add(new Divider { Height = 1, Margin = new Thickness(0, 8, 0, 8), Background = new SolidColorBrush(Color.FromArgb(255, 70, 70, 78)) });
+            root.Children.Add(new Border { Height = 1, Margin = new Thickness(0, 8, 0, 8), Background = new SolidColorBrush(Color.FromArgb(255, 70, 70, 78)) });
             RenderTrainedCommands(root);
             DashboardHost.Children.Add(new ScrollViewer { Content = root, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
         }
@@ -393,9 +393,10 @@ namespace ESP32AIControl.UWP
             {
                 var device = _dashboardSnapshot.Devices.FirstOrDefault(x => x.Id == command.DeviceId);
                 var widget = device == null ? null : device.Widgets.FirstOrDefault(x => x.Id == command.WidgetId);
-                var card = new StackPanel { Margin = new Thickness(0, 4, 0, 8), Padding = new Thickness(12), Background = new SolidColorBrush(Color.FromArgb(255, 43, 43, 49)) };
-                card.Children.Add(new TextBlock { Text = "«" + command.Phrase + "»", FontSize = 18, FontWeight = Windows.UI.Text.FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
-                card.Children.Add(new TextBlock { Text = (device == null ? command.DeviceId : device.Name) + " • " + (widget == null ? command.WidgetId : widget.Title), TextWrapping = TextWrapping.Wrap });
+                var cardContent = new StackPanel { Margin = new Thickness(12) };
+                var card = new Border { Margin = new Thickness(0, 4, 0, 8), Background = new SolidColorBrush(Color.FromArgb(255, 43, 43, 49)), Child = cardContent };
+                cardContent.Children.Add(new TextBlock { Text = "«" + command.Phrase + "»", FontSize = 18, FontWeight = Windows.UI.Text.FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
+                cardContent.Children.Add(new TextBlock { Text = (device == null ? command.DeviceId : device.Name) + " • " + (widget == null ? command.WidgetId : widget.Title), TextWrapping = TextWrapping.Wrap });
                 card.Children.Add(new TextBlock { Text = command.Value == "__READ_VALUE__" ? "ПРОИЗНЕСТИ ЗНАЧЕНИЕ" : command.Value == "1" ? "ВКЛ / ОТКРЫТЬ" : "ВЫКЛ / ЗАКРЫТЬ" });
                 if (command.Variants != null && command.Variants.Count > 1)
                     card.Children.Add(new TextBlock { Text = "Варианты: " + String.Join(", ", command.Variants), TextWrapping = TextWrapping.Wrap });
