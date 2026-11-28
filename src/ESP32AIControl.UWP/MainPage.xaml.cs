@@ -302,10 +302,132 @@ namespace ESP32AIControl.UWP
             UpdateNavigation(MarfaNav);
         }
 
+        private readonly TrainedVoiceCommandStore _trainedCommandStore = new TrainedVoiceCommandStore();
+
         private void Commands_Click(object sender, RoutedEventArgs e)
         {
-            SetSection("Команды", "Обученные команды", "Список команд и управление ими будут перенесены из Android.");
+            ShowCommands();
             UpdateNavigation(CommandsNav);
+        }
+
+        private void ShowCommands()
+        {
+            SetSection("Команды", "Обученные команды", "Фразы, варианты произношения и действия для устройств ESP32.");
+            DashboardHost.Visibility = Visibility.Visible;
+            DashboardHost.Children.Clear();
+
+            var root = new StackPanel { Margin = new Thickness(0, 10, 0, 0), Spacing = 8 };
+            var phrase = new TextBox { PlaceholderText = "Например: включи свет" };
+            var variant = new TextBox { PlaceholderText = "Дополнительный вариант фразы (необязательно)" };
+            var devicePicker = new ComboBox { PlaceholderText = "Выберите устройство", HorizontalAlignment = HorizontalAlignment.Stretch };
+            var widgetPicker = new ComboBox { PlaceholderText = "Выберите элемент управления", HorizontalAlignment = HorizontalAlignment.Stretch };
+            var valuePicker = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
+            valuePicker.Items.Add(new ComboBoxItem { Content = "Включить / открыть", Tag = "1" });
+            valuePicker.Items.Add(new ComboBoxItem { Content = "Выключить / закрыть", Tag = "0" });
+            valuePicker.Items.Add(new ComboBoxItem { Content = "Произнести текущее значение", Tag = "__READ_VALUE__" });
+            valuePicker.SelectedIndex = 0;
+
+            var devices = _dashboardSnapshot.Devices.ToList();
+            foreach (var device in devices)
+                devicePicker.Items.Add(new ComboBoxItem { Content = String.IsNullOrWhiteSpace(device.Name) ? device.Id : device.Name, Tag = device.Id });
+            Action refreshWidgets = () =>
+            {
+                widgetPicker.Items.Clear();
+                var selected = devicePicker.SelectedItem as ComboBoxItem;
+                var device = selected == null ? null : devices.FirstOrDefault(x => x.Id == (string)selected.Tag);
+                if (device == null) return;
+                foreach (var widget in device.Widgets)
+                    widgetPicker.Items.Add(new ComboBoxItem { Content = String.IsNullOrWhiteSpace(widget.Title) ? widget.Id : widget.Title, Tag = widget.Id });
+                if (widgetPicker.Items.Count > 0) widgetPicker.SelectedIndex = 0;
+            };
+            devicePicker.SelectionChanged += (s, a) => refreshWidgets();
+            if (devicePicker.Items.Count > 0) devicePicker.SelectedIndex = 0;
+
+            root.Children.Add(new TextBlock { Text = "Создать обученную команду", FontSize = 20, FontWeight = Windows.UI.Text.FontWeights.SemiBold });
+            root.Children.Add(new TextBlock { Text = "Фраза команды" });
+            root.Children.Add(phrase);
+            root.Children.Add(new TextBlock { Text = "Устройство" });
+            root.Children.Add(devicePicker);
+            root.Children.Add(new TextBlock { Text = "Виджет" });
+            root.Children.Add(widgetPicker);
+            root.Children.Add(new TextBlock { Text = "Действие" });
+            root.Children.Add(valuePicker);
+            root.Children.Add(new TextBlock { Text = "Вариант произношения" });
+            root.Children.Add(variant);
+
+            var add = new Button { Content = "Сохранить команду", HorizontalAlignment = HorizontalAlignment.Stretch };
+            add.Click += (s, a) =>
+            {
+                var selectedDevice = devicePicker.SelectedItem as ComboBoxItem;
+                var selectedWidget = widgetPicker.SelectedItem as ComboBoxItem;
+                var selectedValue = valuePicker.SelectedItem as ComboBoxItem;
+                if (String.IsNullOrWhiteSpace(phrase.Text) || selectedDevice == null || selectedWidget == null || selectedValue == null)
+                {
+                    StatusText.Text = "Укажите фразу, устройство и виджет.";
+                    return;
+                }
+                var command = new TrainedVoiceCommand {
+                    Phrase = phrase.Text.Trim(), DeviceId = (string)selectedDevice.Tag,
+                    WidgetId = (string)selectedWidget.Tag, Value = (string)selectedValue.Tag,
+                    Variants = String.IsNullOrWhiteSpace(variant.Text) ? new List<string>() : new List<string> { variant.Text.Trim() }
+                };
+                _trainedCommandStore.Add(command);
+                phrase.Text = ""; variant.Text = "";
+                RenderTrainedCommands(root);
+                StatusText.Text = "Команда сохранена на этом устройстве.";
+            };
+            root.Children.Add(add);
+            root.Children.Add(new Divider { Height = 1, Margin = new Thickness(0, 8, 0, 8), Background = new SolidColorBrush(Color.FromArgb(255, 70, 70, 78)) });
+            RenderTrainedCommands(root);
+            DashboardHost.Children.Add(new ScrollViewer { Content = root, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+        }
+
+        private void RenderTrainedCommands(StackPanel root)
+        {
+            while (root.Children.Count > 13) root.Children.RemoveAt(root.Children.Count - 1);
+            var commands = _trainedCommandStore.Load();
+            root.Children.Add(new TextBlock { Text = "Сохранённые команды: " + commands.Count, FontSize = 18, FontWeight = Windows.UI.Text.FontWeights.SemiBold, Margin = new Thickness(0, 8, 0, 4) });
+            if (commands.Count == 0)
+                root.Children.Add(new TextBlock { Text = "Пока нет обученных команд. Создайте первую команду выше.", TextWrapping = TextWrapping.Wrap });
+            foreach (var command in commands)
+            {
+                var device = _dashboardSnapshot.Devices.FirstOrDefault(x => x.Id == command.DeviceId);
+                var widget = device == null ? null : device.Widgets.FirstOrDefault(x => x.Id == command.WidgetId);
+                var card = new StackPanel { Margin = new Thickness(0, 4, 0, 8), Padding = new Thickness(12), Background = new SolidColorBrush(Color.FromArgb(255, 43, 43, 49)) };
+                card.Children.Add(new TextBlock { Text = "«" + command.Phrase + "»", FontSize = 18, FontWeight = Windows.UI.Text.FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
+                card.Children.Add(new TextBlock { Text = (device == null ? command.DeviceId : device.Name) + " • " + (widget == null ? command.WidgetId : widget.Title), TextWrapping = TextWrapping.Wrap });
+                card.Children.Add(new TextBlock { Text = command.Value == "__READ_VALUE__" ? "ПРОИЗНЕСТИ ЗНАЧЕНИЕ" : command.Value == "1" ? "ВКЛ / ОТКРЫТЬ" : "ВЫКЛ / ЗАКРЫТЬ" });
+                if (command.Variants != null && command.Variants.Count > 1)
+                    card.Children.Add(new TextBlock { Text = "Варианты: " + String.Join(", ", command.Variants), TextWrapping = TextWrapping.Wrap });
+                var actions = new StackPanel { Orientation = Orientation.Horizontal };
+                var addVariant = new Button { Content = "Добавить вариант" };
+                addVariant.Click += (s, a) =>
+                {
+                    var dialog = new ContentDialog { Title = "Вариант фразы", PrimaryButtonText = "Добавить", CloseButtonText = "Отмена" };
+                    var input = new TextBox { PlaceholderText = "Напишите другой вариант команды" };
+                    dialog.Content = input;
+                    dialog.PrimaryButtonClick += (sender, args) =>
+                    {
+                        if (!String.IsNullOrWhiteSpace(input.Text)) _trainedCommandStore.AddVariant(command.Phrase, input.Text);
+                        ShowCommands();
+                    };
+                    var ignored = dialog.ShowAsync();
+                };
+                var remove = new Button { Content = "Удалить" };
+                remove.Click += (s, a) => { _trainedCommandStore.Remove(command); ShowCommands(); };
+                actions.Children.Add(addVariant); actions.Children.Add(remove); card.Children.Add(actions);
+                root.Children.Add(card);
+            }
+            if (commands.Count > 0)
+            {
+                var clear = new Button { Content = "Очистить все команды" };
+                clear.Click += async (s, a) =>
+                {
+                    var dialog = new ContentDialog { Title = "Очистить обученные команды?", Content = "Все сохранённые фразы и варианты будут удалены.", PrimaryButtonText = "Удалить всё", CloseButtonText = "Отмена" };
+                    if (await dialog.ShowAsync() == ContentDialogResult.Primary) { _trainedCommandStore.Clear(); ShowCommands(); }
+                };
+                root.Children.Add(clear);
+            }
         }
 
         private void History_Click(object sender, RoutedEventArgs e)
