@@ -33,6 +33,7 @@ namespace ESP32AIControl.UWP
         private readonly ScenarioAutomationStore _scenarioStore = new ScenarioAutomationStore();
         private readonly DispatcherTimer _delayedCommandTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         private bool _delayedCommandTickRunning;
+        private bool _isSuspended;
 
         public event EventHandler<DeviceCommandRequestedEventArgs> DeviceCommandRequested;
 
@@ -107,6 +108,39 @@ namespace ESP32AIControl.UWP
                 }
             });
             SizeChanged += MainPage_SizeChanged;
+        }
+
+        public void OnAppSuspending()
+        {
+            if (_isSuspended) return;
+            _isSuspended = true;
+            _delayedCommandTimer.Stop();
+            _udpPruneTimer.Stop();
+            _udpDiscovery.Stop();
+            _mqtt.Stop();
+            _diagnostics.Add("Lifecycle", "Приложение приостановлено; сетевые службы остановлены.");
+        }
+
+        public void OnAppResuming()
+        {
+            if (!_isSuspended) return;
+            _isSuspended = false;
+            _diagnostics.Add("Lifecycle", "Приложение возобновлено; восстановление сетевых служб.");
+            _delayedCommandTimer.Start();
+            _udpPruneTimer.Start();
+            TryRestoreMqttConnection();
+
+            var udpStart = _udpDiscovery.StartAsync();
+            udpStart.ContinueWith(task =>
+            {
+                if (task.IsFaulted)
+                {
+                    var error = task.Exception == null ? "неизвестная ошибка" : task.Exception.GetBaseException().Message;
+                    _diagnostics.Add("UDP", "Не удалось восстановить UDP после возобновления: " + error);
+                    var ignored = Dispatcher.RunAsync(CoreDispatcherPriority.Normal,
+                        () => StatusText.Text = "UDP: " + error);
+                }
+            });
         }
 
         private void MainPage_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -1312,15 +1346,16 @@ namespace ESP32AIControl.UWP
             ApplicationData.Current.LocalSettings.Values["mqtt_" + key] = value ?? "";
         }
 
-        private void TryRestoreMqttConnection()
+        private async void TryRestoreMqttConnection()
         {
+            if (_mqtt.IsConnected) return;
             string host = ReadMqttSetting("host", "");
             int port;
             if (String.IsNullOrWhiteSpace(host) || !Int32.TryParse(ReadMqttSetting("port", "1883"), out port))
                 return;
             try
             {
-                var ignored = _mqtt.StartAsync(new MqttConnectionSettings {
+                await _mqtt.StartAsync(new MqttConnectionSettings {
                     Host = host, Port = port, Prefix = ReadMqttSetting("prefix", "IoTManager"),
                     Username = ReadMqttSetting("username", ""), Password = ReadMqttSetting("password", ""),
                     UseTls = ReadMqttSetting("tls", "false") == "true"
