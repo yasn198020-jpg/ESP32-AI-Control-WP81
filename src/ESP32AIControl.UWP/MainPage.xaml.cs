@@ -397,9 +397,9 @@ namespace ESP32AIControl.UWP
                 var card = new Border { Margin = new Thickness(0, 4, 0, 8), Background = new SolidColorBrush(Color.FromArgb(255, 43, 43, 49)), Child = cardContent };
                 cardContent.Children.Add(new TextBlock { Text = "«" + command.Phrase + "»", FontSize = 18, FontWeight = Windows.UI.Text.FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
                 cardContent.Children.Add(new TextBlock { Text = (device == null ? command.DeviceId : device.Name) + " • " + (widget == null ? command.WidgetId : widget.Title), TextWrapping = TextWrapping.Wrap });
-                card.Children.Add(new TextBlock { Text = command.Value == "__READ_VALUE__" ? "ПРОИЗНЕСТИ ЗНАЧЕНИЕ" : command.Value == "1" ? "ВКЛ / ОТКРЫТЬ" : "ВЫКЛ / ЗАКРЫТЬ" });
+                cardContent.Children.Add(new TextBlock { Text = command.Value == "__READ_VALUE__" ? "ПРОИЗНЕСТИ ЗНАЧЕНИЕ" : command.Value == "1" ? "ВКЛ / ОТКРЫТЬ" : "ВЫКЛ / ЗАКРЫТЬ" });
                 if (command.Variants != null && command.Variants.Count > 1)
-                    card.Children.Add(new TextBlock { Text = "Варианты: " + String.Join(", ", command.Variants), TextWrapping = TextWrapping.Wrap });
+                    cardContent.Children.Add(new TextBlock { Text = "Варианты: " + String.Join(", ", command.Variants), TextWrapping = TextWrapping.Wrap });
                 var actions = new StackPanel { Orientation = Orientation.Horizontal };
                 var addVariant = new Button { Content = "Добавить вариант" };
                 addVariant.Click += (s, a) =>
@@ -416,7 +416,7 @@ namespace ESP32AIControl.UWP
                 };
                 var remove = new Button { Content = "Удалить" };
                 remove.Click += (s, a) => { _trainedCommandStore.Remove(command); ShowCommands(); };
-                actions.Children.Add(addVariant); actions.Children.Add(remove); card.Children.Add(actions);
+                actions.Children.Add(addVariant); actions.Children.Add(remove); cardContent.Children.Add(actions);
                 root.Children.Add(card);
             }
             if (commands.Count > 0)
