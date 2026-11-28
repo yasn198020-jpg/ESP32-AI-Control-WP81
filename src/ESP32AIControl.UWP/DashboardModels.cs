@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Windows.Networking;
 using Windows.Networking.Sockets;
+using Windows.Storage;
 using Windows.Storage.Streams;
 
 namespace ESP32AIControl.UWP
@@ -663,6 +664,93 @@ namespace ESP32AIControl.UWP
 
 namespace ESP32AIControl.UWP
 {
+
+    // Durable queue for user-scheduled device commands. The queue survives app restarts.
+    public sealed class DelayedDeviceCommand
+    {
+        public string Id { get; set; }
+        public string DeviceId { get; set; }
+        public string DeviceName { get; set; }
+        public string WidgetId { get; set; }
+        public string WidgetName { get; set; }
+        public string Value { get; set; }
+        public long ExecuteAtUnixMs { get; set; }
+        public long CreatedAtUnixMs { get; set; }
+    }
+
+    public sealed class DelayedCommandStore
+    {
+        private readonly object _gate = new object();
+        private const string SettingKey = "delayed_device_commands";
+        private List<DelayedDeviceCommand> _items;
+
+        public DelayedCommandStore()
+        {
+            Load();
+        }
+
+        public IList<DelayedDeviceCommand> GetAll()
+        {
+            lock (_gate)
+                return _items.OrderBy(x => x.ExecuteAtUnixMs).Select(Clone).ToList();
+        }
+
+        public void Add(DelayedDeviceCommand command)
+        {
+            if (command == null) throw new ArgumentNullException("command");
+            lock (_gate)
+            {
+                _items.Add(Clone(command));
+                SaveLocked();
+            }
+        }
+
+        public bool Remove(string id)
+        {
+            lock (_gate)
+            {
+                int removed = _items.RemoveAll(x => String.Equals(x.Id, id, StringComparison.Ordinal));
+                if (removed > 0) SaveLocked();
+                return removed > 0;
+            }
+        }
+
+        private void Load()
+        {
+            lock (_gate)
+            {
+                try
+                {
+                    object raw;
+                    string json = ApplicationData.Current.LocalSettings.Values.TryGetValue(SettingKey, out raw)
+                        ? Convert.ToString(raw) : "";
+                    _items = String.IsNullOrWhiteSpace(json)
+                        ? new List<DelayedDeviceCommand>()
+                        : (JsonConvert.DeserializeObject<List<DelayedDeviceCommand>>(json) ?? new List<DelayedDeviceCommand>());
+                }
+                catch { _items = new List<DelayedDeviceCommand>(); }
+            }
+        }
+
+        private void SaveLocked()
+        {
+            try
+            {
+                ApplicationData.Current.LocalSettings.Values[SettingKey] = JsonConvert.SerializeObject(_items);
+            }
+            catch { }
+        }
+
+        private static DelayedDeviceCommand Clone(DelayedDeviceCommand item)
+        {
+            return new DelayedDeviceCommand {
+                Id = item.Id, DeviceId = item.DeviceId, DeviceName = item.DeviceName,
+                WidgetId = item.WidgetId, WidgetName = item.WidgetName, Value = item.Value,
+                ExecuteAtUnixMs = item.ExecuteAtUnixMs, CreatedAtUnixMs = item.CreatedAtUnixMs
+            };
+        }
+    }
+
     public sealed class HistoryPoint
     {
         public long Timestamp { get; set; }
