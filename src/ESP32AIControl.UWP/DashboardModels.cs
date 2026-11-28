@@ -782,6 +782,7 @@ namespace ESP32AIControl.UWP
 
         public async Task ClearAsync()
         {
+            await EnsureLoadedAsync();
             await _fileGate.WaitAsync();
             try
             {
@@ -804,7 +805,7 @@ namespace ESP32AIControl.UWP
                 string text = await Windows.Storage.FileIO.ReadTextAsync(_file);
                 long cutoff = RetentionCutoff();
                 var loaded = new System.Collections.Generic.List<HistoryPoint>();
-                foreach (string line in text.Split(new[] { '\\r', '\\n' }, StringSplitOptions.RemoveEmptyEntries))
+                foreach (string line in text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
                 {
                     try
                     {
@@ -866,9 +867,12 @@ namespace ESP32AIControl.UWP
         {
             long cutoff = RetentionCutoff();
             if (cutoff == 0) return;
-            lock (_sync) _cache.RemoveAll(p => p.Timestamp < cutoff);
-            // The archive is compacted on the next history load rather than
-            // blocking the MQTT receive path or the periodic sampler.
+            lock (_sync)
+            {
+                _cache.RemoveAll(p => p.Timestamp < cutoff);
+                if (_cache.Count > 5000) _cache.RemoveRange(0, _cache.Count - 5000);
+            }
+            // The archive is filtered again when it is loaded; runtime cache stays bounded.
         }
 
         private long RetentionCutoff()
