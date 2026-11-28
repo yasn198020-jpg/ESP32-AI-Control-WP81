@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;\nusing System.Diagnostics;
+using System.Linq;
+using System.Diagnostics;
 using Windows.UI;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
@@ -110,7 +111,10 @@ namespace ESP32AIControl.UWP
         private async void Update_Click(object sender, RoutedEventArgs e)
         {
             SetSection("Обновление", "Обновление приложения", "Проверка канала Windows 10 Mobile…");
-            UpdateDownloadButton.Visibility = Visibility.Collapsed;\n            UpdateProgressBar.Visibility = Visibility.Collapsed;\n            UpdateProgressText.Visibility = Visibility.Collapsed;\n            UpdateProgressBar.Value = 0;
+            UpdateDownloadButton.Visibility = Visibility.Collapsed;
+            UpdateProgressBar.Visibility = Visibility.Collapsed;
+            UpdateProgressText.Visibility = Visibility.Collapsed;
+            UpdateProgressBar.Value = 0;
             try
             {
                 var result = await UpdateService.CheckAsync();
@@ -177,10 +181,15 @@ namespace ESP32AIControl.UWP
                 UpdateProgressBar.Value = 100;
                 UpdateProgressText.Text = "Загрузка завершена. Проверка SHA-256…";
 
-                UpdateProgressText.Text = "SHA-256 совпадает. Запуск системной установки…";\n                StatusText.Text = "Установка обновления…";
+                UpdateProgressText.Text = "SHA-256 совпадает. Запуск системной установки…";
+                StatusText.Text = "Установка обновления…";
                 var installResult = await UpdateService.InstallAsync(
                     file,
-                    value =>\n                    {\n                        StatusText.Text = "Установка Windows: " + value + "%";\n                        UpdateProgressText.Text = "Установка Windows: " + value + "%";\n                    });
+                    value =>
+                    {
+                        StatusText.Text = "Установка Windows: " + value + "%";
+                        UpdateProgressText.Text = "Установка Windows: " + value + "%";
+                    });
 
                 string state = installResult.InstallState.ToString();
                 if (state == "Installed")
