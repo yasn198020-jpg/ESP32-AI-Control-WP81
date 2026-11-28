@@ -362,6 +362,14 @@ namespace ESP32AIControl.UWP.Core.Marfa
 
             var sensor = sensorResolution.Candidate;
             var target = targetResolution.Candidate;
+            int sensorIdCount = devices.SelectMany(d => d.Widgets ?? new List<MarfaWidgetState>())
+                .Count(w => String.Equals(w.Id, sensor.Widget.Id, StringComparison.OrdinalIgnoreCase));
+            int targetIdCount = devices.SelectMany(d => d.Widgets ?? new List<MarfaWidgetState>())
+                .Count(w => String.Equals(w.Id, target.Widget.Id, StringComparison.OrdinalIgnoreCase));
+            if (sensorIdCount != 1 || targetIdCount != 1)
+                return Result(LocalCommandAction.CLARIFY,
+                    "Для условного сценария ID датчика и исполнительного элемента должны быть уникальными во всей конфигурации ESP32.");
+
             var item = new LocalCommandActionItem
             {
                 DeviceId = target.Device.Id, WidgetId = target.Widget.Id, Value = action.Value
