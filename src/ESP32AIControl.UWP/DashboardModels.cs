@@ -241,7 +241,7 @@ namespace ESP32AIControl.UWP
             object raw;
             int digits = config.TryGetValue("round", out raw) ? Convert.ToInt32(raw, CultureInfo.InvariantCulture) : -1;
             Func<decimal, decimal> round = input => digits >= 0 && digits <= 6
-                ? System.Decimal.Round(input, digits, MidpointRounding.AwayFromZero) : input;
+                ? Convert.ToDecimal(Math.Round((double)input, digits, MidpointRounding.AwayFromZero)) : input;
             value = round(value);
             decimal multiply = config.TryGetValue("multiply", out raw) ? Convert.ToDecimal(raw, CultureInfo.InvariantCulture) : 1m;
             value = value * multiply;
