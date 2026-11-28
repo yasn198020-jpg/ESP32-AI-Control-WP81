@@ -281,10 +281,12 @@ namespace ESP32AIControl.UWP
             if (await _reader.LoadAsync(1) != 1) return null;
             byte header = _reader.ReadByte();
             int remaining = 0, multiplier = 1, encoded;
+            var lengthBytes = new List<byte>();
             do
             {
                 if (await _reader.LoadAsync(1) != 1) throw new InvalidOperationException("MQTT packet length truncated.");
                 encoded = _reader.ReadByte();
+                lengthBytes.Add((byte)encoded);
                 remaining += (encoded & 127) * multiplier;
                 multiplier *= 128;
                 if (multiplier > 128 * 128 * 128 * 128) throw new InvalidOperationException("Invalid MQTT packet length.");
@@ -292,13 +294,14 @@ namespace ESP32AIControl.UWP
             if (remaining > 1024 * 1024) throw new InvalidOperationException("MQTT packet exceeds 1 MB.");
             if (remaining > 0 && await _reader.LoadAsync((uint)remaining) < remaining)
                 throw new InvalidOperationException("MQTT packet payload truncated.");
-            var result = new byte[remaining + 1];
+            var result = new byte[1 + lengthBytes.Count + remaining];
             result[0] = header;
+            lengthBytes.CopyTo(result, 1);
             if (remaining > 0)
             {
                 var body = new byte[remaining];
                 _reader.ReadBytes(body);
-                Buffer.BlockCopy(body, 0, result, 1, remaining);
+                Buffer.BlockCopy(body, 0, result, 1 + lengthBytes.Count, remaining);
             }
             return result;
         }
