@@ -56,6 +56,7 @@ namespace ESP32AIControl.UWP
             if (ApplicationData.Current.LocalSettings.Values.TryGetValue("show_last_updated", out showUpdated))
                 _dashboardRenderer.ShowLastUpdated = Convert.ToBoolean(showUpdated);
             _diagnostics.Add("App", "Приложение запущено.");
+            MarfaCoreDiagnostics.Sink = message => _diagnostics.Add("Marfa", message);
             _mqtt.ConnectionChanged += connected =>
             {
                 var ignored = Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
@@ -122,6 +123,7 @@ namespace ESP32AIControl.UWP
         {
             if (_isSuspended) return;
             _isSuspended = true;
+            var stopMarfa = StopMarfaContinuousAsync();
             _delayedCommandTimer.Stop();
             _udpPruneTimer.Stop();
             _udpDiscovery.Stop();
@@ -543,7 +545,7 @@ namespace ESP32AIControl.UWP
 
         private async Task HandleMarfaRecognizedTextAsync(string phrase, TextBlock output)
         {
-            if (_marfaProcessing) return;
+            if (_isSuspended || _marfaProcessing) return;
             string normalized = NormalizeVoicePhrase(phrase);
             var wake = System.Text.RegularExpressions.Regex.Match(normalized, @"^\s*марфа\b\s*(.*)$");
             string command = "";
