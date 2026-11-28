@@ -24,6 +24,9 @@ namespace ESP32AIControl.UWP
         private DashboardRenderer _dashboardRenderer;
         private UpdateManifest _pendingUpdateManifest;
         private readonly MqttDeviceService _mqtt = new MqttDeviceService();
+        private readonly UdpDiscoveryService _udpDiscovery = new UdpDiscoveryService();
+        private readonly DispatcherTimer _udpPruneTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
+        private string _udpDiagnostic = "UDP-приёмник ещё не запускался.";
         private readonly HistoryStore _historyStore = new HistoryStore();
         private readonly DelayedCommandStore _delayedCommandStore = new DelayedCommandStore();
         private readonly ScenarioAutomationStore _scenarioStore = new ScenarioAutomationStore();
@@ -56,6 +59,21 @@ namespace ESP32AIControl.UWP
             {
                 var ignored = Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () => SetDeviceSnapshot(devices));
             };
+            _udpDiscovery.DevicesChanged += devices =>
+            {
+                var ignored = Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
+                {
+                    if (PageTitle.Text == "UDP") RenderUdpDeviceList(devices);
+                });
+            };
+            _udpDiscovery.Diagnostic += message =>
+            {
+                var ignored = Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
+                {
+                    _udpDiagnostic = message;
+                    if (PageTitle.Text == "UDP") StatusText.Text = message;
+                });
+            };
             DeviceCommandRequested += async (sender, args) =>
             {
                 bool sent = await _mqtt.SendControlAsync(args.Device.Id, args.Widget.Id, args.Value);
@@ -70,6 +88,17 @@ namespace ESP32AIControl.UWP
             TryRestoreMqttConnection();
             _delayedCommandTimer.Tick += DelayedCommandTimer_Tick;
             _delayedCommandTimer.Start();
+            _udpPruneTimer.Tick += (sender, args) => _udpDiscovery.PruneExpired();
+            _udpPruneTimer.Start();
+            var udpStart = _udpDiscovery.StartAsync();
+            udpStart.ContinueWith(task =>
+            {
+                if (task.IsFaulted)
+                {
+                    var error = task.Exception == null ? "неизвестная ошибка" : task.Exception.GetBaseException().Message;
+                    var ignored = Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () => StatusText.Text = "UDP: " + error);
+                }
+            });
             SizeChanged += MainPage_SizeChanged;
         }
 
@@ -1248,7 +1277,74 @@ namespace ESP32AIControl.UWP
             }
             catch (Exception ex) { StatusText.Text = "Не удалось восстановить MQTT: " + ex.Message; }
         }
-        private void UdpSettings_Click(object sender, RoutedEventArgs e) { SetSection("UDP", "UDP устройства", "Обнаружение устройств в локальной сети."); }
+        private void UdpSettings_Click(object sender, RoutedEventArgs e) { ShowUdpSettings(); }
+
+        private void ShowUdpSettings()
+        {
+            SetSection("UDP", "Поиск устройств в сети", "ESP32 отправляет объявления по UDP broadcast. Данные датчиков и управление продолжают работать через MQTT.");
+            DashboardHost.Visibility = Visibility.Visible;
+            DashboardHost.Children.Clear();
+
+            var actions = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 10, 0, 8) };
+            var start = new Button { Content = "Запустить поиск", Margin = new Thickness(0, 0, 8, 0) };
+            start.Click += async (sender, args) =>
+            {
+                try { await _udpDiscovery.StartAsync(); StatusText.Text = "UDP-поиск запущен."; }
+                catch (Exception ex) { StatusText.Text = "Не удалось запустить UDP: " + ex.Message; }
+            };
+            var stop = new Button { Content = "Остановить поиск" };
+            stop.Click += (sender, args) => _udpDiscovery.Stop();
+            var refresh = new Button { Content = "Обновить список", Margin = new Thickness(8, 0, 0, 0) };
+            refresh.Click += (sender, args) => RenderUdpDeviceList(_udpDiscovery.GetSnapshot());
+            actions.Children.Add(start); actions.Children.Add(stop); actions.Children.Add(refresh);
+            DashboardHost.Children.Add(actions);
+            DashboardHost.Children.Add(new TextBlock {
+                Text = "Порт UDP 4210 · broadcast 255.255.255.255 · срок актуальности устройства 5 минут",
+                TextWrapping = TextWrapping.Wrap, Foreground = new SolidColorBrush(Color.FromArgb(255, 170, 172, 184)),
+                Margin = new Thickness(0, 0, 0, 8)
+            });
+            RenderUdpDeviceList(_udpDiscovery.GetSnapshot());
+            StatusText.Text = _udpDiagnostic;
+        }
+
+        private void RenderUdpDeviceList(IList<UdpDiscoveredDevice> devices)
+        {
+            if (PageTitle.Text != "UDP") return;
+            var old = DashboardHost.Children.OfType<StackPanel>().FirstOrDefault(x => Convert.ToString(x.Tag) == "udp-device-list");
+            if (old != null) DashboardHost.Children.Remove(old);
+            var list = new StackPanel { Tag = "udp-device-list", Margin = new Thickness(0, 4, 0, 0) };
+            if (devices == null || devices.Count == 0)
+            {
+                list.Children.Add(new TextBlock {
+                    Text = "Устройства пока не найдены. Убедитесь, что телефон и ESP32 находятся в одной локальной сети и устройство отправляет UDP-объявления.",
+                    TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 8)
+                });
+            }
+            else
+            {
+                foreach (var device in devices)
+                {
+                    var cardBody = new StackPanel();
+                    cardBody.Children.Add(new TextBlock {
+                        Text = String.IsNullOrWhiteSpace(device.Name) ? (String.IsNullOrWhiteSpace(device.Id) ? device.Wg : device.Id) : device.Name,
+                        FontSize = 18, FontWeight = Windows.UI.Text.FontWeights.SemiBold
+                    });
+                    cardBody.Children.Add(new TextBlock { Text = "IP: " + device.Ip + "    ID: " + device.Id, TextWrapping = TextWrapping.Wrap });
+                    cardBody.Children.Add(new TextBlock { Text = "WG: " + device.Wg + "    Статус: " + device.Status, TextWrapping = TextWrapping.Wrap });
+                    cardBody.Children.Add(new TextBlock { Text = "Прошивка: " + device.FirmwareVersion + "    Последний пакет: " + device.LastSeenAt.ToLocalTime().ToString("HH:mm:ss"), TextWrapping = TextWrapping.Wrap });
+                    list.Children.Add(new Border {
+                        Background = new SolidColorBrush(Color.FromArgb(255, 42, 44, 54)),
+                        Padding = new Thickness(12), Margin = new Thickness(0, 4, 0, 4), Child = cardBody
+                    });
+                }
+            }
+            list.Children.Add(new TextBlock {
+                Text = "Диагностика: " + _udpDiagnostic, TextWrapping = TextWrapping.Wrap,
+                FontSize = 12, Margin = new Thickness(0, 10, 0, 8),
+                Foreground = new SolidColorBrush(Color.FromArgb(255, 170, 172, 184))
+            });
+            DashboardHost.Children.Add(list);
+        }
         private void AppSettings_Click(object sender, RoutedEventArgs e) { SetSection("Настройки", "Настройки приложения", "Общие параметры приложения."); }
         private void TextSize_Click(object sender, RoutedEventArgs e) { SetSection("Размер текста", "Размер текста", "Масштаб интерфейса и читаемость на разных экранах."); }
         private void ToggleLastUpdated_Click(object sender, RoutedEventArgs e)
