@@ -849,13 +849,13 @@ namespace ESP32AIControl.UWP
         {
             DashboardHost.Visibility = Visibility.Visible;
             DashboardHost.Children.Clear();
-            var root = new StackPanel { Margin = new Thickness(0, 10, 0, 0), Spacing = 8 };
+            var root = new StackPanel { Margin = new Thickness(0, 10, 0, 0) };
             var devicePicker = new ComboBox { Header = "Устройство", MinWidth = 240 };
             var widgetPicker = new ComboBox { Header = "Элемент управления", MinWidth = 240 };
             var valueBox = new TextBox { Header = "Значение команды", PlaceholderText = "Например: 1, 0 или 23.5" };
-            var delayBox = new TextBox { Header = "Выполнить через (минут)", Text = "5", InputScope = new Windows.UI.Xaml.Input.InputScope { Names = { new Windows.UI.Xaml.Input.InputScopeName { Name = Windows.UI.Xaml.Input.InputScopeNameValue.Number } } } };
+            var delayBox = new TextBox { Header = "Выполнить через (минут)", Text = "5" };
             var info = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = new SolidColorBrush(Color.FromArgb(255, 170, 175, 190)) };
-            var listPanel = new StackPanel { Spacing = 8 };
+            var listPanel = new StackPanel();
             var addButton = new Button { Content = "Запланировать команду", HorizontalAlignment = HorizontalAlignment.Stretch };
             var devices = _dashboardSnapshot.Devices.ToList();
             foreach (var device in devices)
@@ -932,20 +932,21 @@ namespace ESP32AIControl.UWP
             }
             foreach (var command in commands)
             {
-                var card = new StackPanel { Margin = new Thickness(0, 6, 0, 10), Padding = new Thickness(12), Background = new SolidColorBrush(Color.FromArgb(255, 42, 44, 54)) };
+                var cardContent = new StackPanel();
+                var card = new Border { Margin = new Thickness(0, 6, 0, 10), Padding = new Thickness(12), Background = new SolidColorBrush(Color.FromArgb(255, 42, 44, 54)), Child = cardContent };
                 long remaining = Math.Max(0, command.ExecuteAtUnixMs - DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
                 string when = DateTimeOffset.FromUnixTimeMilliseconds(command.ExecuteAtUnixMs).ToLocalTime().ToString("dd.MM.yyyy HH:mm");
                 string countdown = remaining <= 0 ? "Ожидает отправки" : "Осталось: " + TimeSpan.FromMilliseconds(remaining).ToString(@"d\.hh\:mm\:ss");
-                card.Children.Add(new TextBlock { Text = command.CommandText(), FontSize = 17, TextWrapping = TextWrapping.Wrap });
-                card.Children.Add(new TextBlock { Text = "Выполнение: " + when });
-                card.Children.Add(new TextBlock { Text = countdown, Foreground = new SolidColorBrush(Color.FromArgb(255, 190, 190, 205)) });
+                cardContent.Children.Add(new TextBlock { Text = command.DeviceName + " • " + command.WidgetName + " = " + command.Value, FontSize = 17, TextWrapping = TextWrapping.Wrap });
+                cardContent.Children.Add(new TextBlock { Text = "Выполнение: " + when });
+                cardContent.Children.Add(new TextBlock { Text = countdown, Foreground = new SolidColorBrush(Color.FromArgb(255, 190, 190, 205)) });
                 var cancel = new Button { Content = "Отменить", Tag = command.Id, HorizontalAlignment = HorizontalAlignment.Left };
                 cancel.Click += (s, e) =>
                 {
                     _delayedCommandStore.Remove(Convert.ToString(((Button)s).Tag));
                     RefreshPendingCommandList(panel);
                 };
-                card.Children.Add(cancel);
+                cardContent.Children.Add(cancel);
                 panel.Children.Add(card);
             }
         }
