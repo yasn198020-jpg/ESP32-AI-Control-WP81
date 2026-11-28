@@ -593,6 +593,19 @@ namespace ESP32AIControl.UWP
                 if (item != null) _historyStore.SetDisplayPeriod(Convert.ToInt64(item.Tag));
             };
 
+            var modePicker = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
+            AddChoice(modePicker, "При изменении значения", "change");
+            AddChoice(modePicker, "По интервалу", "interval");
+            AddChoice(modePicker, "Изменение + интервал", "change_interval");
+            SelectChoice(modePicker, "change_interval");
+            var graphIntervalPicker = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
+            AddChoice(graphIntervalPicker, "1 минута", 60000L); AddChoice(graphIntervalPicker, "5 минут", 300000L);
+            AddChoice(graphIntervalPicker, "10 минут", 600000L); AddChoice(graphIntervalPicker, "30 минут", 1800000L);
+            AddChoice(graphIntervalPicker, "1 час", 3600000L); AddChoice(graphIntervalPicker, "2 часа", 7200000L);
+            SelectChoice(graphIntervalPicker, 1800000L);
+            var graphConfigsPanel = new StackPanel();
+            var addGraphConfig = new Button { Content = "＋ Добавить график для датчика", HorizontalAlignment = HorizontalAlignment.Stretch };
+
             var retentionPicker = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
             AddChoice(retentionPicker, "1 день", 1); AddChoice(retentionPicker, "3 дня", 3);
             AddChoice(retentionPicker, "7 дней", 7); AddChoice(retentionPicker, "14 дней", 14);
@@ -615,6 +628,32 @@ namespace ESP32AIControl.UWP
             var clear = new Button { Content = "Очистить историю", HorizontalAlignment = HorizontalAlignment.Stretch };
             var selectedDeviceId = "";
             var selectedWidgetId = "";
+            Action refreshGraphConfigs = () =>
+            {
+                graphConfigsPanel.Children.Clear();
+                var configs = _historyStore.GraphConfigs();
+                if (configs.Count == 0)
+                    graphConfigsPanel.Children.Add(new TextBlock { Text = "Дополнительные графики не настроены.", TextWrapping = TextWrapping.Wrap });
+                foreach (var config in configs)
+                {
+                    var device = devices.FirstOrDefault(x => x.Id == config.DeviceId);
+                    var widget = device == null ? null : device.Widgets.FirstOrDefault(x => x.Id == config.WidgetId);
+                    var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 3, 0, 3) };
+                    row.Children.Add(new TextBlock {
+                        Text = (widget == null ? config.WidgetId : widget.Title) + " • " +
+                            (config.Mode == "change" ? "изменение" : config.Mode == "interval" ? "интервал" : "изменение + интервал") +
+                            " • " + TimeSpan.FromMilliseconds(config.IntervalMs).ToString(@"h\\:mm"),
+                        TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center
+                    });
+                    var removeConfig = new Button { Content = "Удалить", Margin = new Thickness(8, 0, 0, 0) };
+                    removeConfig.Click += (s, a) => {
+                        _historyStore.RemoveGraphConfig(config.DeviceId, config.WidgetId);
+                        refreshGraphConfigs();
+                    };
+                    row.Children.Add(removeConfig);
+                    graphConfigsPanel.Children.Add(row);
+                }
+            };
 
             Action refreshWidgets = () =>
             {
@@ -688,6 +727,24 @@ namespace ESP32AIControl.UWP
             };
             devicePicker.SelectionChanged += (s, a) => { refreshWidgets(); };
             widgetPicker.SelectionChanged += async (s, a) => { await loadGraph(); };
+            addGraphConfig.Click += (s, a) =>
+            {
+                var d = devicePicker.SelectedItem as ComboBoxItem;
+                var w = widgetPicker.SelectedItem as ComboBoxItem;
+                var mode = modePicker.SelectedItem as ComboBoxItem;
+                var interval = graphIntervalPicker.SelectedItem as ComboBoxItem;
+                if (d == null || w == null || mode == null || interval == null)
+                {
+                    info.Text = "Сначала выберите устройство и числовой датчик.";
+                    return;
+                }
+                _historyStore.AddGraphConfig(new HistoryGraphConfig {
+                    DeviceId = Convert.ToString(d.Tag), WidgetId = Convert.ToString(w.Tag),
+                    Mode = Convert.ToString(mode.Tag), IntervalMs = Convert.ToInt64(interval.Tag)
+                });
+                refreshGraphConfigs();
+                info.Text = "Настройки дополнительного графика сохранены.";
+            };
             refresh.Click += async (s, a) => await loadGraph();
             export.Click += async (s, a) =>
             {
@@ -732,7 +789,10 @@ namespace ESP32AIControl.UWP
             root.Children.Add(new TextBlock { Text = "Устройство" }); root.Children.Add(devicePicker);
             root.Children.Add(new TextBlock { Text = "Показатель" }); root.Children.Add(widgetPicker);
             root.Children.Add(new TextBlock { Text = "Период графика" }); root.Children.Add(periodPicker);
-            root.Children.Add(new TextBlock { Text = "Интервал записи" }); root.Children.Add(samplePicker);
+            root.Children.Add(new TextBlock { Text = "Интервал общей записи" }); root.Children.Add(samplePicker);
+            root.Children.Add(new TextBlock { Text = "Настройка отдельного графика" });
+            root.Children.Add(modePicker); root.Children.Add(graphIntervalPicker); root.Children.Add(addGraphConfig);
+            root.Children.Add(graphConfigsPanel); refreshGraphConfigs();
             root.Children.Add(new TextBlock { Text = "Срок хранения" }); root.Children.Add(retentionPicker);
             root.Children.Add(new TextBlock { Text = "Запись выполняется независимо от частоты MQTT; по умолчанию каждые 10 секунд.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 4) });
             root.Children.Add(refresh); root.Children.Add(export); root.Children.Add(info); root.Children.Add(chartScroll); root.Children.Add(clear);
