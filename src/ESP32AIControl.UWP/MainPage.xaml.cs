@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Diagnostics;
-using System.Threading.Tasks;
+using System.Threading.Tasks;\nusing System.Text;
 using Windows.UI;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
@@ -604,9 +604,12 @@ namespace ESP32AIControl.UWP
             };
 
             var info = new TextBlock { Text = "История загружается из локального архива.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 8) };
+            IList<HistoryPoint> lastPoints = new List<HistoryPoint>();
+            string selectedUnit = "";
             var chart = new Canvas { Width = Math.Max(320, ActualWidth - 70), Height = 220, Background = new SolidColorBrush(Color.FromArgb(255, 35, 36, 42)) };
             var chartScroll = new ScrollViewer { Content = chart, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled, Height = 230 };
             var refresh = new Button { Content = "Обновить график", HorizontalAlignment = HorizontalAlignment.Stretch };
+            var export = new Button { Content = "Экспортировать CSV", HorizontalAlignment = HorizontalAlignment.Stretch };
             var clear = new Button { Content = "Очистить историю", HorizontalAlignment = HorizontalAlignment.Stretch };
             var selectedDeviceId = "";
             var selectedWidgetId = "";
@@ -641,6 +644,7 @@ namespace ESP32AIControl.UWP
                 selectedWidgetId = Convert.ToString(w.Tag);
                 long since = _historyStore.DisplaySince();
                 var points = await _historyStore.LoadAsync(selectedDeviceId, selectedWidgetId, since);
+                lastPoints = points;
                 chart.Children.Clear();
                 if (points.Count == 0)
                 {
@@ -670,7 +674,8 @@ namespace ESP32AIControl.UWP
                     " • последнее: " + points[points.Count - 1].RawValue;
                 var device = devices.FirstOrDefault(x => x.Id == selectedDeviceId);
                 var widget = device == null ? null : device.Widgets.FirstOrDefault(x => x.Id == selectedWidgetId);
-                if (widget != null && !String.IsNullOrWhiteSpace(widget.Unit)) info.Text += " " + widget.Unit;
+                selectedUnit = widget == null ? "" : widget.Unit;
+                if (!String.IsNullOrWhiteSpace(selectedUnit)) info.Text += " " + selectedUnit;
             };
 
             periodPicker.SelectionChanged += async (s, a) =>
@@ -682,6 +687,34 @@ namespace ESP32AIControl.UWP
             devicePicker.SelectionChanged += (s, a) => { refreshWidgets(); };
             widgetPicker.SelectionChanged += async (s, a) => { await loadGraph(); };
             refresh.Click += async (s, a) => await loadGraph();
+            export.Click += async (s, a) =>
+            {
+                if (lastPoints == null || lastPoints.Count == 0) { info.Text = "Нет точек для экспорта."; return; }
+                try
+                {
+                    var picker = new Windows.Storage.Pickers.FileSavePicker();
+                    picker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.Downloads;
+                    picker.FileTypeChoices.Add("CSV", new List<string> { ".csv" });
+                    picker.SuggestedFileName = "esp32-history-" + DateTime.Now.ToString("yyyyMMdd-HHmm");
+                    var file = await picker.PickSaveFileAsync();
+                    if (file == null) return;
+                    var csv = new StringBuilder();
+                    csv.AppendLine("timestamp_utc,device_id,widget_id,value,raw_value,unit");
+                    foreach (var point in lastPoints)
+                    {
+                        var time = DateTimeOffset.FromUnixTimeMilliseconds(point.Timestamp).UtcDateTime.ToString("o");
+                        csv.Append(EscapeCsv(time)).Append(',')
+                            .Append(EscapeCsv(point.DeviceId)).Append(',')
+                            .Append(EscapeCsv(point.WidgetId)).Append(',')
+                            .Append(point.Value.ToString("R", CultureInfo.InvariantCulture)).Append(',')
+                            .Append(EscapeCsv(point.RawValue)).Append(',')
+                            .Append(EscapeCsv(selectedUnit)).AppendLine();
+                    }
+                    await Windows.Storage.FileIO.WriteTextAsync(file, csv.ToString());
+                    info.Text = "Экспортировано точек: " + lastPoints.Count + " • " + file.Name;
+                }
+                catch (Exception ex) { info.Text = "Ошибка экспорта: " + ex.Message; }
+            };
             clear.Click += async (s, a) =>
             {
                 var dialog = new ContentDialog { Title = "Очистить историю?", Content = "Все сохранённые измерения будут удалены.", PrimaryButtonText = "Очистить", CloseButtonText = "Отмена" };
@@ -700,9 +733,15 @@ namespace ESP32AIControl.UWP
             root.Children.Add(new TextBlock { Text = "Интервал записи" }); root.Children.Add(samplePicker);
             root.Children.Add(new TextBlock { Text = "Срок хранения" }); root.Children.Add(retentionPicker);
             root.Children.Add(new TextBlock { Text = "Запись выполняется независимо от частоты MQTT; по умолчанию каждые 10 секунд.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 4) });
-            root.Children.Add(refresh); root.Children.Add(info); root.Children.Add(chartScroll); root.Children.Add(clear);
+            root.Children.Add(refresh); root.Children.Add(export); root.Children.Add(info); root.Children.Add(chartScroll); root.Children.Add(clear);
             DashboardHost.Children.Add(new ScrollViewer { Content = root, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
             var ignored = loadGraph();
+        }
+
+        private static string EscapeCsv(string value)
+        {
+            string text = value ?? "";
+            return "\"" + text.Replace("\"", "\"\"") + "\"";
         }
 
         private static void AddChoice(ComboBox picker, string label, object value)
