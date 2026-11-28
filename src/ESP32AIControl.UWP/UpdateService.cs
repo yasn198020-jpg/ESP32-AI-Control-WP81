@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Diagnostics;
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
@@ -122,13 +123,64 @@ namespace ESP32AIControl.UWP
         {
             if (packageFile == null) throw new ArgumentNullException("packageFile");
 
-            var operation = InstallationManager.AddPackageAsync(
-                "ESP32-AI-Control", new Uri(packageFile.Path, UriKind.Absolute));
+            string packagePath = packageFile.Path;
+            string packageUriText = "(не создан)";
+            ulong packageSize = 0;
 
-            if (progress != null)
-                operation.Progress = (op, value) => progress(value);
+            try
+            {
+                if (string.IsNullOrWhiteSpace(packagePath))
+                    throw new InvalidDataException("У загруженного пакета отсутствует локальный путь.");
 
-            return await operation;
+                var properties = await packageFile.GetBasicPropertiesAsync();
+                packageSize = properties.Size;
+                if (packageSize == 0)
+                    throw new InvalidDataException("Загруженный пакет имеет нулевой размер.");
+
+                var packageUri = new Uri(packagePath, UriKind.Absolute);
+                packageUriText = packageUri.AbsoluteUri;
+
+                if (!packageUri.IsAbsoluteUri || packageUri.Scheme != Uri.UriSchemeFile)
+                    throw new InvalidDataException("Для локального пакета ожидался абсолютный file:// URI.");
+
+                Debug.WriteLine("OTA install preflight: path=" + packagePath +
+                    "; uri=" + packageUriText + "; size=" + packageSize);
+
+                var operation = InstallationManager.AddPackageAsync(
+                    "ESP32-AI-Control", packageUri);
+
+                if (progress != null)
+                    operation.Progress = (op, value) => progress(value);
+
+                var result = await operation;
+                string state = result.InstallState.ToString();
+                Debug.WriteLine("OTA install result: state=" + state +
+                    "; productId=" + result.ProductId + "; error=" + result.ErrorText);
+
+                if (state != "Installed")
+                {
+                    throw new InvalidOperationException(
+                        "Системный установщик не подтвердил установку. " +
+                        "InstallState=" + state +
+                        "; ProductId=" + result.ProductId +
+                        "; ErrorText=" + (result.ErrorText ?? "(пусто)") +
+                        "; PackagePath=" + packagePath +
+                        "; PackageUri=" + packageUriText +
+                        "; PackageSize=" + packageSize + " байт.");
+                }
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("OTA install exception: " + ex);
+                throw new InvalidOperationException(
+                    "Ошибка этапа системной установки. " +
+                    "PackagePath=" + (packagePath ?? "(пусто)") +
+                    "; PackageUri=" + packageUriText +
+                    "; PackageSize=" + packageSize + " байт. " +
+                    "Причина: " + ex.Message, ex);
+            }
         }
 
         private static bool IsSha256(string value)
