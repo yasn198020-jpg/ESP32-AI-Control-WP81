@@ -751,6 +751,195 @@ namespace ESP32AIControl.UWP
         }
     }
 
+
+    public sealed class AutomationCondition
+    {
+        public string WidgetId { get; set; }
+        public string Operator { get; set; }
+        public double Threshold { get; set; }
+        public string Connector { get; set; }
+        public AutomationCondition() { WidgetId = ""; Operator = ">"; Connector = "AND"; }
+    }
+
+    public sealed class AutomationAction
+    {
+        public string DeviceId { get; set; }
+        public string WidgetId { get; set; }
+        public string Value { get; set; }
+        public AutomationAction() { DeviceId = ""; WidgetId = ""; Value = "1"; }
+    }
+
+    public sealed class AutomationScenario
+    {
+        public string Id { get; set; }
+        public string Title { get; set; }
+        public string Message { get; set; }
+        public bool Enabled { get; set; }
+        public bool NotificationEnabled { get; set; }
+        public string ActionType { get; set; }
+        public List<AutomationCondition> Conditions { get; set; }
+        public List<AutomationAction> Actions { get; set; }
+        public AutomationScenario()
+        {
+            Id = Guid.NewGuid().ToString("N"); Title = "Новый сценарий";
+            Message = "Условие выполнено: {value}"; Enabled = true;
+            NotificationEnabled = true; ActionType = "NOTIFICATION";
+            Conditions = new List<AutomationCondition>();
+            Actions = new List<AutomationAction>();
+        }
+    }
+
+    // Persists scenario definitions and evaluates edge-triggered conditions against live MQTT snapshots.
+    public sealed class ScenarioAutomationStore
+    {
+        private const string SettingKey = "automation_scenarios_v1";
+        private const string RuntimeKey = "automation_scenario_edges_v1";
+        private readonly object _gate = new object();
+        private List<AutomationScenario> _items;
+        private Dictionary<string, bool> _edges;
+
+        public ScenarioAutomationStore() { Load(); }
+
+        public IList<AutomationScenario> GetAll()
+        {
+            lock (_gate) return _items.Select(Clone).ToList();
+        }
+
+        public void Save(AutomationScenario scenario)
+        {
+            if (scenario == null) throw new ArgumentNullException("scenario");
+            lock (_gate)
+            {
+                int index = _items.FindIndex(x => x.Id == scenario.Id);
+                if (index < 0) _items.Add(Clone(scenario)); else _items[index] = Clone(scenario);
+                _edges.Remove(scenario.Id);
+                PersistLocked();
+            }
+        }
+
+        public void Delete(string id)
+        {
+            lock (_gate)
+            {
+                _items.RemoveAll(x => x.Id == id);
+                _edges.Remove(id);
+                PersistLocked();
+            }
+        }
+
+        public void SetEnabled(string id, bool enabled)
+        {
+            lock (_gate)
+            {
+                var item = _items.FirstOrDefault(x => x.Id == id);
+                if (item == null) return;
+                item.Enabled = enabled;
+                _edges.Remove(id);
+                PersistLocked();
+            }
+        }
+
+        public IList<AutomationScenario> Evaluate(IEnumerable<DeviceModel> devices)
+        {
+            var values = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+            if (devices != null)
+                foreach (var device in devices)
+                    foreach (var widget in device.Widgets)
+                    {
+                        double number;
+                        if (Double.TryParse(widget.Value, NumberStyles.Any, CultureInfo.InvariantCulture, out number))
+                            values[widget.Id] = number;
+                    }
+
+            var triggered = new List<AutomationScenario>();
+            lock (_gate)
+            {
+                foreach (var scenario in _items.Where(x => x.Enabled))
+                {
+                    bool? match = EvaluateConditions(scenario.Conditions, values);
+                    if (!match.HasValue) continue;
+                    bool wasTrue;
+                    _edges.TryGetValue(scenario.Id, out wasTrue);
+                    if (match.Value && !wasTrue) triggered.Add(Clone(scenario));
+                    _edges[scenario.Id] = match.Value;
+                }
+                PersistEdgesLocked();
+            }
+            return triggered;
+        }
+
+        private static bool? EvaluateConditions(IList<AutomationCondition> conditions, IDictionary<string, double> values)
+        {
+            if (conditions == null || conditions.Count == 0) return false;
+            double first;
+            if (!values.TryGetValue(conditions[0].WidgetId, out first)) return null;
+            bool result = Compare(first, conditions[0]);
+            for (int i = 1; i < conditions.Count; i++)
+            {
+                double current;
+                if (!values.TryGetValue(conditions[i].WidgetId, out current)) return null;
+                bool next = Compare(current, conditions[i]);
+                result = String.Equals(conditions[i].Connector, "OR", StringComparison.OrdinalIgnoreCase)
+                    ? result || next : result && next;
+            }
+            return result;
+        }
+
+        private static bool Compare(double value, AutomationCondition condition)
+        {
+            switch (condition.Operator)
+            {
+                case ">": return value > condition.Threshold;
+                case ">=": return value >= condition.Threshold;
+                case "<": return value < condition.Threshold;
+                case "<=": return value <= condition.Threshold;
+                case "=": return Math.Abs(value - condition.Threshold) < 0.000001;
+                default: return false;
+            }
+        }
+
+        private void Load()
+        {
+            lock (_gate)
+            {
+                try
+                {
+                    object raw;
+                    string json = ApplicationData.Current.LocalSettings.Values.TryGetValue(SettingKey, out raw) ? Convert.ToString(raw) : "";
+                    _items = String.IsNullOrWhiteSpace(json) ? new List<AutomationScenario>() :
+                        (JsonConvert.DeserializeObject<List<AutomationScenario>>(json) ?? new List<AutomationScenario>());
+                }
+                catch { _items = new List<AutomationScenario>(); }
+                try
+                {
+                    object raw;
+                    string json = ApplicationData.Current.LocalSettings.Values.TryGetValue(RuntimeKey, out raw) ? Convert.ToString(raw) : "";
+                    _edges = String.IsNullOrWhiteSpace(json) ? new Dictionary<string, bool>() :
+                        (JsonConvert.DeserializeObject<Dictionary<string, bool>>(json) ?? new Dictionary<string, bool>());
+                }
+                catch { _edges = new Dictionary<string, bool>(); }
+            }
+        }
+
+        private void PersistLocked()
+        {
+            try { ApplicationData.Current.LocalSettings.Values[SettingKey] = JsonConvert.SerializeObject(_items); }
+            catch { }
+            PersistEdgesLocked();
+        }
+
+        private void PersistEdgesLocked()
+        {
+            try { ApplicationData.Current.LocalSettings.Values[RuntimeKey] = JsonConvert.SerializeObject(_edges); }
+            catch { }
+        }
+
+        private static AutomationScenario Clone(AutomationScenario item)
+        {
+            return JsonConvert.DeserializeObject<AutomationScenario>(JsonConvert.SerializeObject(item));
+        }
+    }
+
     public sealed class HistoryPoint
     {
         public long Timestamp { get; set; }
