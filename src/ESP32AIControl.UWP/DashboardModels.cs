@@ -139,7 +139,6 @@ namespace ESP32AIControl.UWP
         private Task _runTask = Task.CompletedTask;
         private bool _connected;
         private bool _disposed;
-        private long _helloStartedAt;
 
         public event Action<bool> ConnectionChanged;
         public event Action<string> Log;
@@ -344,11 +343,23 @@ namespace ESP32AIControl.UWP
             return body.ToArray();
         }
 
-        private static byte[] BuildSubscribe(string topic)
+        private byte[] BuildSubscribe(string topic)
         {
+            ushort packetId = NextPacketId();
             var body = new List<byte>();
-            body.Add(0); body.Add(1); AddString(body, topic); body.Add(1);
+            body.Add((byte)(packetId >> 8)); body.Add((byte)packetId);
+            AddString(body, topic); body.Add(1);
             return body.ToArray();
+        }
+
+        private ushort NextPacketId()
+        {
+            lock (_stateLock)
+            {
+                unchecked { _packetId++; }
+                if (_packetId == 0) _packetId = 1;
+                return _packetId;
+            }
         }
 
         private async Task ReadLoopAsync(CancellationToken token)
@@ -447,7 +458,7 @@ namespace ESP32AIControl.UWP
                     foreach (var id in known) _devices[id].Online = false;
                     PublishSnapshotLocked();
                 }
-                _helloStartedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                long discoveryStartedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                 Task.Run(async () =>
                 {
                     await Task.Delay(TimeSpan.FromSeconds(60));
@@ -457,7 +468,7 @@ namespace ESP32AIControl.UWP
                         {
                             long last;
                             if (!_lastDeviceMessageAt.TryGetValue(id, out last) ||
-                                last < _helloStartedAt)
+                                last < discoveryStartedAt)
                             {
                                 DeviceModel device;
                                 if (_devices.TryGetValue(id, out device)) device.Online = false;
@@ -590,13 +601,7 @@ namespace ESP32AIControl.UWP
             if (!IsConnected || _lifetime == null) return false;
             var body = new List<byte>();
             AddString(body, topic);
-            ushort packetId;
-            lock (_stateLock)
-            {
-                unchecked { _packetId++; }
-                if (_packetId == 0) _packetId = 1;
-                packetId = _packetId;
-            }
+            ushort packetId = NextPacketId();
             // MQTT 3.1.1 QoS 1 PUBLISH: packet identifier precedes payload.
             body.Add((byte)(packetId >> 8));
             body.Add((byte)packetId);
