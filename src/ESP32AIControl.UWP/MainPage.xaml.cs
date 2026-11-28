@@ -25,6 +25,7 @@ namespace ESP32AIControl.UWP
         private UpdateManifest _pendingUpdateManifest;
         private readonly MqttDeviceService _mqtt = new MqttDeviceService();
         private readonly UdpDiscoveryService _udpDiscovery = new UdpDiscoveryService();
+        private readonly AppDiagnosticsStore _diagnostics = new AppDiagnosticsStore();
         private readonly DispatcherTimer _udpPruneTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
         private string _udpDiagnostic = "UDP-приёмник ещё не запускался.";
         private readonly HistoryStore _historyStore = new HistoryStore();
@@ -53,6 +54,7 @@ namespace ESP32AIControl.UWP
             };
             _mqtt.Log += message =>
             {
+                _diagnostics.Add("MQTT", message);
                 var ignored = Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () => StatusText.Text = message);
             };
             _mqtt.DevicesChanged += devices =>
@@ -68,6 +70,7 @@ namespace ESP32AIControl.UWP
             };
             _udpDiscovery.Diagnostic += message =>
             {
+                _diagnostics.Add("UDP", message);
                 var ignored = Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
                 {
                     _udpDiagnostic = message;
@@ -1192,7 +1195,51 @@ namespace ESP32AIControl.UWP
         }
 
         private void Voice_Click(object sender, RoutedEventArgs e) { SetSection("Голос", "Настройки голоса", "Настройки распознавания и синтеза речи."); }
-        private void Journal_Click(object sender, RoutedEventArgs e) { SetSection("Журнал", "Журнал", "Системные события и диагностика подключения."); }
+        private void Journal_Click(object sender, RoutedEventArgs e) { ShowJournal(); }
+
+        private void ShowJournal()
+        {
+            SetSection("Журнал", "Журнал событий", "Диагностика приложения, MQTT и UDP. Хранится до 500 последних записей.");
+            DashboardHost.Visibility = Visibility.Visible;
+            DashboardHost.Children.Clear();
+            var actions = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 8) };
+            var refresh = new Button { Content = "Обновить" };
+            refresh.Click += (sender, args) => RenderJournalEntries();
+            var clear = new Button { Content = "Очистить журнал", Margin = new Thickness(8, 0, 0, 0) };
+            clear.Click += async (sender, args) =>
+            {
+                var dialog = new ContentDialog { Title = "Очистить журнал?", Content = "Все диагностические записи будут удалены.", PrimaryButtonText = "Очистить", CloseButtonText = "Отмена" };
+                if (await dialog.ShowAsync() == ContentDialogResult.Primary) { _diagnostics.Clear(); RenderJournalEntries(); }
+            };
+            actions.Children.Add(refresh); actions.Children.Add(clear);
+            DashboardHost.Children.Add(actions);
+            RenderJournalEntries();
+        }
+
+        private void RenderJournalEntries()
+        {
+            if (PageTitle.Text != "Журнал") return;
+            var old = DashboardHost.Children.OfType<StackPanel>().FirstOrDefault(x => Convert.ToString(x.Tag) == "journal-list");
+            if (old != null) DashboardHost.Children.Remove(old);
+            var list = new StackPanel { Tag = "journal-list" };
+            var entries = _diagnostics.GetAll();
+            if (entries.Count == 0) list.Children.Add(new TextBlock { Text = "Записей пока нет.", Margin = new Thickness(0, 8, 0, 8) });
+            foreach (var entry in entries)
+            {
+                list.Children.Add(new Border {
+                    Background = new SolidColorBrush(Color.FromArgb(255, 42, 44, 54)),
+                    Padding = new Thickness(10), Margin = new Thickness(0, 3, 0, 3),
+                    Child = new StackPanel {
+                        Children = {
+                            new TextBlock { Text = entry.Time.ToString("dd.MM.yyyy HH:mm:ss") + " · " + entry.Level + " · " + entry.Source, FontSize = 12, Foreground = new SolidColorBrush(Color.FromArgb(255, 180, 180, 194)) },
+                            new TextBlock { Text = entry.Message, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 3, 0, 0) }
+                        }
+                    }
+                });
+            }
+            DashboardHost.Children.Add(list);
+            StatusText.Text = "Записей в журнале: " + entries.Count;
+        }
         private void MqttSettings_Click(object sender, RoutedEventArgs e)
         {
             SetSection("MQTT", "Подключение MQTT", "Настройки брокера и состояние связи с ESP32.");
@@ -1345,7 +1392,61 @@ namespace ESP32AIControl.UWP
             });
             DashboardHost.Children.Add(list);
         }
-        private void AppSettings_Click(object sender, RoutedEventArgs e) { SetSection("Настройки", "Настройки приложения", "Общие параметры приложения."); }
+        private void AppSettings_Click(object sender, RoutedEventArgs e) { ShowAppSettings(); }
+
+        private void ShowAppSettings()
+        {
+            SetSection("Настройки", "Служебные настройки", "Состояние приложения, разрешения и управление локальными данными.");
+            DashboardHost.Visibility = Visibility.Visible;
+            DashboardHost.Children.Clear();
+            var panel = new StackPanel { Margin = new Thickness(0, 10, 0, 0) };
+            var lastUpdated = new CheckBox { Content = "Показывать время последнего обновления виджетов", IsChecked = _dashboardRenderer.ShowLastUpdated };
+            lastUpdated.Checked += (sender, args) => { _dashboardRenderer.ShowLastUpdated = true; ApplicationData.Current.LocalSettings.Values["show_last_updated"] = true; if (PageTitle.Text == "Главная") _dashboardRenderer.Render(); };
+            lastUpdated.Unchecked += (sender, args) => { _dashboardRenderer.ShowLastUpdated = false; ApplicationData.Current.LocalSettings.Values["show_last_updated"] = false; if (PageTitle.Text == "Главная") _dashboardRenderer.Render(); };
+            panel.Children.Add(lastUpdated);
+            panel.Children.Add(new TextBlock { Text = "Разрешения пакета", FontSize = 18, Margin = new Thickness(0, 18, 0, 6) });
+            panel.Children.Add(new TextBlock { Text = "Интернет (internetClient) — MQTT и проверка обновлений. Частная сеть (privateNetworkClientServer) — поиск ESP32 по UDP. Микрофон — голосовые функции. Разрешения объявлены в манифесте приложения; Windows может дополнительно управлять доступом к микрофону в настройках конфиденциальности.", TextWrapping = TextWrapping.Wrap });
+            var permissionButton = new Button { Content = "Проверить доступ к микрофону", Margin = new Thickness(0, 8, 0, 0) };
+            permissionButton.Click += async (sender, args) =>
+            {
+                try
+                {
+                    var setting = await Windows.Media.Capture.MediaCapture.InitializeAsync();
+                    StatusText.Text = "Микрофон доступен приложению.";
+                    setting.Dispose();
+                }
+                catch (Exception ex) { StatusText.Text = "Микрофон недоступен: " + ex.Message; }
+            };
+            panel.Children.Add(permissionButton);
+            panel.Children.Add(new TextBlock { Text = "Локальные данные", FontSize = 18, Margin = new Thickness(0, 18, 0, 6) });
+            var clear = new Button { Content = "Очистить историю и служебные очереди" };
+            clear.Click += ClearLocalData_Click;
+            panel.Children.Add(clear);
+            var info = new Button { Content = "Информация о приложении", Margin = new Thickness(0, 8, 0, 0) };
+            info.Click += InfoButton_Click;
+            panel.Children.Add(info);
+            DashboardHost.Children.Add(panel);
+            StatusText.Text = "Локальные данные хранятся на устройстве.";
+        }
+
+        private async void ClearLocalData_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new ContentDialog {
+                Title = "Очистить локальные данные?",
+                Content = "Будут удалены история телеметрии, отложенные команды и сценарии автоматизации. Настройки MQTT и голосовые команды останутся.",
+                PrimaryButtonText = "Очистить", CloseButtonText = "Отмена"
+            };
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+            try
+            {
+                await _historyStore.ClearAsync();
+                foreach (var item in _delayedCommandStore.GetAll()) _delayedCommandStore.Remove(item.Id);
+                foreach (var item in _scenarioStore.GetAll()) _scenarioStore.Delete(item.Id);
+                _diagnostics.Add("Settings", "Пользователь очистил историю, очередь отложенных команд и сценарии.");
+                StatusText.Text = "История, отложенные команды и сценарии очищены.";
+            }
+            catch (Exception ex) { StatusText.Text = "Ошибка очистки данных: " + ex.Message; }
+        }
         private void TextSize_Click(object sender, RoutedEventArgs e) { SetSection("Размер текста", "Размер текста", "Масштаб интерфейса и читаемость на разных экранах."); }
         private void ToggleLastUpdated_Click(object sender, RoutedEventArgs e)
         {
