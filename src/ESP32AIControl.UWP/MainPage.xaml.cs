@@ -709,10 +709,12 @@ namespace ESP32AIControl.UWP
                     double onlyY = bottom - (points[0].Value - min) * (bottom - top) / (max - min);
                     Canvas.SetLeft(dot, left - 4); Canvas.SetTop(dot, onlyY - 4); chart.Children.Add(dot);
                 }
+                long firstTimestamp = points[0].Timestamp;
+                long timestampSpan = Math.Max(1L, points[points.Count - 1].Timestamp - firstTimestamp);
                 for (int i = 1; i < points.Count; i++)
                 {
-                    double x1 = left + (right - left) * (i - 1) / Math.Max(1.0, points.Count - 1);
-                    double x2 = left + (right - left) * i / Math.Max(1.0, points.Count - 1);
+                    double x1 = left + (right - left) * (points[i - 1].Timestamp - firstTimestamp) / (double)timestampSpan;
+                    double x2 = left + (right - left) * (points[i].Timestamp - firstTimestamp) / (double)timestampSpan;
                     double y1 = bottom - (points[i - 1].Value - min) * (bottom - top) / (max - min);
                     double y2 = bottom - (points[i].Value - min) * (bottom - top) / (max - min);
                     chart.Children.Add(new Line { X1 = x1, Y1 = y1, X2 = x2, Y2 = y2, Stroke = seriesBrush, StrokeThickness = 2 });
