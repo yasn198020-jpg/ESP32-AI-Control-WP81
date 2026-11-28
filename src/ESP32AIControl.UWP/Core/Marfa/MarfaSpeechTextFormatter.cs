@@ -22,9 +22,9 @@ namespace ESP32AIControl.UWP.Core.Marfa
             if (!temperature) return String.IsNullOrWhiteSpace(unit) ? value : value + " " + unit;
 
             string degree;
-            if (Decimal.Truncate(Decimal.Abs(number)) == Decimal.Abs(number))
+            if (Decimal.Truncate(Math.Abs(number)) == Math.Abs(number))
             {
-                int whole = (int)(Decimal.Abs(number) % 100);
+                int whole = (int)(Math.Abs(number) % 100);
                 int last = whole % 10;
                 degree = whole >= 11 && whole <= 14 ? "градусов" :
                     last == 1 ? "градус" : last >= 2 && last <= 4 ? "градуса" : "градусов";
